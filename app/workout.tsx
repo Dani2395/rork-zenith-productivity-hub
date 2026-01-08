@@ -14,16 +14,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { Plus, Trash2, Clock, Edit3, Camera, TrendingUp, X } from 'lucide-react-native';
+import { Plus, Trash2, Clock, Edit3, Camera, TrendingUp, X, Dumbbell, Copy } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import type { ProgressImage } from '@/types';
 
 export default function WorkoutScreen() {
-  const { workouts, addWorkout, updateWorkout, deleteWorkout } = useData();
+  const { 
+    workouts, 
+    addWorkout, 
+    updateWorkout, 
+    deleteWorkout,
+    workoutTemplates,
+    addWorkoutTemplate,
+    updateWorkoutTemplate,
+    deleteWorkoutTemplate,
+  } = useData();
+  const [activeTab, setActiveTab] = useState<'workouts' | 'routines'>('workouts');
   const [modalVisible, setModalVisible] = useState(false);
   const [progressModalVisible, setProgressModalVisible] = useState(false);
+  const [routineModalVisible, setRoutineModalVisible] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<number | null>(null);
+  const [editingRoutine, setEditingRoutine] = useState<number | null>(null);
 
   const [workoutDate, setWorkoutDate] = useState(new Date().toISOString().split('T')[0]);
   const [workoutName, setWorkoutName] = useState('');
@@ -36,6 +48,10 @@ export default function WorkoutScreen() {
   const [progressWeight, setProgressWeight] = useState('');
   const [progressNotes, setProgressNotes] = useState('');
   const [progressImage, setProgressImage] = useState('');
+  
+  const [routineName, setRoutineName] = useState('');
+  const [routineExercises, setRoutineExercises] = useState('');
+  const [routineNotes, setRoutineNotes] = useState('');
 
   const resetForm = () => {
     setWorkoutDate(new Date().toISOString().split('T')[0]);
@@ -46,6 +62,13 @@ export default function WorkoutScreen() {
     setWorkoutWeight('');
     setProgressImages([]);
     setEditingWorkout(null);
+  };
+
+  const resetRoutineForm = () => {
+    setRoutineName('');
+    setRoutineExercises('');
+    setRoutineNotes('');
+    setEditingRoutine(null);
   };
 
   const pickProgressImage = async () => {
@@ -124,6 +147,50 @@ export default function WorkoutScreen() {
     }
   };
 
+  const handleSaveRoutine = () => {
+    if (!routineName.trim() || !routineExercises.trim()) return;
+
+    if (editingRoutine) {
+      updateWorkoutTemplate(editingRoutine, {
+        name: routineName.trim(),
+        exercises: routineExercises.trim(),
+        notes: routineNotes.trim(),
+      });
+    } else {
+      addWorkoutTemplate({
+        name: routineName.trim(),
+        exercises: routineExercises.trim(),
+        notes: routineNotes.trim(),
+      });
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    resetRoutineForm();
+    setRoutineModalVisible(false);
+  };
+
+  const handleEditRoutine = (routineId: number) => {
+    const routine = workoutTemplates.find(r => r.id === routineId);
+    if (routine) {
+      setEditingRoutine(routineId);
+      setRoutineName(routine.name);
+      setRoutineExercises(routine.exercises);
+      setRoutineNotes(routine.notes);
+      setRoutineModalVisible(true);
+    }
+  };
+
+  const handleUseRoutine = (routineId: number) => {
+    const routine = workoutTemplates.find(r => r.id === routineId);
+    if (routine) {
+      resetForm();
+      setWorkoutName(routine.name);
+      setWorkoutExercises(routine.exercises);
+      setWorkoutNotes(routine.notes);
+      setModalVisible(true);
+    }
+  };
+
   const sortedWorkouts = [...workouts].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
@@ -148,7 +215,7 @@ export default function WorkoutScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
-        <Text style={styles.title}>💪 Workout Log</Text>
+        <Text style={styles.title}>💪 Workout</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity
             style={styles.progressButton}
@@ -159,8 +226,13 @@ export default function WorkoutScreen() {
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => {
-              resetForm();
-              setModalVisible(true);
+              if (activeTab === 'workouts') {
+                resetForm();
+                setModalVisible(true);
+              } else {
+                resetRoutineForm();
+                setRoutineModalVisible(true);
+              }
             }}
           >
             <LinearGradient
@@ -168,36 +240,62 @@ export default function WorkoutScreen() {
               style={styles.addButtonGradient}
             >
               <Plus size={20} color="white" />
-              <Text style={styles.addButtonText}>Log</Text>
+              <Text style={styles.addButtonText}>{activeTab === 'workouts' ? 'Log' : 'Routine'}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.statsCard}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{thisWeekWorkouts.length}</Text>
-          <Text style={styles.statLabel}>This Week</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{workouts.length}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {thisWeekWorkouts.reduce((sum, w) => sum + w.duration, 0)}
-          </Text>
-          <Text style={styles.statLabel}>Minutes</Text>
-        </View>
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'workouts' && styles.tabActive]}
+          onPress={() => {
+            setActiveTab('workouts');
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+        >
+          <Clock size={18} color={activeTab === 'workouts' ? Colors.primary : Colors.textDim} />
+          <Text style={[styles.tabText, activeTab === 'workouts' && styles.tabTextActive]}>Workouts</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'routines' && styles.tabActive]}
+          onPress={() => {
+            setActiveTab('routines');
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+        >
+          <Dumbbell size={18} color={activeTab === 'routines' ? Colors.primary : Colors.textDim} />
+          <Text style={[styles.tabText, activeTab === 'routines' && styles.tabTextActive]}>Routines</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.workoutList} showsVerticalScrollIndicator={false}>
-        {sortedWorkouts.length === 0 ? (
-          <Text style={styles.emptyText}>No workouts logged yet</Text>
-        ) : (
-          sortedWorkouts.map(workout => (
+      {activeTab === 'workouts' && (
+        <View style={styles.statsCard}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{thisWeekWorkouts.length}</Text>
+            <Text style={styles.statLabel}>This Week</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{workouts.length}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {thisWeekWorkouts.reduce((sum, w) => sum + w.duration, 0)}
+            </Text>
+            <Text style={styles.statLabel}>Minutes</Text>
+          </View>
+        </View>
+      )}
+
+      {activeTab === 'workouts' ? (
+        <ScrollView style={styles.workoutList} showsVerticalScrollIndicator={false}>
+          {sortedWorkouts.length === 0 ? (
+            <Text style={styles.emptyText}>No workouts logged yet</Text>
+          ) : (
+            sortedWorkouts.map(workout => (
             <View key={workout.id} style={styles.workoutCard}>
               <View style={styles.workoutHeader}>
                 <View style={{ flex: 1 }}>
@@ -250,6 +348,52 @@ export default function WorkoutScreen() {
           ))
         )}
       </ScrollView>
+      ) : (
+        <ScrollView style={styles.workoutList} showsVerticalScrollIndicator={false}>
+          {workoutTemplates.length === 0 ? (
+            <Text style={styles.emptyText}>No routines created yet</Text>
+          ) : (
+            workoutTemplates.map(routine => (
+              <View key={routine.id} style={styles.routineCard}>
+                <View style={styles.routineHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.routineName}>{routine.name}</Text>
+                    <Text style={styles.routineExercisesPreview} numberOfLines={2}>
+                      {routine.exercises}
+                    </Text>
+                  </View>
+                  <View style={styles.routineActions}>
+                    <TouchableOpacity
+                      style={styles.useButton}
+                      onPress={() => handleUseRoutine(routine.id)}
+                    >
+                      <Copy size={16} color="white" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEditRoutine(routine.id)}
+                    >
+                      <Edit3 size={18} color={Colors.textDim} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => {
+                        deleteWorkoutTemplate(routine.id);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      }}
+                    >
+                      <Trash2 size={18} color={Colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {routine.notes ? (
+                  <Text style={styles.routineNotes}>{routine.notes}</Text>
+                ) : null}
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
 
       <Modal
         visible={modalVisible}
@@ -472,6 +616,74 @@ export default function WorkoutScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      <Modal
+        visible={routineModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRoutineModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScroll}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{editingRoutine ? '✏️ Edit Routine' : '🏋️ New Routine'}</Text>
+
+              <Text style={styles.inputLabel}>Routine Name *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g., Push Day, Leg Day, Full Body"
+                placeholderTextColor={Colors.textDim}
+                value={routineName}
+                onChangeText={setRoutineName}
+              />
+
+              <Text style={styles.inputLabel}>Exercises *</Text>
+              <TextInput
+                style={[styles.modalInput, styles.modalTextarea]}
+                placeholder="List exercises (one per line)&#10;Example:&#10;Bench Press - 3x10&#10;Incline Dumbbell Press - 3x12&#10;Cable Flyes - 3x15"
+                placeholderTextColor={Colors.textDim}
+                value={routineExercises}
+                onChangeText={setRoutineExercises}
+                multiline
+              />
+
+              <Text style={styles.inputLabel}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.modalInput, { minHeight: 80 }]}
+                placeholder="Add any notes, tips, or reminders for this routine"
+                placeholderTextColor={Colors.textDim}
+                value={routineNotes}
+                onChangeText={setRoutineNotes}
+                multiline
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalButtonSecondary}
+                  onPress={() => {
+                    resetRoutineForm();
+                    setRoutineModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButtonPrimary, (!routineName.trim() || !routineExercises.trim()) && styles.buttonDisabled]} 
+                  onPress={handleSaveRoutine}
+                  disabled={!routineName.trim() || !routineExercises.trim()}
+                >
+                  <LinearGradient
+                    colors={[Colors.primary, Colors.secondary]}
+                    style={styles.modalButtonGradient}
+                  >
+                    <Text style={styles.modalButtonText}>Save Routine</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -480,6 +692,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.textDim,
+  },
+  tabTextActive: {
+    color: Colors.primary,
   },
   header: {
     flexDirection: 'row',
@@ -643,6 +883,57 @@ const styles = StyleSheet.create({
     color: Colors.textDim,
     fontStyle: 'italic' as const,
     marginTop: 8,
+  },
+  routineCard: {
+    backgroundColor: 'rgba(139, 92, 246, 0.05)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.secondary,
+  },
+  routineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  routineName: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  routineExercisesPreview: {
+    fontSize: 13,
+    color: Colors.textDim,
+    lineHeight: 20,
+  },
+  routineActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  useButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routineNotes: {
+    fontSize: 13,
+    color: Colors.textDim,
+    fontStyle: 'italic' as const,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   modalOverlay: {
     flex: 1,
