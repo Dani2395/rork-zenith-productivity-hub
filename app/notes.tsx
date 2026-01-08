@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import DateTimePicker from '@/components/DateTimePicker';
 
 
 
@@ -534,24 +535,13 @@ export default function NotesScreen() {
                 multiline
               />
 
-              <Text style={styles.inputLabel}>Schedule (Optional)</Text>
-              <View style={styles.dateTimeRow}>
-                <TextInput
-                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                  placeholder="Date (YYYY-MM-DD)"
-                  placeholderTextColor={Colors.textDim}
-                  value={noteDate}
-                  onChangeText={setNoteDate}
-                />
-                <View style={{ width: 8 }} />
-                <TextInput
-                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                  placeholder="Time (HH:MM)"
-                  placeholderTextColor={Colors.textDim}
-                  value={noteTime}
-                  onChangeText={setNoteTime}
-                />
-              </View>
+              <DateTimePicker
+                label="Schedule (Optional)"
+                date={noteDate}
+                time={noteTime}
+                onDateChange={setNoteDate}
+                onTimeChange={setNoteTime}
+              />
 
               <View style={styles.optionsRow}>
                 <TouchableOpacity

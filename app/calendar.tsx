@@ -17,6 +17,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles } from 'lucide
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { Holiday } from '@/types';
+import DateTimePicker from '@/components/DateTimePicker';
 
 export default function CalendarScreen() {
   const { events, tasks, workouts, notes, addEvent, holidays, addHoliday, updateHoliday, deleteHoliday } = useData();
@@ -539,12 +540,14 @@ export default function CalendarScreen() {
               multiline
             />
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Time (HH:MM)"
-              placeholderTextColor={Colors.textDim}
-              value={eventTime}
-              onChangeText={setEventTime}
+            <DateTimePicker
+              label="Event Time"
+              date={selectedDate || ''}
+              time={eventTime}
+              onDateChange={() => {}}
+              onTimeChange={setEventTime}
+              showDate={false}
+              showTime={true}
             />
 
             <View style={styles.modalButtons}>
@@ -589,12 +592,14 @@ export default function CalendarScreen() {
                 onChangeText={setHolidayName}
               />
 
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Date (YYYY-MM-DD) *"
-                placeholderTextColor={Colors.textDim}
-                value={holidayDate}
-                onChangeText={setHolidayDate}
+              <DateTimePicker
+                label="Holiday Date *"
+                date={holidayDate}
+                time=""
+                onDateChange={setHolidayDate}
+                onTimeChange={() => {}}
+                showDate={true}
+                showTime={false}
               />
 
               <TextInput

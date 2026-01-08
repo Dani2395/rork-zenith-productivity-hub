@@ -18,6 +18,7 @@ import { Plus, Trash2, Clock, Edit3, Camera, TrendingUp, X, Dumbbell, Copy } fro
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import type { ProgressImage } from '@/types';
+import DateTimePicker from '@/components/DateTimePicker';
 
 export default function WorkoutScreen() {
   const { 
@@ -406,13 +407,14 @@ export default function WorkoutScreen() {
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{editingWorkout ? '✏️ Edit Workout' : '💪 Log Workout'}</Text>
 
-              <Text style={styles.inputLabel}>Date</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={Colors.textDim}
-                value={workoutDate}
-                onChangeText={setWorkoutDate}
+              <DateTimePicker
+                label="Workout Date"
+                date={workoutDate}
+                time=""
+                onDateChange={setWorkoutDate}
+                onTimeChange={() => {}}
+                showDate={true}
+                showTime={false}
               />
 
               <TextInput

@@ -41,6 +41,7 @@ import {
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { SubTask, Holiday, Task, Event, Workout, Note } from '@/types';
+import DateTimePicker from '@/components/DateTimePicker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -1158,23 +1159,13 @@ export default function HomeScreen() {
                 onChangeText={setNewPriority}
                 autoFocus
               />
-              <View style={styles.dateTimeRow}>
-                <TextInput
-                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                  placeholder="Date (YYYY-MM-DD)"
-                  placeholderTextColor={Colors.textDim}
-                  value={priorityDate}
-                  onChangeText={setPriorityDate}
-                />
-                <View style={{ width: 8 }} />
-                <TextInput
-                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                  placeholder="Time (HH:MM)"
-                  placeholderTextColor={Colors.textDim}
-                  value={priorityTime}
-                  onChangeText={setPriorityTime}
-                />
-              </View>
+              <DateTimePicker
+                label="Schedule (Optional)"
+                date={priorityDate}
+                time={priorityTime}
+                onDateChange={setPriorityDate}
+                onTimeChange={setPriorityTime}
+              />
               <View style={styles.subtasksSection}>
                 <Text style={styles.subtasksLabel}>Subtasks:</Text>
                 {subtasks.map((subtask) => (
@@ -1276,14 +1267,16 @@ export default function HomeScreen() {
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{editingHolidayId ? 'Edit Holiday' : 'Add Holiday'}</Text>
               
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Date (YYYY-MM-DD)"
-                placeholderTextColor={Colors.textDim}
-                value={selectedDateForHoliday}
-                onChangeText={setSelectedDateForHoliday}
+              <DateTimePicker
+                label="Holiday Date"
+                date={selectedDateForHoliday}
+                time=""
+                onDateChange={setSelectedDateForHoliday}
+                onTimeChange={() => {}}
+                showDate={true}
+                showTime={false}
               />
-              
+
               <TextInput
                 style={styles.modalInput}
                 placeholder="Holiday Name"

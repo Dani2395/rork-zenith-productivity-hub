@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Edit3, Settings, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import DateTimePicker from '@/components/DateTimePicker';
 
 type FilterType = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
 
@@ -421,23 +422,12 @@ export default function TasksScreen() {
               </View>
             </View>
 
-            <View style={styles.dateTimeRow}>
-              <TextInput
-                style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                placeholder="Date (YYYY-MM-DD)"
-                placeholderTextColor={Colors.textDim}
-                value={taskDate}
-                onChangeText={setTaskDate}
-              />
-              <View style={{ width: 8 }} />
-              <TextInput
-                style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                placeholder="Time (HH:MM)"
-                placeholderTextColor={Colors.textDim}
-                value={taskTime}
-                onChangeText={setTaskTime}
-              />
-            </View>
+            <DateTimePicker
+              date={taskDate}
+              time={taskTime}
+              onDateChange={setTaskDate}
+              onTimeChange={setTaskTime}
+            />
 
             <View style={styles.listSelector}>
               <Text style={styles.inputLabel}>Category</Text>
