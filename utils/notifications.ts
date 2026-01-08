@@ -5,18 +5,15 @@ let Notifications: any = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   Notifications = require('expo-notifications');
-  
-  if (Notifications) {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
-  }
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
 } catch {
   console.log('Notifications not available in this environment');
 }
@@ -52,7 +49,7 @@ export async function registerForPushNotificationsAsync() {
 
     return finalStatus;
   } catch (error) {
-    console.log('Error registering for notifications:', error);
+    console.log('Error setting up notifications:', error);
     return null;
   }
 }
@@ -88,7 +85,6 @@ export async function scheduleNotification(
 
 export async function cancelNotification(notificationId: string) {
   if (!Notifications) return;
-  
   try {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
   } catch (error) {
@@ -98,7 +94,6 @@ export async function cancelNotification(notificationId: string) {
 
 export async function cancelAllNotifications() {
   if (!Notifications) return;
-  
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (error) {
