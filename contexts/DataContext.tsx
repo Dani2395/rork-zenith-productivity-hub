@@ -242,6 +242,36 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
+  const addTaskList = useCallback((name: string, icon: string, color: string) => {
+    const newList: TaskList = { id: Date.now(), name, icon, color };
+    setTaskLists(prev => {
+      const updated = [...prev, newList];
+      saveData('taskLists', updated);
+      return updated;
+    });
+  }, [saveData]);
+
+  const updateTaskList = useCallback((id: number, updates: Partial<TaskList>) => {
+    setTaskLists(prev => {
+      const updated = prev.map(l => l.id === id ? { ...l, ...updates } : l);
+      saveData('taskLists', updated);
+      return updated;
+    });
+  }, [saveData]);
+
+  const deleteTaskList = useCallback((id: number) => {
+    setTaskLists(prev => {
+      const updated = prev.filter(l => l.id !== id);
+      saveData('taskLists', updated);
+      return updated;
+    });
+    setTasks(prev => {
+      const updated = prev.map(t => t.listId === id ? { ...t, listId: null } : t);
+      saveData('tasks', updated);
+      return updated;
+    });
+  }, [saveData]);
+
   const addEvent = useCallback((event: Omit<Event, 'id' | 'createdDate'>) => {
     const newEvent: Event = {
       ...event,
@@ -750,6 +780,9 @@ export const [DataProvider, useData] = createContextHook(() => {
     addNote,
     updateNote,
     deleteNote,
+    addTaskList,
+    updateTaskList,
+    deleteTaskList,
     addEvent,
     updateEvent,
     deleteEvent,
