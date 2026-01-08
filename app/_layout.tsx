@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { DataProvider } from "@/contexts/DataContext";
 import Colors from "@/constants/colors";
+import { registerForPushNotificationsAsync } from "@/utils/notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -108,6 +109,7 @@ function RootLayoutNav() {
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
+    registerForPushNotificationsAsync();
   }, []);
 
   return (

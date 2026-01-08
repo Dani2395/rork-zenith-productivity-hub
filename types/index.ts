@@ -10,6 +10,8 @@ export interface Task {
   completedDate?: string;
   listId?: number | null;
   createdDate: string;
+  notificationId?: string;
+  reminderBefore?: number;
 }
 
 export interface TaskList {
@@ -31,6 +33,8 @@ export interface Note {
   images?: string[];
   stamps?: string[];
   lockPin?: string;
+  notificationId?: string;
+  reminderTime?: string;
 }
 
 export interface Event {
@@ -41,6 +45,8 @@ export interface Event {
   time: string;
   recurring: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   createdDate: string;
+  notificationId?: string;
+  reminderBefore?: number;
 }
 
 export interface Habit {
@@ -92,6 +98,16 @@ export interface Workout {
   exercises: string;
   duration: number;
   notes: string;
+  progressImages?: ProgressImage[];
+  weight?: number;
+}
+
+export interface ProgressImage {
+  id: number;
+  uri: string;
+  timestamp: string;
+  weight?: number;
+  notes?: string;
 }
 
 export interface Book {

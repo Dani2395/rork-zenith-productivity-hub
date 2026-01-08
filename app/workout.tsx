@@ -7,17 +7,22 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Clock, Edit3 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Plus, Trash2, Clock, Edit3, Camera, TrendingUp, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import type { ProgressImage } from '@/types';
 
 export default function WorkoutScreen() {
   const { workouts, addWorkout, updateWorkout, deleteWorkout } = useData();
   const [modalVisible, setModalVisible] = useState(false);
+  const [progressModalVisible, setProgressModalVisible] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<number | null>(null);
 
   const [workoutDate, setWorkoutDate] = useState(new Date().toISOString().split('T')[0]);
@@ -25,6 +30,12 @@ export default function WorkoutScreen() {
   const [workoutExercises, setWorkoutExercises] = useState('');
   const [workoutDuration, setWorkoutDuration] = useState('');
   const [workoutNotes, setWorkoutNotes] = useState('');
+  const [workoutWeight, setWorkoutWeight] = useState('');
+  const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
+
+  const [progressWeight, setProgressWeight] = useState('');
+  const [progressNotes, setProgressNotes] = useState('');
+  const [progressImage, setProgressImage] = useState('');
 
   const resetForm = () => {
     setWorkoutDate(new Date().toISOString().split('T')[0]);
@@ -32,7 +43,40 @@ export default function WorkoutScreen() {
     setWorkoutExercises('');
     setWorkoutDuration('');
     setWorkoutNotes('');
+    setWorkoutWeight('');
+    setProgressImages([]);
     setEditingWorkout(null);
+  };
+
+  const pickProgressImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [3, 4],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setProgressImage(result.assets[0].uri);
+    }
+  };
+
+  const handleAddProgressImage = () => {
+    if (!progressImage) return;
+
+    const newImage: ProgressImage = {
+      id: Date.now(),
+      uri: progressImage,
+      timestamp: new Date().toISOString(),
+      weight: progressWeight ? parseFloat(progressWeight) : undefined,
+      notes: progressNotes || undefined,
+    };
+
+    setProgressImages([...progressImages, newImage]);
+    setProgressImage('');
+    setProgressWeight('');
+    setProgressNotes('');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleSaveWorkout = () => {
@@ -45,6 +89,8 @@ export default function WorkoutScreen() {
         exercises: workoutExercises.trim(),
         duration: parseInt(workoutDuration) || 0,
         notes: workoutNotes.trim(),
+        weight: workoutWeight ? parseFloat(workoutWeight) : undefined,
+        progressImages: progressImages.length > 0 ? progressImages : undefined,
       });
     } else {
       addWorkout({
@@ -53,6 +99,8 @@ export default function WorkoutScreen() {
         exercises: workoutExercises.trim(),
         duration: parseInt(workoutDuration) || 0,
         notes: workoutNotes.trim(),
+        weight: workoutWeight ? parseFloat(workoutWeight) : undefined,
+        progressImages: progressImages.length > 0 ? progressImages : undefined,
       });
     }
 
@@ -70,6 +118,8 @@ export default function WorkoutScreen() {
       setWorkoutExercises(workout.exercises);
       setWorkoutDuration(workout.duration.toString());
       setWorkoutNotes(workout.notes);
+      setWorkoutWeight(workout.weight?.toString() || '');
+      setProgressImages(workout.progressImages || []);
       setModalVisible(true);
     }
   };
@@ -86,25 +136,42 @@ export default function WorkoutScreen() {
     return workoutDate >= weekAgo && workoutDate <= today;
   });
 
+  const allProgressImages = workouts
+    .flatMap(w => (w.progressImages || []).map(img => ({ ...img, workoutDate: w.date })))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const weightHistory = workouts
+    .filter(w => w.weight !== undefined)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .map(w => ({ date: w.date, weight: w.weight! }));
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>💪 Workout Log</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setModalVisible(true);
-          }}
-        >
-          <LinearGradient
-            colors={[Colors.primary, Colors.secondary]}
-            style={styles.addButtonGradient}
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.progressButton}
+            onPress={() => setProgressModalVisible(true)}
           >
-            <Plus size={20} color="white" />
-            <Text style={styles.addButtonText}>Log Workout</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <TrendingUp size={20} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              resetForm();
+              setModalVisible(true);
+            }}
+          >
+            <LinearGradient
+              colors={[Colors.primary, Colors.secondary]}
+              style={styles.addButtonGradient}
+            >
+              <Plus size={20} color="white" />
+              <Text style={styles.addButtonText}>Log</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.statsCard}>
@@ -133,9 +200,12 @@ export default function WorkoutScreen() {
           sortedWorkouts.map(workout => (
             <View key={workout.id} style={styles.workoutCard}>
               <View style={styles.workoutHeader}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.workoutName}>{workout.name}</Text>
                   <Text style={styles.workoutDate}>{workout.date}</Text>
+                  {workout.weight && (
+                    <Text style={styles.workoutWeight}>⚖️ {workout.weight} lbs</Text>
+                  )}
                 </View>
                 <View style={styles.workoutActions}>
                   {workout.duration > 0 && (
@@ -161,6 +231,15 @@ export default function WorkoutScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              
+              {workout.progressImages && workout.progressImages.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.progressImagesScroll}>
+                  {workout.progressImages.map(img => (
+                    <Image key={img.id} source={{ uri: img.uri }} style={styles.progressImageThumb} />
+                  ))}
+                </ScrollView>
+              )}
+
               <View style={styles.exercisesContainer}>
                 <Text style={styles.exercisesText}>{workout.exercises}</Text>
               </View>
@@ -209,14 +288,25 @@ export default function WorkoutScreen() {
                 multiline
               />
 
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Duration (minutes)"
-                placeholderTextColor={Colors.textDim}
-                value={workoutDuration}
-                onChangeText={setWorkoutDuration}
-                keyboardType="numeric"
-              />
+              <View style={styles.row}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                  placeholder="Duration (min)"
+                  placeholderTextColor={Colors.textDim}
+                  value={workoutDuration}
+                  onChangeText={setWorkoutDuration}
+                  keyboardType="numeric"
+                />
+                <View style={{ width: 12 }} />
+                <TextInput
+                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                  placeholder="Weight (lbs)"
+                  placeholderTextColor={Colors.textDim}
+                  value={workoutWeight}
+                  onChangeText={setWorkoutWeight}
+                  keyboardType="numeric"
+                />
+              </View>
 
               <TextInput
                 style={[styles.modalInput, { minHeight: 60 }]}
@@ -226,6 +316,61 @@ export default function WorkoutScreen() {
                 onChangeText={setWorkoutNotes}
                 multiline
               />
+
+              <Text style={styles.inputLabel}>Progress Photos</Text>
+              <View style={styles.progressSection}>
+                <TouchableOpacity style={styles.addPhotoButton} onPress={pickProgressImage}>
+                  <Camera size={20} color={Colors.primary} />
+                  <Text style={styles.addPhotoText}>Add Progress Photo</Text>
+                </TouchableOpacity>
+
+                {progressImage && (
+                  <View style={styles.newProgressContainer}>
+                    <Image source={{ uri: progressImage }} style={styles.newProgressImage} />
+                    <View style={styles.newProgressInputs}>
+                      <TextInput
+                        style={styles.smallInput}
+                        placeholder="Weight (lbs)"
+                        placeholderTextColor={Colors.textDim}
+                        value={progressWeight}
+                        onChangeText={setProgressWeight}
+                        keyboardType="numeric"
+                      />
+                      <TextInput
+                        style={[styles.smallInput, { flex: 1 }]}
+                        placeholder="Notes (optional)"
+                        placeholderTextColor={Colors.textDim}
+                        value={progressNotes}
+                        onChangeText={setProgressNotes}
+                      />
+                      <TouchableOpacity style={styles.addImageButton} onPress={handleAddProgressImage}>
+                        <Plus size={18} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {progressImages.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.progressImagesRow}>
+                      {progressImages.map(img => (
+                        <View key={img.id} style={styles.progressImageContainer}>
+                          <Image source={{ uri: img.uri }} style={styles.progressImageSmall} />
+                          <TouchableOpacity
+                            style={styles.removeImageBtn}
+                            onPress={() => setProgressImages(progressImages.filter(i => i.id !== img.id))}
+                          >
+                            <X size={12} color="white" />
+                          </TouchableOpacity>
+                          {img.weight && (
+                            <Text style={styles.progressImageWeight}>{img.weight} lbs</Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity
@@ -242,10 +387,87 @@ export default function WorkoutScreen() {
                     colors={[Colors.primary, Colors.secondary]}
                     style={styles.modalButtonGradient}
                   >
-                    <Text style={styles.modalButtonText}>Log Workout</Text>
+                    <Text style={styles.modalButtonText}>Save Workout</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={progressModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setProgressModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScroll}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>📈 Progress Tracking</Text>
+
+              <View style={styles.progressSection}>
+                <Text style={styles.sectionTitle}>Weight History</Text>
+                {weightHistory.length === 0 ? (
+                  <Text style={styles.emptyText}>No weight data yet</Text>
+                ) : (
+                  <View style={styles.weightHistoryList}>
+                    {weightHistory.slice(-10).reverse().map((entry, idx) => (
+                      <View key={idx} style={styles.weightHistoryItem}>
+                        <Text style={styles.weightDate}>{entry.date}</Text>
+                        <Text style={styles.weightValue}>{entry.weight} lbs</Text>
+                        {idx < weightHistory.length - 1 && (
+                          <Text style={[
+                            styles.weightChange,
+                            entry.weight < weightHistory[weightHistory.length - idx - 2].weight
+                              ? styles.weightDown
+                              : styles.weightUp
+                          ]}>
+                            {entry.weight < weightHistory[weightHistory.length - idx - 2].weight ? '↓' : '↑'}
+                            {Math.abs(entry.weight - weightHistory[weightHistory.length - idx - 2].weight).toFixed(1)}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <Text style={styles.sectionTitle}>Progress Photos</Text>
+                {allProgressImages.length === 0 ? (
+                  <Text style={styles.emptyText}>No progress photos yet</Text>
+                ) : (
+                  <View style={styles.progressPhotosGrid}>
+                    {allProgressImages.map((img) => (
+                      <TouchableOpacity
+                        key={img.id}
+                        style={styles.progressPhotoCard}
+                        onPress={() => {
+                          Alert.alert(
+                            'Progress Photo',
+                            `Date: ${img.workoutDate}\n${img.weight ? `Weight: ${img.weight} lbs\n` : ''}${img.notes || ''}`
+                          );
+                        }}
+                      >
+                        <Image source={{ uri: img.uri }} style={styles.progressPhotoImage} />
+                        <View style={styles.progressPhotoInfo}>
+                          <Text style={styles.progressPhotoDate}>{img.workoutDate}</Text>
+                          {img.weight && (
+                            <Text style={styles.progressPhotoWeight}>{img.weight} lbs</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalButtonSecondary}
+                onPress={() => setProgressModalVisible(false)}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Close</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
@@ -265,6 +487,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  progressButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 24,
@@ -321,7 +555,8 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: 'center',
     color: Colors.textDim,
-    marginTop: 40,
+    marginTop: 20,
+    marginBottom: 20,
     fontSize: 14,
   },
   workoutCard: {
@@ -350,6 +585,12 @@ const styles = StyleSheet.create({
     color: Colors.textDim,
     marginTop: 2,
   },
+  workoutWeight: {
+    fontSize: 13,
+    color: Colors.primary,
+    marginTop: 4,
+    fontWeight: '600' as const,
+  },
   workoutActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -376,6 +617,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  progressImagesScroll: {
+    marginBottom: 12,
+  },
+  progressImageThumb: {
+    width: 80,
+    height: 100,
+    borderRadius: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   exercisesContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 8,
@@ -389,7 +641,7 @@ const styles = StyleSheet.create({
   workoutNotes: {
     fontSize: 13,
     color: Colors.textDim,
-    fontStyle: 'italic',
+    fontStyle: 'italic' as const,
     marginTop: 8,
   },
   modalOverlay: {
@@ -433,6 +685,99 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: 'top',
   },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  progressSection: {
+    marginBottom: 16,
+  },
+  addPhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed' as const,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  addPhotoText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.primary,
+  },
+  newProgressContainer: {
+    marginBottom: 12,
+  },
+  newProgressImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  newProgressInputs: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  smallInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 10,
+    color: Colors.text,
+    fontSize: 13,
+    width: 90,
+  },
+  addImageButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressImagesRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  progressImageContainer: {
+    position: 'relative',
+  },
+  progressImageSmall: {
+    width: 100,
+    height: 130,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressImageWeight: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: 10,
+    color: 'white',
+    fontWeight: '600' as const,
+  },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -465,5 +810,76 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: 'white',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  weightHistoryList: {
+    marginBottom: 24,
+  },
+  weightHistoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  weightDate: {
+    fontSize: 13,
+    color: Colors.textDim,
+    flex: 1,
+  },
+  weightValue: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginRight: 12,
+  },
+  weightChange: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  weightDown: {
+    color: Colors.success,
+  },
+  weightUp: {
+    color: Colors.danger,
+  },
+  progressPhotosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  progressPhotoCard: {
+    width: '48%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  progressPhotoImage: {
+    width: '100%',
+    height: 200,
+  },
+  progressPhotoInfo: {
+    padding: 8,
+  },
+  progressPhotoDate: {
+    fontSize: 12,
+    color: Colors.textDim,
+    marginBottom: 4,
+  },
+  progressPhotoWeight: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.primary,
   },
 });
