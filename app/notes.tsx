@@ -114,7 +114,7 @@ export default function NotesScreen() {
 
     const timestamp = new Date().toISOString();
 
-    if (editingNote) {
+    if (editingNote !== null) {
       updateNote(editingNote, {
         name: noteName.trim(),
         text: noteText.trim(),

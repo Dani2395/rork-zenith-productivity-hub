@@ -21,7 +21,8 @@ import { Holiday } from '@/types';
 export default function CalendarScreen() {
   const { events, tasks, workouts, notes, addEvent, holidays, addHoliday, updateHoliday, deleteHoliday } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const todayString = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayString);
   const [modalVisible, setModalVisible] = useState(false);
   const [animationParticles, setAnimationParticles] = useState<any[]>([]);
   const animationRef = useRef<number | null>(null);
@@ -729,6 +730,7 @@ const styles = StyleSheet.create({
   },
   calendarContainer: {
     paddingHorizontal: 16,
+    marginBottom: 12,
   },
   weekHeader: {
     flexDirection: 'row',
@@ -747,7 +749,7 @@ const styles = StyleSheet.create({
   },
   calendarDay: {
     width: '14.28%',
-    aspectRatio: 1,
+    aspectRatio: 0.85,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
@@ -805,7 +807,6 @@ const styles = StyleSheet.create({
   },
   selectedDateContainer: {
     flex: 1,
-    marginTop: 16,
     paddingHorizontal: 16,
   },
   selectedDateHeader: {
@@ -813,6 +814,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   selectedDateTitle: {
     fontSize: 16,

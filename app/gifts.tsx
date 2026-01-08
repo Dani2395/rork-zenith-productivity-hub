@@ -176,7 +176,7 @@ export default function GiftsScreen() {
       return;
     }
     
-    if (lockPin === storedPin) {
+    if (lockPin.trim() === storedPin.trim()) {
       setIsLocked(false);
       await saveLockState(false);
       setLockModalVisible(false);
@@ -195,8 +195,8 @@ export default function GiftsScreen() {
       return;
     }
     
-    setStoredPin(lockPin);
     await savePinState(lockPin);
+    setStoredPin(lockPin);
     setIsPinSetup(true);
     setIsLocked(false);
     await saveLockState(false);
