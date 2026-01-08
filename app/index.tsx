@@ -40,7 +40,7 @@ import {
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { SubTask, Holiday } from '@/types';
+import { SubTask, Holiday, Task, Event, Workout, Note } from '@/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -112,6 +112,7 @@ export default function HomeScreen() {
   } | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const weatherAnimValue = useRef(new Animated.Value(0)).current;
+  const [quickAccessVisible, setQuickAccessVisible] = useState(false);
 
   const sidebarAnim = useRef(new Animated.Value(-SCREEN_WIDTH * 0.8)).current;
 
@@ -304,6 +305,7 @@ export default function HomeScreen() {
   const todayTasks = tasks.filter(t => t.date === today && !t.completed);
   const todayEvents = events.filter(e => e.date === today);
   const todayWorkouts = workouts.filter(w => w.date === today);
+  const todayNotes = notes.filter(n => n.date === today);
   const todayMoods = moods[today]?.entries || [];
 
   const moodEmojis = ['😄', '😊', '😐', '😔', '😢'];
@@ -914,67 +916,102 @@ export default function HomeScreen() {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>📅 Today&apos;s Schedule</Text>
-            {todayTasks.length === 0 && todayEvents.length === 0 && todayWorkouts.length === 0 ? (
+            {todayTasks.length === 0 && todayEvents.length === 0 && todayWorkouts.length === 0 && todayNotes.length === 0 ? (
               <Text style={styles.emptyText}>Nothing scheduled for today 🎉</Text>
             ) : (
               <View style={styles.scheduleList}>
-                {todayTasks.map(task => (
-                  <TouchableOpacity
-                    key={task.id}
-                    style={[
-                      styles.scheduleItem,
-                      { borderLeftColor: task.priority === 'high' ? Colors.danger : task.priority === 'medium' ? Colors.warning : Colors.success },
-                    ]}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      router.push('/tasks');
-                    }}
-                  >
-                    <Text style={styles.scheduleIcon}>✅</Text>
-                    <View style={styles.scheduleContent}>
-                      <Text style={styles.scheduleTitle}>{task.name}</Text>
-                      {task.time && (
-                        <Text style={styles.scheduleTime}>{task.time}</Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                {todayEvents.map(event => (
-                  <TouchableOpacity
-                    key={event.id}
-                    style={styles.scheduleItem}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      router.push('/calendar');
-                    }}
-                  >
-                    <Text style={styles.scheduleIcon}>📅</Text>
-                    <View style={styles.scheduleContent}>
-                      <Text style={styles.scheduleTitle}>{event.name}</Text>
-                      {event.time && (
-                        <Text style={styles.scheduleTime}>{event.time}</Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                {todayWorkouts.map(workout => (
-                  <TouchableOpacity
-                    key={workout.id}
-                    style={styles.scheduleItem}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      router.push('/workout');
-                    }}
-                  >
-                    <Text style={styles.scheduleIcon}>💪</Text>
-                    <View style={styles.scheduleContent}>
-                      <Text style={styles.scheduleTitle}>{workout.name}</Text>
-                      {workout.duration > 0 && (
-                        <Text style={styles.scheduleTime}>{workout.duration} min</Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                {[...todayTasks.map(task => ({ ...task, type: 'task' as const, sortTime: task.time || '23:59' })),
+                  ...todayEvents.map(event => ({ ...event, type: 'event' as const, sortTime: event.time || '23:59' })),
+                  ...todayWorkouts.map(workout => ({ ...workout, type: 'workout' as const, sortTime: '23:59' })),
+                  ...todayNotes.map(note => ({ ...note, type: 'note' as const, sortTime: note.lastModified ? new Date(note.lastModified).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '23:59' }))
+                ].sort((a, b) => a.sortTime.localeCompare(b.sortTime)).map((item) => {
+                  if (item.type === 'task') {
+                    const task = item as Task & { type: 'task'; sortTime: string };
+                    return (
+                      <TouchableOpacity
+                        key={`task-${task.id}`}
+                        style={[
+                          styles.scheduleItem,
+                          { borderLeftColor: task.priority === 'high' ? Colors.danger : task.priority === 'medium' ? Colors.warning : Colors.success },
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          router.push('/tasks');
+                        }}
+                      >
+                        <Text style={styles.scheduleIcon}>✅</Text>
+                        <View style={styles.scheduleContent}>
+                          <Text style={styles.scheduleTitle}>{task.name}</Text>
+                          {task.time && (
+                            <Text style={styles.scheduleTime}>{task.time}</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  } else if (item.type === 'event') {
+                    const event = item as Event & { type: 'event'; sortTime: string };
+                    return (
+                      <TouchableOpacity
+                        key={`event-${event.id}`}
+                        style={styles.scheduleItem}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          router.push('/calendar');
+                        }}
+                      >
+                        <Text style={styles.scheduleIcon}>📅</Text>
+                        <View style={styles.scheduleContent}>
+                          <Text style={styles.scheduleTitle}>{event.name}</Text>
+                          {event.time && (
+                            <Text style={styles.scheduleTime}>{event.time}</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  } else if (item.type === 'workout') {
+                    const workout = item as Workout & { type: 'workout'; sortTime: string };
+                    return (
+                      <TouchableOpacity
+                        key={`workout-${workout.id}`}
+                        style={styles.scheduleItem}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          router.push('/workout');
+                        }}
+                      >
+                        <Text style={styles.scheduleIcon}>💪</Text>
+                        <View style={styles.scheduleContent}>
+                          <Text style={styles.scheduleTitle}>{workout.name}</Text>
+                          {workout.duration > 0 && (
+                            <Text style={styles.scheduleTime}>{workout.duration} min</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  } else {
+                    const note = item as Note & { type: 'note'; sortTime: string };
+                    return (
+                      <TouchableOpacity
+                        key={`note-${note.id}`}
+                        style={styles.scheduleItem}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          router.push('/notes');
+                        }}
+                      >
+                        <Text style={styles.scheduleIcon}>📝</Text>
+                        <View style={styles.scheduleContent}>
+                          <Text style={styles.scheduleTitle}>{note.name}</Text>
+                          {note.lastModified && (
+                            <Text style={styles.scheduleTime}>
+                              {new Date(note.lastModified).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }
+                })}
               </View>
             )}
           </View>
@@ -1024,7 +1061,7 @@ export default function HomeScreen() {
           style={styles.fab}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push('/tasks');
+            setQuickAccessVisible(true);
           }}
         >
           <LinearGradient
@@ -1301,6 +1338,55 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+      </Modal>
+
+      <Modal
+        visible={quickAccessVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQuickAccessVisible(false)}
+      >
+        <Pressable style={styles.quickAccessOverlay} onPress={() => setQuickAccessVisible(false)}>
+          <View style={styles.quickAccessMenu}>
+            <Text style={styles.quickAccessTitle}>Quick Add</Text>
+            <TouchableOpacity
+              style={styles.quickAccessOption}
+              onPress={() => {
+                setQuickAccessVisible(false);
+                router.push('/tasks');
+              }}
+            >
+              <View style={styles.quickAccessIconContainer}>
+                <CheckSquare size={24} color={Colors.primary} />
+              </View>
+              <Text style={styles.quickAccessText}>Add Task</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickAccessOption}
+              onPress={() => {
+                setQuickAccessVisible(false);
+                router.push('/calendar');
+              }}
+            >
+              <View style={styles.quickAccessIconContainer}>
+                <Calendar size={24} color={Colors.secondary} />
+              </View>
+              <Text style={styles.quickAccessText}>Add Event</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickAccessOption}
+              onPress={() => {
+                setQuickAccessVisible(false);
+                router.push('/notes');
+              }}
+            >
+              <View style={styles.quickAccessIconContainer}>
+                <FileText size={24} color={Colors.success} />
+              </View>
+              <Text style={styles.quickAccessText}>Add Note</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -1975,6 +2061,50 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'white',
     fontWeight: '600' as const,
+  },
+  quickAccessOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+    paddingBottom: 100,
+  },
+  quickAccessMenu: {
+    backgroundColor: Colors.card,
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickAccessTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  quickAccessOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 12,
+    marginBottom: 10,
+    gap: 16,
+  },
+  quickAccessIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickAccessText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: Colors.text,
   },
   weatherCard: {
     marginBottom: 16,
