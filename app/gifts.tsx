@@ -176,13 +176,17 @@ export default function GiftsScreen() {
       return;
     }
     
-    if (lockPin.trim() === storedPin.trim()) {
-      setIsLocked(false);
+    console.log('Attempting unlock. Entered PIN:', lockPin, 'Stored PIN:', storedPin);
+    
+    if (lockPin === storedPin) {
+      console.log('PIN match! Unlocking...');
       await saveLockState(false);
+      setIsLocked(false);
       setLockModalVisible(false);
       setLockPin('');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
+      console.log('PIN mismatch!');
       Alert.alert('Incorrect PIN', 'The PIN you entered is incorrect. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setLockPin('');
@@ -195,15 +199,17 @@ export default function GiftsScreen() {
       return;
     }
     
+    console.log('Setting new PIN:', lockPin);
     await savePinState(lockPin);
     setStoredPin(lockPin);
     setIsPinSetup(true);
-    setIsLocked(false);
     await saveLockState(false);
+    setIsLocked(false);
     setIsSettingPin(false);
     setLockModalVisible(false);
     setLockPin('');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('Success', 'PIN has been set successfully!');
   };
 
   const toggleLock = async () => {

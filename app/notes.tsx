@@ -114,37 +114,42 @@ export default function NotesScreen() {
 
     const timestamp = new Date().toISOString();
 
-    if (editingNote !== null) {
-      updateNote(editingNote, {
-        name: noteName.trim(),
-        text: noteText.trim(),
-        locked: noteLocked,
-        pinned: notePinned,
-        category: noteCategory,
-        images: noteImages,
-        stamps: noteStamps,
-        lockPin: noteLocked ? noteLockPin : undefined,
-        lastModified: timestamp,
-      });
-    } else {
-      addNote({
-        name: noteName.trim(),
-        text: noteText.trim(),
-        locked: noteLocked,
-        pinned: notePinned,
-        category: noteCategory,
-        date: new Date().toISOString().split('T')[0],
-        images: noteImages,
-        stamps: noteStamps,
-        lockPin: noteLocked ? noteLockPin : undefined,
-        createdDate: timestamp,
-        lastModified: timestamp,
-      });
-    }
+    try {
+      if (editingNote !== null) {
+        updateNote(editingNote, {
+          name: noteName.trim(),
+          text: noteText.trim(),
+          locked: noteLocked,
+          pinned: notePinned,
+          category: noteCategory,
+          images: noteImages,
+          stamps: noteStamps,
+          lockPin: noteLocked ? noteLockPin : undefined,
+          lastModified: timestamp,
+        });
+      } else {
+        addNote({
+          name: noteName.trim(),
+          text: noteText.trim(),
+          locked: noteLocked,
+          pinned: notePinned,
+          category: noteCategory,
+          date: new Date().toISOString().split('T')[0],
+          images: noteImages,
+          stamps: noteStamps,
+          lockPin: noteLocked ? noteLockPin : undefined,
+          createdDate: timestamp,
+          lastModified: timestamp,
+        });
+      }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    resetForm();
-    setModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      resetForm();
+      setModalVisible(false);
+    } catch (error) {
+      console.error('Error saving note:', error);
+      Alert.alert('Error', 'Failed to save note. Please try again.');
+    }
   };
 
   const handleEditNote = (noteId: number) => {
