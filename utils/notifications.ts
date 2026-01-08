@@ -2,14 +2,20 @@ import { Platform } from 'react-native';
 
 let Notifications: any = null;
 let isInitialized = false;
+let initializationFailed = false;
 
 function initializeNotifications() {
-  if (isInitialized) return;
+  if (isInitialized || initializationFailed) return;
   isInitialized = true;
   
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    Notifications = require('expo-notifications');
+    const ExpoNotifications = (global as any).__expo_notifications_module__;
+    if (!ExpoNotifications) {
+      initializationFailed = true;
+      return;
+    }
+    
+    Notifications = ExpoNotifications;
     if (Notifications) {
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
@@ -22,8 +28,16 @@ function initializeNotifications() {
       });
     }
   } catch {
-    console.log('Notifications not available in Expo Go. Use a development build for notification support.');
+    initializationFailed = true;
   }
+}
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ExpoNotifications = require('expo-notifications');
+  (global as any).__expo_notifications_module__ = ExpoNotifications;
+} catch {
+  // Notifications not available (Expo Go SDK 53+)
 }
 
 export async function registerForPushNotificationsAsync() {
