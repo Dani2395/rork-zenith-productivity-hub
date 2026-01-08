@@ -29,6 +29,7 @@ export interface Note {
   locked: boolean;
   pinned: boolean;
   date: string;
+  time?: string;
   category: string;
   createdDate: string;
   lastModified?: string;

@@ -57,6 +57,8 @@ export default function NotesScreen() {
   const [noteImages, setNoteImages] = useState<string[]>([]);
   const [noteStamps, setNoteStamps] = useState<string[]>([]);
   const [noteLockPin, setNoteLockPin] = useState('');
+  const [noteDate, setNoteDate] = useState('');
+  const [noteTime, setNoteTime] = useState('');
 
   const [showStampPicker, setShowStampPicker] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -94,6 +96,8 @@ export default function NotesScreen() {
     setNoteImages([]);
     setNoteStamps([]);
     setNoteLockPin('');
+    setNoteDate('');
+    setNoteTime('');
     setEditingNote(null);
   };
 
@@ -123,6 +127,8 @@ export default function NotesScreen() {
           locked: noteLocked,
           pinned: notePinned,
           category: noteCategory,
+          date: noteDate.trim() || new Date().toISOString().split('T')[0],
+          time: noteTime.trim() || undefined,
           images: noteImages,
           stamps: noteStamps,
           lockPin: noteLocked ? noteLockPin : undefined,
@@ -135,7 +141,8 @@ export default function NotesScreen() {
           locked: noteLocked,
           pinned: notePinned,
           category: noteCategory,
-          date: new Date().toISOString().split('T')[0],
+          date: noteDate.trim() || new Date().toISOString().split('T')[0],
+          time: noteTime.trim() || undefined,
           images: noteImages,
           stamps: noteStamps,
           lockPin: noteLocked ? noteLockPin : undefined,
@@ -175,6 +182,8 @@ export default function NotesScreen() {
     setNoteImages(note.images || []);
     setNoteStamps(note.stamps || []);
     setNoteLockPin(note.lockPin || '');
+    setNoteDate(note.date || '');
+    setNoteTime(note.time || '');
     setModalVisible(true);
   };
 
@@ -524,6 +533,25 @@ export default function NotesScreen() {
                 onChangeText={setNoteText}
                 multiline
               />
+
+              <Text style={styles.inputLabel}>Schedule (Optional)</Text>
+              <View style={styles.dateTimeRow}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                  placeholder="Date (YYYY-MM-DD)"
+                  placeholderTextColor={Colors.textDim}
+                  value={noteDate}
+                  onChangeText={setNoteDate}
+                />
+                <View style={{ width: 8 }} />
+                <TextInput
+                  style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                  placeholder="Time (HH:MM)"
+                  placeholderTextColor={Colors.textDim}
+                  value={noteTime}
+                  onChangeText={setNoteTime}
+                />
+              </View>
 
               <View style={styles.optionsRow}>
                 <TouchableOpacity
@@ -1232,6 +1260,11 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: Colors.textDim,
     marginBottom: 8,
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
   },
   categoryOptions: {
     flexDirection: 'row',

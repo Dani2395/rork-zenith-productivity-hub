@@ -928,7 +928,7 @@ export default function HomeScreen() {
                 {[...todayTasks.map(task => ({ ...task, type: 'task' as const, sortTime: task.time || '23:59' })),
                   ...todayEvents.map(event => ({ ...event, type: 'event' as const, sortTime: event.time || '23:59' })),
                   ...todayWorkouts.map(workout => ({ ...workout, type: 'workout' as const, sortTime: '23:59' })),
-                  ...todayNotes.map(note => ({ ...note, type: 'note' as const, sortTime: note.lastModified ? new Date(note.lastModified).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '23:59' }))
+                  ...todayNotes.map(note => ({ ...note, type: 'note' as const, sortTime: note.time || '23:59' }))
                 ].sort((a, b) => a.sortTime.localeCompare(b.sortTime)).map((item) => {
                   if (item.type === 'task') {
                     const task = item as Task & { type: 'task'; sortTime: string };
@@ -1007,10 +1007,8 @@ export default function HomeScreen() {
                         <Text style={styles.scheduleIcon}>📝</Text>
                         <View style={styles.scheduleContent}>
                           <Text style={styles.scheduleTitle}>{note.name}</Text>
-                          {note.lastModified && (
-                            <Text style={styles.scheduleTime}>
-                              {new Date(note.lastModified).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                            </Text>
+                          {note.time && (
+                            <Text style={styles.scheduleTime}>{note.time}</Text>
                           )}
                         </View>
                       </TouchableOpacity>
