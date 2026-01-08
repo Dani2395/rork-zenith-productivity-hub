@@ -7,27 +7,21 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Edit3 } from 'lucide-react-native';
+import { Plus, Trash2, Edit3, Settings, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 
 type FilterType = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
 
-const CATEGORIES = [
-  { value: '', label: 'None' },
-  { value: 'Work', label: '💼 Work' },
-  { value: 'Personal', label: '👤 Personal' },
-  { value: 'Shopping', label: '🛒 Shopping' },
-  { value: 'Health', label: '💪 Health' },
-  { value: 'Finance', label: '💰 Finance' },
-];
+
 
 export default function TasksScreen() {
-  const { tasks, taskLists, addTask, updateTask, deleteTask, toggleTask } = useData();
+  const { tasks, taskLists, addTask, updateTask, deleteTask, toggleTask, taskCategories, addTaskCategory, updateTaskCategory, deleteTaskCategory } = useData();
 
   const [filter, setFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +36,10 @@ export default function TasksScreen() {
   const [taskTime, setTaskTime] = useState('');
   const [taskListId, setTaskListId] = useState<number | null>(null);
   const [taskCategory, setTaskCategory] = useState('');
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [newCategoryValue, setNewCategoryValue] = useState('');
+  const [newCategoryLabel, setNewCategoryLabel] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -135,6 +133,56 @@ export default function TasksScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
+  const handleSaveCategory = () => {
+    if (!newCategoryValue.trim() || !newCategoryLabel.trim()) {
+      Alert.alert('Missing Information', 'Please enter both value and label');
+      return;
+    }
+
+    if (editingCategoryId !== null) {
+      updateTaskCategory(editingCategoryId, {
+        value: newCategoryValue.trim(),
+        label: newCategoryLabel.trim(),
+      });
+    } else {
+      addTaskCategory(newCategoryValue.trim(), newCategoryLabel.trim());
+    }
+
+    setNewCategoryValue('');
+    setNewCategoryLabel('');
+    setEditingCategoryId(null);
+    setCategoryModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleEditCategory = (id: number) => {
+    const category = taskCategories.find(c => c.id === id);
+    if (category) {
+      setEditingCategoryId(id);
+      setNewCategoryValue(category.value);
+      setNewCategoryLabel(category.label);
+      setCategoryModalVisible(true);
+    }
+  };
+
+  const handleDeleteCategory = (id: number) => {
+    Alert.alert(
+      'Delete Category',
+      'Are you sure you want to delete this category?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteTaskCategory(id);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'today', label: 'Today' },
@@ -153,13 +201,25 @@ export default function TasksScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>✅ Tasks</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => {
-            resetForm();
-            setModalVisible(true);
-          }}
-        >
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => {
+              setEditingCategoryId(null);
+              setNewCategoryValue('');
+              setNewCategoryLabel('');
+              setCategoryModalVisible(true);
+            }}
+          >
+            <Settings size={20} color={Colors.textDim} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => {
+              resetForm();
+              setModalVisible(true);
+            }}
+          >
           <LinearGradient
             colors={[Colors.primary, Colors.secondary]}
             style={styles.addButtonGradient}
@@ -168,6 +228,7 @@ export default function TasksScreen() {
             <Text style={styles.addButtonText}>Add Task</Text>
           </LinearGradient>
         </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -381,11 +442,29 @@ export default function TasksScreen() {
             <View style={styles.listSelector}>
               <Text style={styles.inputLabel}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  style={[styles.listOption, taskCategory === '' && styles.listOptionActive]}
+                  onPress={() => setTaskCategory('')}
+                >
+                  <Text style={styles.listOptionText}>None</Text>
+                </TouchableOpacity>
+                {taskCategories.map(cat => (
                   <TouchableOpacity
-                    key={cat.value}
+                    key={cat.id}
                     style={[styles.listOption, taskCategory === cat.value && styles.listOptionActive]}
                     onPress={() => setTaskCategory(cat.value)}
+                    onLongPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      Alert.alert(
+                        'Manage Category',
+                        cat.label,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Edit', onPress: () => handleEditCategory(cat.id) },
+                          { text: 'Delete', style: 'destructive', onPress: () => handleDeleteCategory(cat.id) },
+                        ]
+                      );
+                    }}
                   >
                     <Text style={styles.listOptionText}>{cat.label}</Text>
                   </TouchableOpacity>
@@ -434,6 +513,96 @@ export default function TasksScreen() {
                   <Text style={styles.modalButtonText}>Save Task</Text>
                 </LinearGradient>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={categoryModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setCategoryModalVisible(false);
+          setEditingCategoryId(null);
+          setNewCategoryValue('');
+          setNewCategoryLabel('');
+        }}
+      >
+        <View style={styles.categoryModalOverlay}>
+          <View style={styles.categoryModalContent}>
+            <Settings size={48} color={Colors.primary} />
+            <Text style={styles.categoryModalTitle}>{editingCategoryId ? 'Edit Category' : 'Add Category'}</Text>
+            <Text style={styles.categoryModalSubtitle}>{editingCategoryId ? 'Update category details' : 'Create a new category'}</Text>
+            
+            <TextInput
+              style={styles.categoryInput}
+              placeholder="Value (e.g., Study)"
+              placeholderTextColor={Colors.textDim}
+              value={newCategoryValue}
+              onChangeText={setNewCategoryValue}
+            />
+            
+            <TextInput
+              style={styles.categoryInput}
+              placeholder="Label (e.g., 📚 Study)"
+              placeholderTextColor={Colors.textDim}
+              value={newCategoryLabel}
+              onChangeText={setNewCategoryLabel}
+            />
+
+            {taskCategories.length > 0 && !editingCategoryId && (
+              <View style={styles.existingCategoriesSection}>
+                <Text style={styles.existingCategoriesTitle}>Existing Categories:</Text>
+                <ScrollView style={styles.existingCategoriesList}>
+                  {taskCategories.map(cat => (
+                    <View key={cat.id} style={styles.existingCategoryItem}>
+                      <Text style={styles.existingCategoryText}>{cat.label}</Text>
+                      <View style={styles.categoryActions}>
+                        <TouchableOpacity
+                          onPress={() => handleEditCategory(cat.id)}
+                          style={styles.categoryActionButton}
+                        >
+                          <Edit2 size={16} color={Colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteCategory(cat.id)}
+                          style={styles.categoryActionButton}
+                        >
+                          <Trash2 size={16} color={Colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={styles.categoryModalButtons}>
+              <TouchableOpacity
+                style={styles.categoryModalButtonSecondary}
+                onPress={() => {
+                  setCategoryModalVisible(false);
+                  setEditingCategoryId(null);
+                  setNewCategoryValue('');
+                  setNewCategoryLabel('');
+                }}
+              >
+                <Text style={styles.categoryModalButtonTextSecondary}>Cancel</Text>
+              </TouchableOpacity>
+              {(newCategoryValue.trim() || newCategoryLabel.trim()) && (
+                <TouchableOpacity
+                  style={styles.categoryModalButtonPrimary}
+                  onPress={handleSaveCategory}
+                >
+                  <LinearGradient
+                    colors={[Colors.primary, Colors.secondary]}
+                    style={styles.categoryModalButtonGradient}
+                  >
+                    <Text style={styles.categoryModalButtonText}>{editingCategoryId ? 'Update' : 'Add'}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -750,6 +919,125 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: 'white',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryModalContent: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    padding: 32,
+    width: '85%',
+    maxHeight: '80%',
+    alignItems: 'center',
+  },
+  categoryModalTitle: {
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  categoryModalSubtitle: {
+    fontSize: 14,
+    color: Colors.textDim,
+    marginBottom: 24,
+  },
+  categoryInput: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 16,
+    color: Colors.text,
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  existingCategoriesSection: {
+    width: '100%',
+    marginTop: 16,
+    marginBottom: 16,
+    maxHeight: 200,
+  },
+  existingCategoriesTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  existingCategoriesList: {
+    maxHeight: 160,
+  },
+  existingCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  existingCategoryText: {
+    fontSize: 13,
+    color: Colors.text,
+    flex: 1,
+  },
+  categoryActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  categoryActionButton: {
+    padding: 4,
+  },
+  categoryModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  categoryModalButtonSecondary: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  categoryModalButtonTextSecondary: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  categoryModalButtonPrimary: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  categoryModalButtonGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  categoryModalButtonText: {
     fontSize: 14,
     fontWeight: '600' as const,
     color: 'white',

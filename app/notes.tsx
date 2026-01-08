@@ -13,19 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock } from 'lucide-react-native';
+import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 
-const CATEGORIES = [
-  { value: '', label: 'All' },
-  { value: 'Work', label: '💼 Work' },
-  { value: 'Personal', label: '👤 Personal' },
-  { value: 'Ideas', label: '💡 Ideas' },
-  { value: 'Projects', label: '🚀 Projects' },
-  { value: 'Journal', label: '📔 Journal' },
-  { value: 'Recipes', label: '🍳 Recipes' },
-];
+
 
 const STAMPS = [
   '⭐', '❤️', '🎉', '🌟', '✨', '🎯', '🔥', '💎',
@@ -49,7 +41,7 @@ const IMAGE_URLS = [
 ];
 
 export default function NotesScreen() {
-  const { notes, addNote, updateNote, deleteNote } = useData();
+  const { notes, addNote, updateNote, deleteNote, noteCategories, addNoteCategory, updateNoteCategory, deleteNoteCategory } = useData();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingNote, setEditingNote] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,6 +63,15 @@ export default function NotesScreen() {
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockingNoteId, setUnlockingNoteId] = useState<number | null>(null);
   const [unlockPin, setUnlockPin] = useState('');
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [newCategoryValue, setNewCategoryValue] = useState('');
+  const [newCategoryLabel, setNewCategoryLabel] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+
+  const CATEGORIES = [
+    { id: 0, value: '', label: 'All', type: 'note' as const },
+    ...noteCategories,
+  ];
 
   const filteredNotes = notes.filter(note => {
     if (searchQuery && !note.name.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -177,6 +178,56 @@ export default function NotesScreen() {
     setModalVisible(true);
   };
 
+  const handleSaveCategory = () => {
+    if (!newCategoryValue.trim() || !newCategoryLabel.trim()) {
+      Alert.alert('Missing Information', 'Please enter both value and label');
+      return;
+    }
+
+    if (editingCategoryId !== null) {
+      updateNoteCategory(editingCategoryId, {
+        value: newCategoryValue.trim(),
+        label: newCategoryLabel.trim(),
+      });
+    } else {
+      addNoteCategory(newCategoryValue.trim(), newCategoryLabel.trim());
+    }
+
+    setNewCategoryValue('');
+    setNewCategoryLabel('');
+    setEditingCategoryId(null);
+    setCategoryModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleEditCategory = (id: number) => {
+    const category = noteCategories.find(c => c.id === id);
+    if (category) {
+      setEditingCategoryId(id);
+      setNewCategoryValue(category.value);
+      setNewCategoryLabel(category.label);
+      setCategoryModalVisible(true);
+    }
+  };
+
+  const handleDeleteCategory = (id: number) => {
+    Alert.alert(
+      'Delete Category',
+      'Are you sure you want to delete this category?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteNoteCategory(id);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
   const handleUnlock = () => {
     if (unlockingNoteId === null) return;
     const note = notes.find(n => n.id === unlockingNoteId);
@@ -210,6 +261,17 @@ export default function NotesScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>📝 {viewMode === 'journal' ? 'Journal' : 'Notes'}</Text>
         <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => {
+              setEditingCategoryId(null);
+              setNewCategoryValue('');
+              setNewCategoryLabel('');
+              setCategoryModalVisible(true);
+            }}
+          >
+            <Settings size={20} color={Colors.textDim} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.viewToggle}
             onPress={() => {
@@ -279,23 +341,38 @@ export default function NotesScreen() {
         contentContainerStyle={styles.categoriesContainer}
       >
         {CATEGORIES.map(cat => (
-          <TouchableOpacity
-            key={cat.value}
-            style={[
-              styles.categoryChip,
-              selectedCategory === cat.value && styles.categoryChipActive,
-            ]}
-            onPress={() => setSelectedCategory(cat.value)}
-          >
-            <Text
+          <View key={cat.id} style={styles.categoryChipWrapper}>
+            <TouchableOpacity
               style={[
-                styles.categoryChipText,
-                selectedCategory === cat.value && styles.categoryChipTextActive,
+                styles.categoryChip,
+                selectedCategory === cat.value && styles.categoryChipActive,
               ]}
+              onPress={() => setSelectedCategory(cat.value)}
+              onLongPress={() => {
+                if (cat.id !== 0) {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  Alert.alert(
+                    'Manage Category',
+                    cat.label,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Edit', onPress: () => handleEditCategory(cat.id) },
+                      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteCategory(cat.id) },
+                    ]
+                  );
+                }
+              }}
             >
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  selectedCategory === cat.value && styles.categoryChipTextActive,
+                ]}
+              >
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          </View>
         ))}
       </ScrollView>
 
@@ -547,9 +624,9 @@ export default function NotesScreen() {
               <Text style={styles.inputLabel}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.categoryOptions}>
-                  {CATEGORIES.slice(1).map(cat => (
+                  {noteCategories.map(cat => (
                     <TouchableOpacity
-                      key={cat.value}
+                      key={cat.id}
                       style={[
                         styles.categoryOption,
                         noteCategory === cat.value && styles.categoryOptionActive,
@@ -706,6 +783,96 @@ export default function NotesScreen() {
                   <Text style={styles.unlockButtonText}>Unlock</Text>
                 </LinearGradient>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={categoryModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setCategoryModalVisible(false);
+          setEditingCategoryId(null);
+          setNewCategoryValue('');
+          setNewCategoryLabel('');
+        }}
+      >
+        <View style={styles.unlockOverlay}>
+          <View style={styles.categoryModalContent}>
+            <Settings size={48} color={Colors.primary} />
+            <Text style={styles.unlockTitle}>{editingCategoryId ? 'Edit Category' : 'Add Category'}</Text>
+            <Text style={styles.unlockSubtitle}>{editingCategoryId ? 'Update category details' : 'Create a new category'}</Text>
+            
+            <TextInput
+              style={styles.categoryInput}
+              placeholder="Value (e.g., Study)"
+              placeholderTextColor={Colors.textDim}
+              value={newCategoryValue}
+              onChangeText={setNewCategoryValue}
+            />
+            
+            <TextInput
+              style={styles.categoryInput}
+              placeholder="Label (e.g., 📚 Study)"
+              placeholderTextColor={Colors.textDim}
+              value={newCategoryLabel}
+              onChangeText={setNewCategoryLabel}
+            />
+
+            {noteCategories.length > 0 && !editingCategoryId && (
+              <View style={styles.existingCategoriesSection}>
+                <Text style={styles.existingCategoriesTitle}>Existing Categories:</Text>
+                <ScrollView style={styles.existingCategoriesList}>
+                  {noteCategories.map(cat => (
+                    <View key={cat.id} style={styles.existingCategoryItem}>
+                      <Text style={styles.existingCategoryText}>{cat.label}</Text>
+                      <View style={styles.categoryActions}>
+                        <TouchableOpacity
+                          onPress={() => handleEditCategory(cat.id)}
+                          style={styles.categoryActionButton}
+                        >
+                          <Edit2 size={16} color={Colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteCategory(cat.id)}
+                          style={styles.categoryActionButton}
+                        >
+                          <Trash2 size={16} color={Colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={styles.unlockButtons}>
+              <TouchableOpacity
+                style={styles.unlockButtonSecondary}
+                onPress={() => {
+                  setCategoryModalVisible(false);
+                  setEditingCategoryId(null);
+                  setNewCategoryValue('');
+                  setNewCategoryLabel('');
+                }}
+              >
+                <Text style={styles.unlockButtonTextSecondary}>Cancel</Text>
+              </TouchableOpacity>
+              {(newCategoryValue.trim() || newCategoryLabel.trim()) && (
+                <TouchableOpacity
+                  style={styles.unlockButtonPrimary}
+                  onPress={handleSaveCategory}
+                >
+                  <LinearGradient
+                    colors={[Colors.primary, Colors.secondary]}
+                    style={styles.unlockButtonGradient}
+                  >
+                    <Text style={styles.unlockButtonText}>{editingCategoryId ? 'Update' : 'Add'}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -1313,5 +1480,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: 'white',
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryChipWrapper: {
+    position: 'relative',
+  },
+  categoryModalContent: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    padding: 32,
+    width: '85%',
+    maxHeight: '80%',
+    alignItems: 'center',
+  },
+  categoryInput: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 16,
+    color: Colors.text,
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  existingCategoriesSection: {
+    width: '100%',
+    marginTop: 16,
+    marginBottom: 16,
+    maxHeight: 200,
+  },
+  existingCategoriesTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  existingCategoriesList: {
+    maxHeight: 160,
+  },
+  existingCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  existingCategoryText: {
+    fontSize: 13,
+    color: Colors.text,
+    flex: 1,
+  },
+  categoryActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  categoryActionButton: {
+    padding: 4,
   },
 });

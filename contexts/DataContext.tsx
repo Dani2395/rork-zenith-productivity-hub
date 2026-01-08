@@ -23,6 +23,7 @@ import {
   BingoItem,
   BingoPrize,
   Holiday,
+  Category,
 } from '@/types';
 
 const DEFAULT_TASK_LISTS: TaskList[] = [
@@ -69,6 +70,23 @@ const DEFAULT_BINGO: BingoItem[] = [
   { e: '✨', t: 'Build habit', d: false },
 ];
 
+const DEFAULT_NOTE_CATEGORIES: Category[] = [
+  { id: 1, value: 'Work', label: '💼 Work', type: 'note' },
+  { id: 2, value: 'Personal', label: '👤 Personal', type: 'note' },
+  { id: 3, value: 'Ideas', label: '💡 Ideas', type: 'note' },
+  { id: 4, value: 'Projects', label: '🚀 Projects', type: 'note' },
+  { id: 5, value: 'Journal', label: '📔 Journal', type: 'note' },
+  { id: 6, value: 'Recipes', label: '🍳 Recipes', type: 'note' },
+];
+
+const DEFAULT_TASK_CATEGORIES: Category[] = [
+  { id: 1, value: 'Work', label: '💼 Work', type: 'task' },
+  { id: 2, value: 'Personal', label: '👤 Personal', type: 'task' },
+  { id: 3, value: 'Shopping', label: '🛒 Shopping', type: 'task' },
+  { id: 4, value: 'Health', label: '💪 Health', type: 'task' },
+  { id: 5, value: 'Finance', label: '💰 Finance', type: 'task' },
+];
+
 export const [DataProvider, useData] = createContextHook(() => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskLists, setTaskLists] = useState<TaskList[]>(DEFAULT_TASK_LISTS);
@@ -89,6 +107,8 @@ export const [DataProvider, useData] = createContextHook(() => {
   const [bingoData, setBingoData] = useState<BingoItem[]>(DEFAULT_BINGO);
   const [bingoPrize, setBingoPrize] = useState<BingoPrize>({ title: '🎉 Grand Prize', description: 'Celebrate your achievement!', emoji: '🎁' });
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [noteCategories, setNoteCategories] = useState<Category[]>(DEFAULT_NOTE_CATEGORIES);
+  const [taskCategories, setTaskCategories] = useState<Category[]>(DEFAULT_TASK_CATEGORIES);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -117,6 +137,8 @@ export const [DataProvider, useData] = createContextHook(() => {
         bingoDataStored,
         bingoPrizeData,
         holidaysData,
+        noteCategoriesData,
+        taskCategoriesData,
       ] = await Promise.all([
         AsyncStorage.getItem('tasks'),
         AsyncStorage.getItem('taskLists'),
@@ -137,6 +159,8 @@ export const [DataProvider, useData] = createContextHook(() => {
         AsyncStorage.getItem('bingoData'),
         AsyncStorage.getItem('bingoPrize'),
         AsyncStorage.getItem('holidays'),
+        AsyncStorage.getItem('noteCategories'),
+        AsyncStorage.getItem('taskCategories'),
       ]);
 
       if (tasksData) setTasks(JSON.parse(tasksData));
@@ -158,6 +182,8 @@ export const [DataProvider, useData] = createContextHook(() => {
       if (bingoDataStored) setBingoData(JSON.parse(bingoDataStored));
       if (bingoPrizeData) setBingoPrize(JSON.parse(bingoPrizeData));
       if (holidaysData) setHolidays(JSON.parse(holidaysData));
+      if (noteCategoriesData) setNoteCategories(JSON.parse(noteCategoriesData));
+      if (taskCategoriesData) setTaskCategories(JSON.parse(taskCategoriesData));
     } catch (error) {
       console.log('Error loading data:', error);
     } finally {
@@ -859,6 +885,52 @@ export const [DataProvider, useData] = createContextHook(() => {
       setHolidays(prev => {
         const updated = prev.filter(h => h.id !== id);
         saveData('holidays', updated);
+        return updated;
+      });
+    },
+    noteCategories,
+    taskCategories,
+    addNoteCategory: (value: string, label: string) => {
+      const newCategory: Category = { id: Date.now(), value, label, type: 'note' };
+      setNoteCategories(prev => {
+        const updated = [...prev, newCategory];
+        saveData('noteCategories', updated);
+        return updated;
+      });
+    },
+    updateNoteCategory: (id: number, updates: Partial<Category>) => {
+      setNoteCategories(prev => {
+        const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
+        saveData('noteCategories', updated);
+        return updated;
+      });
+    },
+    deleteNoteCategory: (id: number) => {
+      setNoteCategories(prev => {
+        const updated = prev.filter(c => c.id !== id);
+        saveData('noteCategories', updated);
+        return updated;
+      });
+    },
+    addTaskCategory: (value: string, label: string) => {
+      const newCategory: Category = { id: Date.now(), value, label, type: 'task' };
+      setTaskCategories(prev => {
+        const updated = [...prev, newCategory];
+        saveData('taskCategories', updated);
+        return updated;
+      });
+    },
+    updateTaskCategory: (id: number, updates: Partial<Category>) => {
+      setTaskCategories(prev => {
+        const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
+        saveData('taskCategories', updated);
+        return updated;
+      });
+    },
+    deleteTaskCategory: (id: number) => {
+      setTaskCategories(prev => {
+        const updated = prev.filter(c => c.id !== id);
+        saveData('taskCategories', updated);
         return updated;
       });
     },
