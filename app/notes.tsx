@@ -13,7 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2 } from 'lucide-react-native';
+import { Audio } from 'expo-av';
+import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2, Mic, Play, Pause, Square } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import DateTimePicker from '@/components/DateTimePicker';
@@ -60,6 +61,11 @@ export default function NotesScreen() {
   const [noteLockPin, setNoteLockPin] = useState('');
   const [noteDate, setNoteDate] = useState('');
   const [noteTime, setNoteTime] = useState('');
+  const [noteAudioRecordings, setNoteAudioRecordings] = useState<string[]>([]);
+
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [playingAudio, setPlayingAudio] = useState<{ [key: string]: Audio.Sound }>({});
 
   const [showStampPicker, setShowStampPicker] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
@@ -99,6 +105,7 @@ export default function NotesScreen() {
     setNoteLockPin('');
     setNoteDate('');
     setNoteTime('');
+    setNoteAudioRecordings([]);
     setEditingNote(null);
   };
 
@@ -133,6 +140,7 @@ export default function NotesScreen() {
           images: noteImages,
           stamps: noteStamps,
           lockPin: noteLocked ? noteLockPin : undefined,
+          audioRecordings: noteAudioRecordings,
           lastModified: timestamp,
         });
       } else {
@@ -147,6 +155,7 @@ export default function NotesScreen() {
           images: noteImages,
           stamps: noteStamps,
           lockPin: noteLocked ? noteLockPin : undefined,
+          audioRecordings: noteAudioRecordings,
           createdDate: timestamp,
           lastModified: timestamp,
         });
@@ -185,6 +194,7 @@ export default function NotesScreen() {
     setNoteLockPin(note.lockPin || '');
     setNoteDate(note.date || '');
     setNoteTime(note.time || '');
+    setNoteAudioRecordings(note.audioRecordings || []);
     setModalVisible(true);
   };
 
@@ -251,6 +261,94 @@ export default function NotesScreen() {
       Alert.alert('Incorrect PIN', 'Please try again');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
+  };
+
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to record audio');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(newRecording);
+      setIsRecording(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (error) {
+      console.error('Failed to start recording', error);
+      Alert.alert('Error', 'Failed to start recording');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    try {
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        setNoteAudioRecordings([...noteAudioRecordings, uri]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      console.error('Failed to stop recording', error);
+      Alert.alert('Error', 'Failed to stop recording');
+    }
+  };
+
+  const playAudio = async (uri: string) => {
+    try {
+      if (playingAudio[uri]) {
+        await playingAudio[uri].pauseAsync();
+        setPlayingAudio((prev) => {
+          const updated = { ...prev };
+          delete updated[uri];
+          return updated;
+        });
+      } else {
+        const { sound } = await Audio.Sound.createAsync({ uri });
+        await sound.playAsync();
+        setPlayingAudio((prev) => ({ ...prev, [uri]: sound }));
+
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            setPlayingAudio((prev) => {
+              const updated = { ...prev };
+              delete updated[uri];
+              return updated;
+            });
+          }
+        });
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Failed to play audio', error);
+      Alert.alert('Error', 'Failed to play audio');
+    }
+  };
+
+  const deleteAudio = (uri: string) => {
+    if (playingAudio[uri]) {
+      playingAudio[uri].unloadAsync();
+      setPlayingAudio((prev) => {
+        const updated = { ...prev };
+        delete updated[uri];
+        return updated;
+      });
+    }
+    setNoteAudioRecordings(noteAudioRecordings.filter((audio) => audio !== uri));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
   const categoryIcons: Record<string, string> = {
@@ -599,6 +697,57 @@ export default function NotesScreen() {
                   <Smile size={18} color={Colors.secondary} />
                   <Text style={styles.mediaButtonText}>Add Stamp</Text>
                 </TouchableOpacity>
+              </View>
+
+              <View style={styles.audioSection}>
+                <Text style={styles.inputLabel}>Voice Recording</Text>
+                <View style={styles.recordingControls}>
+                  {!isRecording ? (
+                    <TouchableOpacity
+                      style={styles.recordButton}
+                      onPress={startRecording}
+                    >
+                      <Mic size={20} color="white" />
+                      <Text style={styles.recordButtonText}>Start Recording</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.recordButton, styles.recordButtonActive]}
+                      onPress={stopRecording}
+                    >
+                      <Square size={20} color="white" />
+                      <Text style={styles.recordButtonText}>Stop Recording</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {noteAudioRecordings.length > 0 && (
+                  <View style={styles.audioRecordingsList}>
+                    {noteAudioRecordings.map((uri, idx) => (
+                      <View key={idx} style={styles.audioRecordingItem}>
+                        <TouchableOpacity
+                          style={styles.playButton}
+                          onPress={() => playAudio(uri)}
+                        >
+                          {playingAudio[uri] ? (
+                            <Pause size={18} color={Colors.primary} />
+                          ) : (
+                            <Play size={18} color={Colors.primary} />
+                          )}
+                        </TouchableOpacity>
+                        <Text style={styles.audioRecordingText}>
+                          Recording {idx + 1}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.deleteAudioButton}
+                          onPress={() => deleteAudio(uri)}
+                        >
+                          <Trash2 size={14} color={Colors.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
 
               {noteImages.length > 0 && (
@@ -1569,5 +1718,61 @@ const styles = StyleSheet.create({
   },
   categoryActionButton: {
     padding: 4,
+  },
+  audioSection: {
+    marginBottom: 16,
+  },
+  recordingControls: {
+    marginBottom: 12,
+  },
+  recordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+  },
+  recordButtonActive: {
+    backgroundColor: Colors.danger,
+  },
+  recordButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: 'white',
+  },
+  audioRecordingsList: {
+    gap: 8,
+  },
+  audioRecordingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  playButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioRecordingText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+  },
+  deleteAudioButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

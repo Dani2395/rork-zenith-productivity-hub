@@ -93,6 +93,12 @@
         {
           "iCloudContainerEnvironment": "Production"
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice recordings."
+        }
       ]
     ],
     "experiments": {
