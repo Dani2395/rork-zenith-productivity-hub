@@ -1,26 +1,34 @@
 import { Platform } from 'react-native';
 
 let Notifications: any = null;
+let isInitialized = false;
 
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Notifications = require('expo-notifications');
-  if (Notifications) {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
+function initializeNotifications() {
+  if (isInitialized) return;
+  isInitialized = true;
+  
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Notifications = require('expo-notifications');
+    if (Notifications) {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+    }
+  } catch {
+    console.log('Notifications not available in Expo Go. Use a development build for notification support.');
   }
-} catch {
-  console.log('Notifications not available in this environment');
 }
 
 export async function registerForPushNotificationsAsync() {
+  initializeNotifications();
+  
   if (!Notifications) {
     console.log('Notifications not available');
     return null;
@@ -62,6 +70,8 @@ export async function scheduleNotification(
   triggerDate: Date,
   data?: Record<string, any>
 ): Promise<string> {
+  initializeNotifications();
+  
   if (!Notifications) {
     console.log('Notifications not available');
     return '';
@@ -86,6 +96,8 @@ export async function scheduleNotification(
 }
 
 export async function cancelNotification(notificationId: string) {
+  initializeNotifications();
+  
   if (!Notifications || !notificationId) return;
   
   try {
@@ -96,6 +108,8 @@ export async function cancelNotification(notificationId: string) {
 }
 
 export async function cancelAllNotifications() {
+  initializeNotifications();
+  
   if (!Notifications) return;
   
   try {
