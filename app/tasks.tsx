@@ -17,6 +17,15 @@ import { useData } from '@/contexts/DataContext';
 
 type FilterType = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
 
+const CATEGORIES = [
+  { value: '', label: 'None' },
+  { value: 'Work', label: '💼 Work' },
+  { value: 'Personal', label: '👤 Personal' },
+  { value: 'Shopping', label: '🛒 Shopping' },
+  { value: 'Health', label: '💪 Health' },
+  { value: 'Finance', label: '💰 Finance' },
+];
+
 export default function TasksScreen() {
   const { tasks, taskLists, addTask, updateTask, deleteTask, toggleTask } = useData();
 
@@ -32,6 +41,7 @@ export default function TasksScreen() {
   const [taskDate, setTaskDate] = useState('');
   const [taskTime, setTaskTime] = useState('');
   const [taskListId, setTaskListId] = useState<number | null>(null);
+  const [taskCategory, setTaskCategory] = useState('');
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -69,6 +79,7 @@ export default function TasksScreen() {
     setTaskDate('');
     setTaskTime('');
     setTaskListId(null);
+    setTaskCategory('');
     setEditingTask(null);
   };
 
@@ -83,6 +94,7 @@ export default function TasksScreen() {
         date: taskDate,
         time: taskTime,
         listId: taskListId,
+        category: taskCategory,
       });
     } else {
       addTask({
@@ -94,6 +106,7 @@ export default function TasksScreen() {
         recurring: 'none',
         completed: false,
         listId: taskListId,
+        category: taskCategory,
       });
     }
 
@@ -112,6 +125,7 @@ export default function TasksScreen() {
       setTaskDate(task.date);
       setTaskTime(task.time);
       setTaskListId(task.listId || null);
+      setTaskCategory(task.category || '');
       setModalVisible(true);
     }
   };
@@ -346,21 +360,38 @@ export default function TasksScreen() {
               </View>
             </View>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Date (YYYY-MM-DD)"
-              placeholderTextColor={Colors.textDim}
-              value={taskDate}
-              onChangeText={setTaskDate}
-            />
+            <View style={styles.dateTimeRow}>
+              <TextInput
+                style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                placeholder="Date (YYYY-MM-DD)"
+                placeholderTextColor={Colors.textDim}
+                value={taskDate}
+                onChangeText={setTaskDate}
+              />
+              <View style={{ width: 8 }} />
+              <TextInput
+                style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                placeholder="Time (HH:MM)"
+                placeholderTextColor={Colors.textDim}
+                value={taskTime}
+                onChangeText={setTaskTime}
+              />
+            </View>
 
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Time (HH:MM)"
-              placeholderTextColor={Colors.textDim}
-              value={taskTime}
-              onChangeText={setTaskTime}
-            />
+            <View style={styles.listSelector}>
+              <Text style={styles.inputLabel}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {CATEGORIES.map(cat => (
+                  <TouchableOpacity
+                    key={cat.value}
+                    style={[styles.listOption, taskCategory === cat.value && styles.listOptionActive]}
+                    onPress={() => setTaskCategory(cat.value)}
+                  >
+                    <Text style={styles.listOptionText}>{cat.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
             <View style={styles.listSelector}>
               <Text style={styles.inputLabel}>List</Text>
@@ -632,6 +663,10 @@ const styles = StyleSheet.create({
   modalTextarea: {
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
   },
   inputLabel: {
     fontSize: 13,

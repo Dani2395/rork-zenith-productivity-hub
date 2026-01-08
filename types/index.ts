@@ -9,6 +9,7 @@ export interface Task {
   completed: boolean;
   completedDate?: string;
   listId?: number | null;
+  category?: string;
   createdDate: string;
   notificationId?: string;
   reminderBefore?: number;

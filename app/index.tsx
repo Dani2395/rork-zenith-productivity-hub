@@ -734,42 +734,47 @@ export default function HomeScreen() {
 
       <SafeAreaView style={styles.mainContent}>
         <View style={styles.header}>
-          {weather && (
-            <TouchableOpacity onPress={fetchWeather} style={styles.headerWeatherIcon}>
-              <Animated.Text
-                style={[
-                  styles.headerWeatherEmoji,
-                  {
-                    transform: [
-                      {
-                        scale: weatherAnimValue.interpolate({
-                          inputRange: [0, 0.5, 1],
-                          outputRange: [1, 1.15, 1],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              >
-                {weather.icon}
-              </Animated.Text>
-              <Text style={styles.headerWeatherTemp}>{weather.temp}°</Text>
-            </TouchableOpacity>
-          )}
-          {weatherLoading && (
-            <View style={styles.headerWeatherIcon}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-            </View>
-          )}
-          <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
-            {sidebarOpen ? (
-              <X size={24} color={Colors.text} />
-            ) : (
-              <Menu size={24} color={Colors.text} />
+          <View style={styles.headerLeft}>
+            {weather && (
+              <TouchableOpacity onPress={fetchWeather} style={styles.headerWeatherIcon}>
+                <Animated.Text
+                  style={[
+                    styles.headerWeatherEmoji,
+                    {
+                      transform: [
+                        {
+                          scale: weatherAnimValue.interpolate({
+                            inputRange: [0, 0.5, 1],
+                            outputRange: [1, 1.15, 1],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  {weather.icon}
+                </Animated.Text>
+                <Text style={styles.headerWeatherTemp}>{weather.temp}°</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Zenith</Text>
-          <Text style={styles.headerSubtitle}>Home</Text>
+            {weatherLoading && (
+              <View style={styles.headerWeatherIcon}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            )}
+            <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+              {sidebarOpen ? (
+                <X size={24} color={Colors.text} />
+              ) : (
+                <Menu size={24} color={Colors.text} />
+              )}
+            </TouchableOpacity>
+          </View>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Zenith</Text>
+            <Text style={styles.headerSubtitle}>Home</Text>
+          </View>
+          <View style={styles.headerRight} />
         </View>
 
         <ScrollView
@@ -778,39 +783,6 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
 
-
-          {pinnedNotes.length > 0 && (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>📌 Pinned Notes</Text>
-              <View style={styles.pinnedNote}>
-                <Text style={styles.pinnedNoteTitle}>
-                  {pinnedNotes[pinnedIndex]?.name}
-                </Text>
-                <Text style={styles.pinnedNoteText} numberOfLines={4}>
-                  {pinnedNotes[pinnedIndex]?.text}
-                </Text>
-              </View>
-              {pinnedNotes.length > 1 && (
-                <View style={styles.pinnedNav}>
-                  <TouchableOpacity
-                    onPress={() =>
-                      setPinnedIndex((pinnedIndex - 1 + pinnedNotes.length) % pinnedNotes.length)
-                    }
-                  >
-                    <ChevronLeft size={20} color={Colors.textDim} />
-                  </TouchableOpacity>
-                  <Text style={styles.pinnedIndicator}>
-                    {pinnedIndex + 1} / {pinnedNotes.length}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setPinnedIndex((pinnedIndex + 1) % pinnedNotes.length)}
-                  >
-                    <ChevronRight size={20} color={Colors.textDim} />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
 
           <View style={styles.card}>
             <View style={styles.cardTitleRow}>
@@ -880,6 +852,39 @@ export default function HomeScreen() {
               ))
             )}
           </View>
+
+          {pinnedNotes.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>📌 Pinned Notes</Text>
+              <View style={styles.pinnedNote}>
+                <Text style={styles.pinnedNoteTitle}>
+                  {pinnedNotes[pinnedIndex]?.name}
+                </Text>
+                <Text style={styles.pinnedNoteText} numberOfLines={4}>
+                  {pinnedNotes[pinnedIndex]?.text}
+                </Text>
+              </View>
+              {pinnedNotes.length > 1 && (
+                <View style={styles.pinnedNav}>
+                  <TouchableOpacity
+                    onPress={() =>
+                      setPinnedIndex((pinnedIndex - 1 + pinnedNotes.length) % pinnedNotes.length)
+                    }
+                  >
+                    <ChevronLeft size={20} color={Colors.textDim} />
+                  </TouchableOpacity>
+                  <Text style={styles.pinnedIndicator}>
+                    {pinnedIndex + 1} / {pinnedNotes.length}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setPinnedIndex((pinnedIndex + 1) % pinnedNotes.length)}
+                  >
+                    <ChevronRight size={20} color={Colors.textDim} />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>⭐ Today&apos;s Habits</Text>
@@ -1480,11 +1485,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    gap: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  headerCenter: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerRight: {
+    flex: 1,
   },
   headerWeatherIcon: {
     flexDirection: 'row',
@@ -1514,12 +1532,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700' as const,
     color: Colors.primary,
-    marginLeft: 12,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: Colors.textDim,
-    marginLeft: 'auto',
   },
   scrollView: {
     flex: 1,
