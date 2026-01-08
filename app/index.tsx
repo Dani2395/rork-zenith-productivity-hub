@@ -904,15 +904,23 @@ export default function HomeScreen() {
                     <Text style={styles.priorityNumberText}>{index + 1}</Text>
                   </LinearGradient>
                   <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        styles.priorityText,
-                        priority.completed && styles.priorityTextCompleted,
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {priority.overdue && '⚠️ '}{priority.task}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <Text
+                        style={[
+                          styles.priorityText,
+                          priority.completed && styles.priorityTextCompleted,
+                          { flex: 1 },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {priority.task}
+                      </Text>
+                      {priority.overdue && (
+                        <View style={styles.overdueTag}>
+                          <Text style={styles.overdueTagText}>OVERDUE</Text>
+                        </View>
+                      )}
+                    </View>
                     {(priority.date || priority.time) && (
                       <Text style={styles.priorityDateTime}>
                         {priority.date && `📅 ${priority.date}`}
