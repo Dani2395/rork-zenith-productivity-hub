@@ -13,6 +13,7 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -80,11 +81,14 @@ export default function HomeScreen() {
     addHoliday,
     updateHoliday,
     deleteHoliday,
+    addTask,
     updateTask,
     deleteTask,
     toggleTask,
+    addEvent,
     updateEvent,
     deleteEvent,
+    addNote,
     updateNote,
     deleteNote,
     updateWorkout,
@@ -128,6 +132,16 @@ export default function HomeScreen() {
     type: 'task' | 'event' | 'note' | 'workout' | 'holiday';
     item: Task | Event | Note | Workout | Holiday;
   } | null>(null);
+  const [editingScheduleItem, setEditingScheduleItem] = useState(false);
+
+  // Quick Add Modal States
+  const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
+  const [quickAddType, setQuickAddType] = useState<'task' | 'event' | 'note' | null>(null);
+  const [quickAddName, setQuickAddName] = useState('');
+  const [quickAddDesc, setQuickAddDesc] = useState('');
+  const [quickAddDate, setQuickAddDate] = useState('');
+  const [quickAddTime, setQuickAddTime] = useState('');
+  const [quickAddPriority, setQuickAddPriority] = useState<'low' | 'medium' | 'high'>('medium');
 
   const sidebarAnim = useRef(new Animated.Value(-SCREEN_WIDTH * 0.8)).current;
 
@@ -315,6 +329,65 @@ export default function HomeScreen() {
       setMoodNote('');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+  };
+
+  const handleQuickAdd = () => {
+    if (!quickAddName.trim()) {
+      Alert.alert('Missing Information', 'Please enter a name');
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const dateToUse = quickAddDate || today;
+
+    if (quickAddType === 'task') {
+      addTask({
+        name: quickAddName.trim(),
+        desc: quickAddDesc.trim(),
+        priority: quickAddPriority,
+        date: dateToUse,
+        time: quickAddTime,
+        recurring: 'none',
+        completed: false,
+        createdDate: timestamp,
+      });
+    } else if (quickAddType === 'event') {
+      addEvent({
+        name: quickAddName.trim(),
+        desc: quickAddDesc.trim(),
+        date: dateToUse,
+        time: quickAddTime,
+        recurring: 'none',
+        createdDate: timestamp,
+      });
+    } else if (quickAddType === 'note') {
+      addNote({
+        name: quickAddName.trim(),
+        text: quickAddDesc.trim(),
+        locked: false,
+        pinned: false,
+        date: dateToUse,
+        time: quickAddTime || undefined,
+        category: '',
+        createdDate: timestamp,
+        lastModified: timestamp,
+      });
+    }
+
+    setQuickAddName('');
+    setQuickAddDesc('');
+    setQuickAddDate('');
+    setQuickAddTime('');
+    setQuickAddPriority('medium');
+    setQuickAddModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const openQuickAdd = (type: 'task' | 'event' | 'note') => {
+    setQuickAddType(type);
+    setQuickAddDate(today);
+    setQuickAccessVisible(false);
+    setQuickAddModalVisible(true);
   };
 
   // Today's items
@@ -1404,10 +1477,7 @@ export default function HomeScreen() {
             <Text style={styles.quickAccessTitle}>Quick Add</Text>
             <TouchableOpacity
               style={styles.quickAccessOption}
-              onPress={() => {
-                setQuickAccessVisible(false);
-                router.push('/tasks');
-              }}
+              onPress={() => openQuickAdd('task')}
             >
               <View style={styles.quickAccessIconContainer}>
                 <CheckSquare size={24} color={Colors.primary} />
@@ -1416,10 +1486,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickAccessOption}
-              onPress={() => {
-                setQuickAccessVisible(false);
-                router.push('/calendar');
-              }}
+              onPress={() => openQuickAdd('event')}
             >
               <View style={styles.quickAccessIconContainer}>
                 <Calendar size={24} color={Colors.secondary} />
@@ -1428,10 +1495,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickAccessOption}
-              onPress={() => {
-                setQuickAccessVisible(false);
-                router.push('/notes');
-              }}
+              onPress={() => openQuickAdd('note')}
             >
               <View style={styles.quickAccessIconContainer}>
                 <FileText size={24} color={Colors.success} />
@@ -1440,6 +1504,103 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </Pressable>
+      </Modal>
+
+      {/* Quick Add Modal */}
+      <Modal
+        visible={quickAddModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setQuickAddModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {quickAddType === 'task' && '✅ Quick Add Task'}
+                {quickAddType === 'event' && '📅 Quick Add Event'}
+                {quickAddType === 'note' && '📝 Quick Add Note'}
+              </Text>
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder={quickAddType === 'note' ? 'Note title *' : 'Name *'}
+                placeholderTextColor={Colors.textDim}
+                value={quickAddName}
+                onChangeText={setQuickAddName}
+                autoFocus
+              />
+
+              <TextInput
+                style={[styles.modalInput, styles.modalTextarea]}
+                placeholder={quickAddType === 'note' ? 'Note content' : 'Description'}
+                placeholderTextColor={Colors.textDim}
+                value={quickAddDesc}
+                onChangeText={setQuickAddDesc}
+                multiline
+              />
+
+              {quickAddType === 'task' && (
+                <View style={styles.prioritySelector}>
+                  <Text style={styles.inputLabel}>Priority</Text>
+                  <View style={styles.priorityButtons}>
+                    {(['low', 'medium', 'high'] as const).map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.priorityButton,
+                          quickAddPriority === p && styles.priorityButtonActive,
+                          p === 'low' && { borderColor: Colors.success, backgroundColor: quickAddPriority === p ? Colors.success : 'transparent' },
+                          p === 'medium' && { borderColor: Colors.warning, backgroundColor: quickAddPriority === p ? Colors.warning : 'transparent' },
+                          p === 'high' && { borderColor: Colors.danger, backgroundColor: quickAddPriority === p ? Colors.danger : 'transparent' },
+                        ]}
+                        onPress={() => setQuickAddPriority(p)}
+                      >
+                        <Text style={[styles.priorityButtonText, quickAddPriority === p && styles.priorityButtonTextActive]}>
+                          {p.charAt(0).toUpperCase() + p.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <DateTimePicker
+                label="Schedule"
+                date={quickAddDate}
+                time={quickAddTime}
+                onDateChange={setQuickAddDate}
+                onTimeChange={setQuickAddTime}
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalButtonSecondary}
+                  onPress={() => {
+                    setQuickAddModalVisible(false);
+                    setQuickAddName('');
+                    setQuickAddDesc('');
+                    setQuickAddDate('');
+                    setQuickAddTime('');
+                  }}
+                >
+                  <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalButtonPrimary}
+                  onPress={handleQuickAdd}
+                >
+                  <LinearGradient
+                    colors={[Colors.primary, Colors.secondary]}
+                    style={styles.modalButtonGradient}
+                  >
+                    <Text style={styles.modalButtonText}>Add</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
       </Modal>
 
       <Modal
@@ -2471,5 +2632,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600' as const,
     color: Colors.textDim,
+  },
+  prioritySelector: {
+    marginBottom: 16,
+  },
+  priorityButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  priorityButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+  },
+  priorityButtonActive: {
+    // backgroundColor handled inline
+  },
+  priorityButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  priorityButtonTextActive: {
+    color: 'white',
   },
 });
