@@ -8,6 +8,7 @@ import {
   TextInput,
   Modal,
   Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -170,6 +171,11 @@ export default function GiftsScreen() {
   };
 
   const handleUnlock = async () => {
+    if (lockPin.length !== 4) {
+      Alert.alert('Invalid PIN', 'Please enter a 4-digit PIN');
+      return;
+    }
+    
     if (lockPin === storedPin) {
       setIsLocked(false);
       await saveLockState(false);
@@ -177,38 +183,42 @@ export default function GiftsScreen() {
       setLockPin('');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
+      Alert.alert('Incorrect PIN', 'The PIN you entered is incorrect. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setLockPin('');
     }
   };
 
   const handleSetPin = async () => {
-    if (lockPin.length >= 4) {
-      setStoredPin(lockPin);
-      await savePinState(lockPin);
-      setIsPinSetup(true);
-      setIsLocked(false);
-      await saveLockState(false);
-      setIsSettingPin(false);
-      setLockModalVisible(false);
-      setLockPin('');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (lockPin.length !== 4) {
+      Alert.alert('Invalid PIN', 'Please enter exactly 4 digits');
+      return;
     }
+    
+    setStoredPin(lockPin);
+    await savePinState(lockPin);
+    setIsPinSetup(true);
+    setIsLocked(false);
+    await saveLockState(false);
+    setIsSettingPin(false);
+    setLockModalVisible(false);
+    setLockPin('');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const toggleLock = async () => {
     if (isLocked) {
+      setIsSettingPin(false);
+      setLockModalVisible(true);
+    } else {
       if (!isPinSetup) {
         setIsSettingPin(true);
         setLockModalVisible(true);
       } else {
-        setIsSettingPin(false);
-        setLockModalVisible(true);
+        setIsLocked(true);
+        await saveLockState(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-    } else {
-      setIsLocked(true);
-      await saveLockState(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 

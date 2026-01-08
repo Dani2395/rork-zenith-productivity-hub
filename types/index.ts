@@ -30,6 +30,7 @@ export interface Note {
   date: string;
   category: string;
   createdDate: string;
+  lastModified?: string;
   images?: string[];
   stamps?: string[];
   lockPin?: string;

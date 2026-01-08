@@ -97,12 +97,22 @@ export default function NotesScreen() {
   };
 
   const handleSaveNote = () => {
-    if (!noteName.trim() || !noteText.trim()) return;
-
-    if (noteLocked && !noteLockPin.trim()) {
-      Alert.alert('PIN Required', 'Please enter a PIN to lock this note');
+    if (!noteName.trim() || !noteText.trim()) {
+      Alert.alert('Missing Information', 'Please enter both a title and content for your note');
       return;
     }
+
+    if (noteLocked && !noteLockPin.trim()) {
+      Alert.alert('PIN Required', 'Please enter a 4-digit PIN to lock this note');
+      return;
+    }
+
+    if (noteLocked && noteLockPin.length !== 4) {
+      Alert.alert('Invalid PIN', 'PIN must be exactly 4 digits');
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
 
     if (editingNote) {
       updateNote(editingNote, {
@@ -114,6 +124,7 @@ export default function NotesScreen() {
         images: noteImages,
         stamps: noteStamps,
         lockPin: noteLocked ? noteLockPin : undefined,
+        lastModified: timestamp,
       });
     } else {
       addNote({
@@ -126,6 +137,8 @@ export default function NotesScreen() {
         images: noteImages,
         stamps: noteStamps,
         lockPin: noteLocked ? noteLockPin : undefined,
+        createdDate: timestamp,
+        lastModified: timestamp,
       });
     }
 
@@ -360,6 +373,11 @@ export default function NotesScreen() {
                   </View>
                 )}
               </View>
+              {note.lastModified && (
+                <Text style={styles.noteTimestamp}>
+                  {new Date(note.lastModified).toLocaleString()}
+                </Text>
+              )}
               {note.images && note.images.length > 0 && (
                 <Image
                   source={{ uri: note.images[0] }}
@@ -956,6 +974,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textDim,
     marginTop: 8,
+  },
+  noteTimestamp: {
+    fontSize: 10,
+    color: Colors.textDim,
+    marginTop: 4,
+    marginBottom: 4,
   },
   deleteButton: {
     position: 'absolute',

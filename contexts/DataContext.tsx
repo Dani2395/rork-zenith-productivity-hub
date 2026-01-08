@@ -214,11 +214,10 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
-  const addNote = useCallback((note: Omit<Note, 'id' | 'createdDate'>) => {
+  const addNote = useCallback((note: Omit<Note, 'id'>) => {
     const newNote: Note = {
       ...note,
       id: Date.now(),
-      createdDate: new Date().toISOString().split('T')[0],
     };
     setNotes(prev => {
       const updated = [...prev, newNote];
