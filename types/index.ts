@@ -199,6 +199,12 @@ export interface BingoItem {
   bg?: string;
 }
 
+export interface BingoPrize {
+  title: string;
+  description: string;
+  emoji: string;
+}
+
 export interface Holiday {
   id: number;
   date: string;

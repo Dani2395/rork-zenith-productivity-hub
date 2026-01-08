@@ -21,6 +21,7 @@ import {
   GiftPerson,
   GiftItem,
   BingoItem,
+  BingoPrize,
   Holiday,
 } from '@/types';
 
@@ -86,6 +87,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   const [savings, setSavings] = useState<Savings[]>([]);
   const [giftPeople, setGiftPeople] = useState<GiftPerson[]>([]);
   const [bingoData, setBingoData] = useState<BingoItem[]>(DEFAULT_BINGO);
+  const [bingoPrize, setBingoPrize] = useState<BingoPrize>({ title: '🎉 Grand Prize', description: 'Celebrate your achievement!', emoji: '🎁' });
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -113,6 +115,7 @@ export const [DataProvider, useData] = createContextHook(() => {
         savingsData,
         giftPeopleData,
         bingoDataStored,
+        bingoPrizeData,
         holidaysData,
       ] = await Promise.all([
         AsyncStorage.getItem('tasks'),
@@ -132,6 +135,7 @@ export const [DataProvider, useData] = createContextHook(() => {
         AsyncStorage.getItem('savings'),
         AsyncStorage.getItem('giftPeople'),
         AsyncStorage.getItem('bingoData'),
+        AsyncStorage.getItem('bingoPrize'),
         AsyncStorage.getItem('holidays'),
       ]);
 
@@ -152,6 +156,7 @@ export const [DataProvider, useData] = createContextHook(() => {
       if (savingsData) setSavings(JSON.parse(savingsData));
       if (giftPeopleData) setGiftPeople(JSON.parse(giftPeopleData));
       if (bingoDataStored) setBingoData(JSON.parse(bingoDataStored));
+      if (bingoPrizeData) setBingoPrize(JSON.parse(bingoPrizeData));
       if (holidaysData) setHolidays(JSON.parse(holidaysData));
     } catch (error) {
       console.log('Error loading data:', error);
@@ -641,6 +646,14 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
+  const updateBingoPrize = useCallback((updates: Partial<BingoPrize>) => {
+    setBingoPrize(prev => {
+      const updated = { ...prev, ...updates };
+      saveData('bingoPrize', updated);
+      return updated;
+    });
+  }, [saveData]);
+
   const addGiftPerson = useCallback((name: string, tag: GiftPerson['tag']) => {
     const newPerson: GiftPerson = {
       id: Date.now(),
@@ -773,6 +786,7 @@ export const [DataProvider, useData] = createContextHook(() => {
     savings,
     giftPeople,
     bingoData,
+    bingoPrize,
     addTask,
     updateTask,
     deleteTask,
@@ -819,6 +833,7 @@ export const [DataProvider, useData] = createContextHook(() => {
     deleteSavings,
     toggleBingo,
     updateBingo,
+    updateBingoPrize,
     addGiftPerson,
     addGiftItem,
     deleteGiftPerson,

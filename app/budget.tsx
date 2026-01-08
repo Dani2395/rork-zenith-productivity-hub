@@ -18,8 +18,11 @@ import {
   TrendingUp,
   TrendingDown,
   Trash2,
+  Upload,
+  Edit2,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import * as DocumentPicker from 'expo-document-picker';
 import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
 
@@ -73,6 +76,9 @@ export default function BudgetScreen() {
   const [savingsCurrent, setSavingsCurrent] = useState('');
   const [savingsMonthly, setSavingsMonthly] = useState('');
   const [savingsDeadline, setSavingsDeadline] = useState('');
+
+  const [uploadModalVisible, setUploadModalVisible] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
 
   const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -312,6 +318,71 @@ export default function BudgetScreen() {
     ]);
   };
 
+  const handleUploadStatement = async () => {
+    try {
+      setUploadStatus('Picking file...');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/plain', 'application/pdf'],
+      });
+
+      if (result.canceled) {
+        setUploadStatus('');
+        return;
+      }
+
+      setUploadStatus('Processing...');
+      
+      if (result.assets[0].mimeType === 'text/csv' || result.assets[0].name.endsWith('.csv')) {
+        const fileUri = result.assets[0].uri;
+        const response = await fetch(fileUri);
+        const text = await response.text();
+        
+        const lines = text.split('\n');
+        let imported = 0;
+        
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          const parts = line.split(',');
+          if (parts.length < 3) continue;
+          
+          const date = parts[0]?.trim();
+          const description = parts[1]?.trim();
+          const amountStr = parts[2]?.trim().replace(/[^0-9.-]/g, '');
+          const amount = Math.abs(parseFloat(amountStr));
+          
+          if (!date || !amount || isNaN(amount)) continue;
+          
+          const isExpense = parseFloat(amountStr) < 0;
+          
+          addTransaction({
+            amount,
+            description: description || (isExpense ? 'Expense' : 'Income'),
+            date: date.includes('/') ? date : new Date().toISOString().split('T')[0],
+            type: isExpense ? 'expense' : 'income',
+          });
+          
+          imported++;
+        }
+        
+        setUploadStatus(`✅ Imported ${imported} transactions`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => {
+          setUploadModalVisible(false);
+          setUploadStatus('');
+        }, 2000);
+      } else {
+        setUploadStatus('❌ Please upload a CSV file');
+        setTimeout(() => setUploadStatus(''), 3000);
+      }
+    } catch (error) {
+      console.log('Upload error:', error);
+      setUploadStatus('❌ Error processing file');
+      setTimeout(() => setUploadStatus(''), 3000);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -389,6 +460,14 @@ export default function BudgetScreen() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity
+          style={styles.uploadButton}
+          onPress={() => setUploadModalVisible(true)}
+        >
+          <Upload size={18} color={Colors.primary} />
+          <Text style={styles.uploadButtonText}>Upload Bank Statement (CSV)</Text>
+        </TouchableOpacity>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>💰 Budgets</Text>
           {budgets.length === 0 ? (
@@ -419,6 +498,12 @@ export default function BudgetScreen() {
                       </View>
                     </View>
                     <View style={styles.budgetActions}>
+                      <TouchableOpacity
+                        onPress={() => openBudgetModal(budget)}
+                        style={styles.iconButton}
+                      >
+                        <Edit2 size={16} color={Colors.primary} />
+                      </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleDeleteBudget(budget.id, budget.name)}
                         style={styles.iconButton}
@@ -475,12 +560,20 @@ export default function BudgetScreen() {
                       {debt.interest}% APR • ${debt.payment}/mo • Due: {debt.due}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteDebt(debt.id, debt.name)}
-                    style={styles.iconButton}
-                  >
-                    <Trash2 size={16} color={Colors.danger} />
-                  </TouchableOpacity>
+                  <View style={styles.budgetActions}>
+                    <TouchableOpacity
+                      onPress={() => openDebtModal(debt)}
+                      style={styles.iconButton}
+                    >
+                      <Edit2 size={16} color={Colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteDebt(debt.id, debt.name)}
+                      style={styles.iconButton}
+                    >
+                      <Trash2 size={16} color={Colors.danger} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </TouchableOpacity>
             ))
@@ -516,12 +609,20 @@ export default function BudgetScreen() {
                         ${goal.monthly}/mo • Deadline: {goal.deadline}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteSavings(goal.id, goal.name)}
-                      style={styles.iconButton}
-                    >
-                      <Trash2 size={16} color={Colors.danger} />
-                    </TouchableOpacity>
+                    <View style={styles.budgetActions}>
+                      <TouchableOpacity
+                        onPress={() => openSavingsModal(goal)}
+                        style={styles.iconButton}
+                      >
+                        <Edit2 size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteSavings(goal.id, goal.name)}
+                        style={styles.iconButton}
+                      >
+                        <Trash2 size={16} color={Colors.danger} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                   <View style={styles.progressBar}>
                     <View
@@ -582,12 +683,20 @@ export default function BudgetScreen() {
                       >
                         {isIncome ? '+' : '-'}${t.amount.toFixed(2)}
                       </Text>
-                      <TouchableOpacity
-                        onPress={() => handleDeleteTransaction(t.id)}
-                        style={styles.iconButton}
-                      >
-                        <Trash2 size={14} color={Colors.danger} />
-                      </TouchableOpacity>
+                      <View style={styles.transactionActions}>
+                        <TouchableOpacity
+                          onPress={() => openTransactionModal(t)}
+                          style={styles.iconButton}
+                        >
+                          <Edit2 size={14} color={Colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteTransaction(t.id)}
+                          style={styles.iconButton}
+                        >
+                          <Trash2 size={14} color={Colors.danger} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -885,6 +994,56 @@ export default function BudgetScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={uploadModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setUploadModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Upload Bank Statement</Text>
+            <Text style={styles.uploadInstructions}>
+              Upload a CSV file with the following format:{`\n\n`}
+              Date, Description, Amount{`\n`}
+              2024-01-15, Grocery Store, -45.99{`\n`}
+              2024-01-16, Salary Deposit, 2500.00{`\n\n`}
+              Negative amounts are expenses, positive are income.
+            </Text>
+            
+            {uploadStatus ? (
+              <View style={styles.uploadStatusContainer}>
+                <Text style={styles.uploadStatus}>{uploadStatus}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalButtonSecondary}
+                onPress={() => {
+                  setUploadModalVisible(false);
+                  setUploadStatus('');
+                }}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.modalButtonPrimary} 
+                onPress={handleUploadStatement}
+                disabled={!!uploadStatus && !uploadStatus.startsWith('❌')}
+              >
+                <LinearGradient
+                  colors={[Colors.primary, Colors.secondary]}
+                  style={styles.modalButtonGradient}
+                >
+                  <Text style={styles.modalButtonText}>Choose File</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1019,6 +1178,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: Colors.text,
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  uploadButtonText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.primary,
+  },
+  uploadInstructions: {
+    fontSize: 13,
+    color: Colors.textDim,
+    lineHeight: 20,
+    marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    padding: 12,
+    borderRadius: 8,
+  },
+  uploadStatusContainer: {
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  uploadStatus: {
+    fontSize: 14,
+    color: Colors.text,
+    textAlign: 'center',
+    fontWeight: '600' as const,
+  },
+  transactionActions: {
+    flexDirection: 'row',
+    gap: 4,
   },
   section: {
     marginBottom: 24,

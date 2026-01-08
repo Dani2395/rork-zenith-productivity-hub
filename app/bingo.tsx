@@ -23,13 +23,18 @@ const BACKGROUND_COLORS = [
 ];
 
 export default function BingoScreen() {
-  const { bingoData, toggleBingo, updateBingo } = useData();
+  const { bingoData, bingoPrize, toggleBingo, updateBingo, updateBingoPrize } = useData();
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [prizeModalVisible, setPrizeModalVisible] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editEmoji, setEditEmoji] = useState('');
   const [editText, setEditText] = useState('');
   const [editBg, setEditBg] = useState('');
   const [editImg, setEditImg] = useState('');
+
+  const [prizeTitle, setPrizeTitle] = useState('');
+  const [prizeDescription, setPrizeDescription] = useState('');
+  const [prizeEmoji, setPrizeEmoji] = useState('');
 
   const completedCount = bingoData.filter(item => item.d).length;
 
@@ -125,6 +130,25 @@ export default function BingoScreen() {
     setEditModalVisible(false);
   };
 
+  const openPrizeModal = () => {
+    setPrizeTitle(bingoPrize.title);
+    setPrizeDescription(bingoPrize.description);
+    setPrizeEmoji(bingoPrize.emoji);
+    setPrizeModalVisible(true);
+  };
+
+  const handleSavePrize = () => {
+    if (prizeTitle.trim()) {
+      updateBingoPrize({
+        title: prizeTitle.trim(),
+        description: prizeDescription.trim(),
+        emoji: prizeEmoji,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setPrizeModalVisible(false);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
@@ -133,25 +157,35 @@ export default function BingoScreen() {
 
       <View style={styles.statusContainer}>
         {isBlackout ? (
-          <LinearGradient
-            colors={['#fbbf24', '#f59e0b']}
-            style={styles.statusBadge}
-          >
-            <Text style={styles.statusText}>🎉🎉🎉 BLACKOUT! 🎉🎉🎉</Text>
-          </LinearGradient>
+          <TouchableOpacity onPress={openPrizeModal} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#fbbf24', '#f59e0b']}
+              style={styles.statusBadge}
+            >
+              <Text style={styles.statusText}>🎉🎉🎉 BLACKOUT! 🎉🎉🎉</Text>
+              <Text style={styles.prizeText}>{bingoPrize.emoji} {bingoPrize.title}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         ) : hasBingo ? (
-          <LinearGradient
-            colors={[Colors.primary, Colors.secondary]}
-            style={styles.statusBadge}
-          >
-            <Text style={styles.statusText}>🎉 BINGO! 🎉</Text>
-          </LinearGradient>
+          <TouchableOpacity onPress={openPrizeModal} activeOpacity={0.8}>
+            <LinearGradient
+              colors={[Colors.primary, Colors.secondary]}
+              style={styles.statusBadge}
+            >
+              <Text style={styles.statusText}>🎉 BINGO! 🎉</Text>
+              <Text style={styles.prizeText}>{bingoPrize.emoji} {bingoPrize.title}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         ) : (
           <View style={styles.progressBadge}>
             <Text style={styles.progressText}>{completedCount}/25 completed</Text>
           </View>
         )}
       </View>
+
+      <TouchableOpacity style={styles.editPrizeButton} onPress={openPrizeModal}>
+        <Text style={styles.editPrizeText}>✏️ Edit Prize</Text>
+      </TouchableOpacity>
 
       <ScrollView style={styles.gridContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.bingoGrid}>
@@ -320,6 +354,75 @@ export default function BingoScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={prizeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPrizeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Prize</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Prize Emoji</Text>
+              <TextInput
+                style={styles.emojiInput}
+                value={prizeEmoji}
+                onChangeText={setPrizeEmoji}
+                placeholder="🎁"
+                placeholderTextColor={Colors.textDim}
+                maxLength={4}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Prize Title</Text>
+              <TextInput
+                style={styles.textInput}
+                value={prizeTitle}
+                onChangeText={setPrizeTitle}
+                placeholder="Enter prize title"
+                placeholderTextColor={Colors.textDim}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Prize Description</Text>
+              <TextInput
+                style={styles.textInput}
+                value={prizeDescription}
+                onChangeText={setPrizeDescription}
+                placeholder="Enter prize description"
+                placeholderTextColor={Colors.textDim}
+                multiline
+              />
+            </View>
+
+            <View style={styles.prizePreview}>
+              <Text style={styles.prizePreviewEmoji}>{prizeEmoji}</Text>
+              <Text style={styles.prizePreviewTitle}>{prizeTitle}</Text>
+              <Text style={styles.prizePreviewDesc}>{prizeDescription}</Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setPrizeModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveButton}
+                onPress={handleSavePrize}
+              >
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -351,6 +454,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700' as const,
     color: 'white',
+  },
+  prizeText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: 'white',
+    marginTop: 4,
+  },
+  editPrizeButton: {
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  editPrizeText: {
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '600' as const,
   },
   progressBadge: {
     paddingVertical: 8,
@@ -604,5 +728,30 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 12,
     marginBottom: 4,
+  },
+  prizePreview: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  prizePreviewEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  prizePreviewTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  prizePreviewDesc: {
+    fontSize: 13,
+    color: Colors.textDim,
+    textAlign: 'center',
   },
 });
