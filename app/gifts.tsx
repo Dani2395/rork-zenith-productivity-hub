@@ -37,7 +37,7 @@ const EVENTS = [
 ];
 
 export default function GiftsScreen() {
-  const { giftPeople, addGiftPerson, addGiftItem, deleteGiftPerson } = useData();
+  const { giftPeople, addGiftPerson, addGiftItem, deleteGiftPerson, updateGiftItem } = useData();
 
   useEffect(() => {
     loadLockState();
@@ -81,7 +81,7 @@ export default function GiftsScreen() {
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [expandedPersons, setExpandedPersons] = useState<Set<number>>(new Set());
-  const [isLocked, setIsLocked] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
   const [lockModalVisible, setLockModalVisible] = useState(false);
   const [lockPin, setLockPin] = useState('');
   const [storedPin, setStoredPin] = useState('1234');
@@ -202,6 +202,7 @@ export default function GiftsScreen() {
         setIsSettingPin(true);
         setLockModalVisible(true);
       } else {
+        setIsSettingPin(false);
         setLockModalVisible(true);
       }
     } else {
@@ -329,8 +330,17 @@ export default function GiftsScreen() {
                                 <ExternalLink size={16} color={Colors.primary} />
                               </TouchableOpacity>
                             )}
-                            <TouchableOpacity style={styles.purchasedButton}>
-                              <Check size={16} color={Colors.success} />
+                            <TouchableOpacity 
+                              style={[
+                                styles.purchasedButton,
+                                gift.purchased && styles.purchasedButtonActive,
+                              ]}
+                              onPress={() => {
+                                updateGiftItem(person.id, gift.id, { purchased: !gift.purchased });
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              }}
+                            >
+                              <Check size={16} color={gift.purchased ? 'white' : Colors.success} />
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -762,6 +772,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  purchasedButtonActive: {
+    backgroundColor: Colors.success,
   },
   modalOverlay: {
     flex: 1,

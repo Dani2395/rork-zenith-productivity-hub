@@ -12,12 +12,14 @@ import {
   Priorities,
   Moods,
   Workout,
+  WorkoutTemplate,
   Book,
   Budget,
   Transaction,
   Debt,
   Savings,
   GiftPerson,
+  GiftItem,
   BingoItem,
   Holiday,
 } from '@/types';
@@ -76,6 +78,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   const [priorities, setPriorities] = useState<Priorities>({});
   const [moods, setMoods] = useState<Moods>({});
   const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [workoutTemplates, setWorkoutTemplates] = useState<WorkoutTemplate[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>(DEFAULT_BUDGETS);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -102,6 +105,7 @@ export const [DataProvider, useData] = createContextHook(() => {
         prioritiesData,
         moodsData,
         workoutsData,
+        workoutTemplatesData,
         booksData,
         budgetsData,
         transactionsData,
@@ -120,6 +124,7 @@ export const [DataProvider, useData] = createContextHook(() => {
         AsyncStorage.getItem('priorities'),
         AsyncStorage.getItem('moods'),
         AsyncStorage.getItem('workouts'),
+        AsyncStorage.getItem('workoutTemplates'),
         AsyncStorage.getItem('books'),
         AsyncStorage.getItem('budgets'),
         AsyncStorage.getItem('transactions'),
@@ -139,6 +144,7 @@ export const [DataProvider, useData] = createContextHook(() => {
       if (prioritiesData) setPriorities(JSON.parse(prioritiesData));
       if (moodsData) setMoods(JSON.parse(moodsData));
       if (workoutsData) setWorkouts(JSON.parse(workoutsData));
+      if (workoutTemplatesData) setWorkoutTemplates(JSON.parse(workoutTemplatesData));
       if (booksData) setBooks(JSON.parse(booksData));
       if (budgetsData) setBudgets(JSON.parse(budgetsData));
       if (transactionsData) setTransactions(JSON.parse(transactionsData));
@@ -421,6 +427,31 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
+  const addWorkoutTemplate = useCallback((template: Omit<WorkoutTemplate, 'id'>) => {
+    const newTemplate: WorkoutTemplate = { ...template, id: Date.now() };
+    setWorkoutTemplates(prev => {
+      const updated = [...prev, newTemplate];
+      saveData('workoutTemplates', updated);
+      return updated;
+    });
+  }, [saveData]);
+
+  const updateWorkoutTemplate = useCallback((id: number, updates: Partial<WorkoutTemplate>) => {
+    setWorkoutTemplates(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
+      saveData('workoutTemplates', updated);
+      return updated;
+    });
+  }, [saveData]);
+
+  const deleteWorkoutTemplate = useCallback((id: number) => {
+    setWorkoutTemplates(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      saveData('workoutTemplates', updated);
+      return updated;
+    });
+  }, [saveData]);
+
   const addBook = useCallback((book: Omit<Book, 'id' | 'dateAdded'>) => {
     const newBook: Book = {
       ...book,
@@ -636,6 +667,22 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
+  const updateGiftItem = useCallback((personId: number, giftId: number, updates: Partial<GiftItem>) => {
+    setGiftPeople(prev => {
+      const updated = prev.map(p => {
+        if (p.id === personId) {
+          return {
+            ...p,
+            gifts: p.gifts.map(g => g.id === giftId ? { ...g, ...updates } : g),
+          };
+        }
+        return p;
+      });
+      saveData('giftPeople', updated);
+      return updated;
+    });
+  }, [saveData]);
+
   const deleteBook = useCallback((id: number) => {
     setBooks(prev => {
       const updated = prev.filter(b => b.id !== id);
@@ -689,6 +736,7 @@ export const [DataProvider, useData] = createContextHook(() => {
     priorities,
     moods,
     workouts,
+    workoutTemplates,
     books,
     budgets,
     transactions,
@@ -719,6 +767,9 @@ export const [DataProvider, useData] = createContextHook(() => {
     addWorkout,
     updateWorkout,
     deleteWorkout,
+    addWorkoutTemplate,
+    updateWorkoutTemplate,
+    deleteWorkoutTemplate,
     addBook,
     updateBook,
     deleteBook,
@@ -740,6 +791,7 @@ export const [DataProvider, useData] = createContextHook(() => {
     addGiftItem,
     deleteGiftPerson,
     deleteGiftItem,
+    updateGiftItem,
     holidays,
     addHoliday: (holiday: Omit<Holiday, 'id'>) => {
       const newHoliday: Holiday = { ...holiday, id: Date.now() };

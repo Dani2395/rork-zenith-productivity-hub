@@ -100,6 +100,14 @@ export interface Workout {
   notes: string;
   progressImages?: ProgressImage[];
   weight?: number;
+  templateId?: number;
+}
+
+export interface WorkoutTemplate {
+  id: number;
+  name: string;
+  exercises: string;
+  notes: string;
 }
 
 export interface ProgressImage {
@@ -170,6 +178,7 @@ export interface GiftItem {
   price: string;
   link: string;
   image?: string;
+  purchased?: boolean;
 }
 
 export interface GiftPerson {
