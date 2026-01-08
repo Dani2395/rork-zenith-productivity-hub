@@ -152,6 +152,63 @@ export default function BooksScreen() {
     </View>
   );
 
+  const bookSpineColors = [
+    '#8B4513', '#A0522D', '#CD853F', '#DEB887', '#F4A460',
+    '#D2691E', '#B8860B', '#DAA520', '#6B4423', '#8B7355',
+    '#BC8F8F', '#CD5C5C', '#8B4789', '#9370DB', '#8B668B',
+    '#4682B4', '#5F9EA0', '#6495ED', '#4169E1', '#191970',
+  ];
+
+  const getBookSpineColor = (bookId: number) => {
+    return bookSpineColors[bookId % bookSpineColors.length];
+  };
+
+  const renderBookSpine = (book: typeof books[0]) => {
+    return (
+      <TouchableOpacity
+        key={book.id}
+        style={[styles.bookSpine, { backgroundColor: getBookSpineColor(book.id) }]}
+        onPress={() => loadBookForEdit(book)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.bookSpineTitle} numberOfLines={3}>
+          {book.title}
+        </Text>
+        <View style={styles.bookSpineAuthor}>
+          <Text style={styles.bookSpineAuthorText} numberOfLines={1}>
+            {book.author}
+          </Text>
+        </View>
+        {book.rating > 0 && (
+          <View style={styles.bookSpineRating}>
+            {[...Array(book.rating)].map((_, i) => (
+              <Text key={i} style={styles.bookSpineStar}>⭐</Text>
+            ))}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderBookshelf = (books: typeof finishedBooks) => {
+    const booksPerShelf = 5;
+    const shelves = [];
+
+    for (let i = 0; i < books.length; i += booksPerShelf) {
+      const shelfBooks = books.slice(i, i + booksPerShelf);
+      shelves.push(
+        <View key={i} style={styles.shelf}>
+          <View style={styles.shelfBooks}>
+            {shelfBooks.map(book => renderBookSpine(book))}
+          </View>
+          <View style={styles.shelfWood} />
+        </View>
+      );
+    }
+
+    return shelves;
+  };
+
   const renderBookCard = (book: typeof books[0], showProgress = false) => {
     const progress = book.totalPages > 0 
       ? Math.round((book.currentPage / book.totalPages) * 100) 
@@ -317,11 +374,18 @@ export default function BooksScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>✅ Finished</Text>
+          <Text style={styles.sectionTitle}>📚 My Library</Text>
+          <Text style={styles.sectionSubtitle}>Finished Books Collection</Text>
           {finishedBooks.length === 0 ? (
-            <Text style={styles.emptyText}>No finished books yet</Text>
+            <View style={styles.emptyLibrary}>
+              <Text style={styles.emptyLibraryEmoji}>📖</Text>
+              <Text style={styles.emptyText}>Your bookshelf is empty</Text>
+              <Text style={styles.emptySubtext}>Finish reading books to see them here!</Text>
+            </View>
           ) : (
-            finishedBooks.map(book => renderBookCard(book))
+            <View style={styles.bookshelfContainer}>
+              {renderBookshelf(finishedBooks)}
+            </View>
           )}
         </View>
 
@@ -803,5 +867,97 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 2,
     borderColor: Colors.primary,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: Colors.textDim,
+    marginBottom: 16,
+    fontStyle: 'italic' as const,
+  },
+  emptyLibrary: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyLibraryEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptySubtext: {
+    fontSize: 12,
+    color: Colors.textDim,
+    marginTop: 4,
+  },
+  bookshelfContainer: {
+    backgroundColor: '#f5f5dc',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 8,
+  },
+  shelf: {
+    marginBottom: 24,
+  },
+  shelfBooks: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
+  shelfWood: {
+    height: 12,
+    backgroundColor: '#8B4513',
+    borderRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: '#6B3410',
+  },
+  bookSpine: {
+    width: 60,
+    height: 180,
+    borderRadius: 4,
+    padding: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+    borderRightWidth: 2,
+    borderRightColor: 'rgba(0,0,0,0.2)',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.3)',
+  },
+  bookSpineTitle: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: 'white',
+    textAlign: 'center',
+    writingDirection: 'ltr' as const,
+    lineHeight: 14,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  bookSpineAuthor: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bookSpineAuthorText: {
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    fontStyle: 'italic' as const,
+  },
+  bookSpineRating: {
+    flexDirection: 'column',
+    gap: 2,
+  },
+  bookSpineStar: {
+    fontSize: 8,
   },
 });
