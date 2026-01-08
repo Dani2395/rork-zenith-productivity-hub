@@ -37,9 +37,6 @@ import {
   ChevronRight,
   Trash2,
   Settings,
-  MapPin,
-  Droplets,
-  Wind,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
@@ -735,6 +732,33 @@ export default function HomeScreen() {
 
       <SafeAreaView style={styles.mainContent}>
         <View style={styles.header}>
+          {weather && (
+            <TouchableOpacity onPress={fetchWeather} style={styles.headerWeatherIcon}>
+              <Animated.Text
+                style={[
+                  styles.headerWeatherEmoji,
+                  {
+                    transform: [
+                      {
+                        scale: weatherAnimValue.interpolate({
+                          inputRange: [0, 0.5, 1],
+                          outputRange: [1, 1.15, 1],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                {weather.icon}
+              </Animated.Text>
+              <Text style={styles.headerWeatherTemp}>{weather.temp}°</Text>
+            </TouchableOpacity>
+          )}
+          {weatherLoading && (
+            <View style={styles.headerWeatherIcon}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+            </View>
+          )}
           <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
             {sidebarOpen ? (
               <X size={24} color={Colors.text} />
@@ -751,83 +775,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {weather && (
-            <View style={styles.weatherCard}>
-              <LinearGradient
-                colors={['#4A90E2', '#7B68EE']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.weatherGradient}
-              >
-                <View style={styles.weatherHeader}>
-                  <View style={styles.weatherLocation}>
-                    <MapPin size={14} color="rgba(255,255,255,0.8)" />
-                    <Text style={styles.weatherLocationText}>{weather.location}</Text>
-                  </View>
-                  <TouchableOpacity onPress={fetchWeather} style={styles.weatherRefresh}>
-                    <Animated.View
-                      style={{
-                        transform: [
-                          {
-                            rotate: weatherAnimValue.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: ['0deg', '360deg'],
-                            }),
-                          },
-                        ],
-                      }}
-                    >
-                      <Text style={{ fontSize: 16 }}>🔄</Text>
-                    </Animated.View>
-                  </TouchableOpacity>
-                </View>
-                
-                <View style={styles.weatherMain}>
-                  <Animated.Text
-                    style={[
-                      styles.weatherIcon,
-                      {
-                        transform: [
-                          {
-                            scale: weatherAnimValue.interpolate({
-                              inputRange: [0, 0.5, 1],
-                              outputRange: [1, 1.15, 1],
-                            }),
-                          },
-                        ],
-                      },
-                    ]}
-                  >
-                    {weather.icon}
-                  </Animated.Text>
-                  <View style={styles.weatherTempContainer}>
-                    <Text style={styles.weatherTemp}>{weather.temp}°F</Text>
-                    <Text style={styles.weatherCondition}>{weather.condition}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.weatherDetails}>
-                  <View style={styles.weatherDetail}>
-                    <Droplets size={16} color="rgba(255,255,255,0.9)" />
-                    <Text style={styles.weatherDetailText}>{weather.humidity}%</Text>
-                  </View>
-                  <View style={styles.weatherDetail}>
-                    <Wind size={16} color="rgba(255,255,255,0.9)" />
-                    <Text style={styles.weatherDetailText}>{weather.windSpeed} mph</Text>
-                  </View>
-                </View>
-              </LinearGradient>
-            </View>
-          )}
-          
-          {weatherLoading && (
-            <View style={styles.weatherCard}>
-              <View style={styles.weatherLoading}>
-                <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={styles.weatherLoadingText}>Loading weather...</Text>
-              </View>
-            </View>
-          )}
+
 
           {pinnedNotes.length > 0 && (
             <View style={styles.card}>
@@ -862,103 +810,101 @@ export default function HomeScreen() {
             </View>
           )}
 
-          <View style={styles.gridRow}>
-            <View style={[styles.card, styles.halfCard]}>
-              <View style={styles.cardTitleRow}>
-                <Text style={styles.cardTitle}>🔥 Top 5 Priorities</Text>
+          <View style={styles.card}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardTitle}>🔥 Top 5 Priorities</Text>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setPriorityModalVisible(true)}
+              >
+                <Plus size={16} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            {todayPriorities.length === 0 ? (
+              <Text style={styles.emptyText}>No priorities set</Text>
+            ) : (
+              todayPriorities.slice(0, 5).map((priority, index) => (
                 <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => setPriorityModalVisible(true)}
+                  key={priority.id}
+                  style={styles.priorityItem}
+                  onPress={() => handleEditPriority(priority)}
+                  activeOpacity={0.7}
                 >
-                  <Plus size={16} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-              {todayPriorities.length === 0 ? (
-                <Text style={styles.emptyText}>No priorities set</Text>
-              ) : (
-                todayPriorities.slice(0, 5).map((priority, index) => (
-                  <TouchableOpacity
-                    key={priority.id}
-                    style={styles.priorityItem}
-                    onPress={() => handleEditPriority(priority)}
-                    activeOpacity={0.7}
+                  <LinearGradient
+                    colors={[Colors.primary, Colors.secondary]}
+                    style={styles.priorityNumber}
                   >
-                    <LinearGradient
-                      colors={[Colors.primary, Colors.secondary]}
-                      style={styles.priorityNumber}
-                    >
-                      <Text style={styles.priorityNumberText}>{index + 1}</Text>
-                    </LinearGradient>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.priorityText,
-                          priority.completed && styles.priorityTextCompleted,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {priority.overdue && '⚠️ '}{priority.task}
-                      </Text>
-                      {(priority.date || priority.time) && (
-                        <Text style={styles.priorityDateTime}>
-                          {priority.date && `📅 ${priority.date}`}
-                          {priority.time && ` ⏰ ${priority.time}`}
-                        </Text>
-                      )}
-                    </View>
-                    <TouchableOpacity
-                      style={styles.priorityDeleteBtn}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeletePriority(priority.id);
-                      }}
-                    >
-                      <Trash2 size={14} color={Colors.danger} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    <Text style={styles.priorityNumberText}>{index + 1}</Text>
+                  </LinearGradient>
+                  <View style={{ flex: 1 }}>
+                    <Text
                       style={[
-                        styles.priorityCheckBtn,
-                        priority.completed && styles.priorityCheckBtnCompleted,
+                        styles.priorityText,
+                        priority.completed && styles.priorityTextCompleted,
                       ]}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleCompletePriority(priority.id);
-                      }}
+                      numberOfLines={2}
                     >
-                      <Text style={styles.priorityCheckText}>{priority.completed ? '✓' : '○'}</Text>
-                    </TouchableOpacity>
+                      {priority.overdue && '⚠️ '}{priority.task}
+                    </Text>
+                    {(priority.date || priority.time) && (
+                      <Text style={styles.priorityDateTime}>
+                        {priority.date && `📅 ${priority.date}`}
+                        {priority.time && ` ⏰ ${priority.time}`}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.priorityDeleteBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeletePriority(priority.id);
+                    }}
+                  >
+                    <Trash2 size={14} color={Colors.danger} />
                   </TouchableOpacity>
-                ))
-              )}
-            </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.priorityCheckBtn,
+                      priority.completed && styles.priorityCheckBtnCompleted,
+                    ]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleCompletePriority(priority.id);
+                    }}
+                  >
+                    <Text style={styles.priorityCheckText}>{priority.completed ? '✓' : '○'}</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
 
-            <View style={[styles.card, styles.halfCard]}>
-              <Text style={styles.cardTitle}>⭐ Today&apos;s Habits</Text>
-              {habits.length === 0 ? (
-                <Text style={styles.emptyText}>No habits</Text>
-              ) : (
-                habits.slice(0, 5).map(habit => {
-                  const isCompleted = habitCompletions[`${habit.id}-${today}`];
-                  return (
-                    <TouchableOpacity
-                      key={habit.id}
-                      style={styles.habitItem}
-                      onPress={() => {
-                        toggleHabitCompletion(habit.id, today);
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      }}
-                    >
-                      <Text style={styles.habitText} numberOfLines={1}>
-                        {habit.name}
-                      </Text>
-                      <Text style={styles.habitCheck}>
-                        {isCompleted ? '✅' : '⬜'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>⭐ Today&apos;s Habits</Text>
+            {habits.length === 0 ? (
+              <Text style={styles.emptyText}>No habits</Text>
+            ) : (
+              habits.slice(0, 5).map(habit => {
+                const isCompleted = habitCompletions[`${habit.id}-${today}`];
+                return (
+                  <TouchableOpacity
+                    key={habit.id}
+                    style={styles.habitItem}
+                    onPress={() => {
+                      toggleHabitCompletion(habit.id, today);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Text style={styles.habitText} numberOfLines={2}>
+                      {habit.name}
+                    </Text>
+                    <Text style={styles.habitCheck}>
+                      {isCompleted ? '✅' : '⬜'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
 
           <View style={styles.card}>
@@ -1452,6 +1398,24 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    gap: 12,
+  },
+  headerWeatherIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 12,
+    gap: 6,
+  },
+  headerWeatherEmoji: {
+    fontSize: 24,
+  },
+  headerWeatherTemp: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.primary,
   },
   menuButton: {
     width: 40,
@@ -1541,6 +1505,7 @@ const styles = StyleSheet.create({
   priorityText: {
     fontSize: 13,
     color: Colors.text,
+    lineHeight: 18,
   },
   priorityTextCompleted: {
     textDecorationLine: 'line-through',
@@ -1587,6 +1552,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: Colors.text,
+    lineHeight: 18,
   },
   habitCheck: {
     fontSize: 16,
