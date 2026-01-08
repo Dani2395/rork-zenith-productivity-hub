@@ -79,6 +79,15 @@ export default function HomeScreen() {
     addHoliday,
     updateHoliday,
     deleteHoliday,
+    updateTask,
+    deleteTask,
+    toggleTask,
+    updateEvent,
+    deleteEvent,
+    updateNote,
+    deleteNote,
+    updateWorkout,
+    deleteWorkout,
   } = useData();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -113,6 +122,11 @@ export default function HomeScreen() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const weatherAnimValue = useRef(new Animated.Value(0)).current;
   const [quickAccessVisible, setQuickAccessVisible] = useState(false);
+  const [scheduleItemModalVisible, setScheduleItemModalVisible] = useState(false);
+  const [selectedScheduleItem, setSelectedScheduleItem] = useState<{
+    type: 'task' | 'event' | 'note' | 'workout' | 'holiday';
+    item: Task | Event | Note | Workout | Holiday;
+  } | null>(null);
 
   const sidebarAnim = useRef(new Animated.Value(-SCREEN_WIDTH * 0.8)).current;
 
@@ -302,11 +316,16 @@ export default function HomeScreen() {
     }
   };
 
+  // Today's items
   const todayTasks = tasks.filter(t => t.date === today && !t.completed);
   const todayEvents = events.filter(e => e.date === today);
   const todayWorkouts = workouts.filter(w => w.date === today);
   const todayNotes = notes.filter(n => n.date === today);
+  const todayHolidays = holidays.filter(h => h.date === today);
   const todayMoods = moods[today]?.entries || [];
+
+  // Overdue tasks (from previous days that weren't completed)
+  const overdueTasks = tasks.filter(t => t.date < today && !t.completed);
 
   const moodEmojis = ['😄', '😊', '😐', '😔', '😢'];
   const moodCounts = moodEmojis.reduce((acc, emoji) => {
@@ -921,17 +940,26 @@ export default function HomeScreen() {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>📅 Today&apos;s Schedule</Text>
-            {todayTasks.length === 0 && todayEvents.length === 0 && todayWorkouts.length === 0 && todayNotes.length === 0 ? (
+            {todayTasks.length === 0 && todayEvents.length === 0 && todayWorkouts.length === 0 && todayNotes.length === 0 && todayHolidays.length === 0 && overdueTasks.length === 0 ? (
               <Text style={styles.emptyText}>Nothing scheduled for today 🎉</Text>
             ) : (
               <View style={styles.scheduleList}>
-                {[...todayTasks.map(task => ({ ...task, type: 'task' as const, sortTime: task.time || '23:59' })),
-                  ...todayEvents.map(event => ({ ...event, type: 'event' as const, sortTime: event.time || '23:59' })),
-                  ...todayWorkouts.map(workout => ({ ...workout, type: 'workout' as const, sortTime: '23:59' })),
-                  ...todayNotes.map(note => ({ ...note, type: 'note' as const, sortTime: note.time || '23:59' }))
-                ].sort((a, b) => a.sortTime.localeCompare(b.sortTime)).map((item) => {
+                {[
+                  ...overdueTasks.map(task => ({ ...task, type: 'task' as const, sortTime: task.time || '00:00', isOverdue: true })),
+                  ...todayHolidays.map(holiday => ({ ...holiday, type: 'holiday' as const, sortTime: '00:00', isOverdue: false })),
+                  ...todayTasks.map(task => ({ ...task, type: 'task' as const, sortTime: task.time || '23:59', isOverdue: false })),
+                  ...todayEvents.map(event => ({ ...event, type: 'event' as const, sortTime: event.time || '23:59', isOverdue: false })),
+                  ...todayWorkouts.map(workout => ({ ...workout, type: 'workout' as const, sortTime: '23:59', isOverdue: false })),
+                  ...todayNotes.map(note => ({ ...note, type: 'note' as const, sortTime: note.time || '23:59', isOverdue: false }))
+                ].sort((a, b) => {
+                  // Overdue items first
+                  if (a.isOverdue && !b.isOverdue) return -1;
+                  if (!a.isOverdue && b.isOverdue) return 1;
+                  // Then sort by time
+                  return a.sortTime.localeCompare(b.sortTime);
+                }).map((item) => {
                   if (item.type === 'task') {
-                    const task = item as Task & { type: 'task'; sortTime: string };
+                    const task = item as Task & { type: 'task'; sortTime: string; isOverdue: boolean };
                     return (
                       <TouchableOpacity
                         key={`task-${task.id}`}
@@ -941,12 +969,20 @@ export default function HomeScreen() {
                         ]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          router.push('/tasks');
+                          setSelectedScheduleItem({ type: 'task', item: task });
+                          setScheduleItemModalVisible(true);
                         }}
                       >
                         <Text style={styles.scheduleIcon}>✅</Text>
                         <View style={styles.scheduleContent}>
-                          <Text style={styles.scheduleTitle}>{task.name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.scheduleTitle}>{task.name}</Text>
+                            {task.isOverdue && (
+                              <View style={styles.overdueTag}>
+                                <Text style={styles.overdueTagText}>OVERDUE</Text>
+                              </View>
+                            )}
+                          </View>
                           {task.time && (
                             <Text style={styles.scheduleTime}>{task.time}</Text>
                           )}
@@ -961,7 +997,8 @@ export default function HomeScreen() {
                         style={styles.scheduleItem}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          router.push('/calendar');
+                          setSelectedScheduleItem({ type: 'event', item: event });
+                          setScheduleItemModalVisible(true);
                         }}
                       >
                         <Text style={styles.scheduleIcon}>📅</Text>
@@ -981,7 +1018,8 @@ export default function HomeScreen() {
                         style={styles.scheduleItem}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          router.push('/workout');
+                          setSelectedScheduleItem({ type: 'workout', item: workout });
+                          setScheduleItemModalVisible(true);
                         }}
                       >
                         <Text style={styles.scheduleIcon}>💪</Text>
@@ -993,6 +1031,24 @@ export default function HomeScreen() {
                         </View>
                       </TouchableOpacity>
                     );
+                  } else if (item.type === 'holiday') {
+                    const holiday = item as Holiday & { type: 'holiday'; sortTime: string };
+                    return (
+                      <TouchableOpacity
+                        key={`holiday-${holiday.id}`}
+                        style={styles.scheduleItem}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setSelectedScheduleItem({ type: 'holiday', item: holiday });
+                          setScheduleItemModalVisible(true);
+                        }}
+                      >
+                        <Text style={styles.scheduleIcon}>{holiday.emoji}</Text>
+                        <View style={styles.scheduleContent}>
+                          <Text style={styles.scheduleTitle}>{holiday.name}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
                   } else {
                     const note = item as Note & { type: 'note'; sortTime: string };
                     return (
@@ -1001,7 +1057,8 @@ export default function HomeScreen() {
                         style={styles.scheduleItem}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          router.push('/notes');
+                          setSelectedScheduleItem({ type: 'note', item: note });
+                          setScheduleItemModalVisible(true);
                         }}
                       >
                         <Text style={styles.scheduleIcon}>📝</Text>
@@ -1388,6 +1445,158 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.quickAccessText}>Add Note</Text>
             </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={scheduleItemModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setScheduleItemModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setScheduleItemModalVisible(false)}>
+          <View style={styles.scheduleItemModal} onStartShouldSetResponder={() => true}>
+            {selectedScheduleItem && (
+              <>
+                <Text style={styles.modalTitle}>
+                  {selectedScheduleItem.type === 'task' && '✅ Task'}
+                  {selectedScheduleItem.type === 'event' && '📅 Event'}
+                  {selectedScheduleItem.type === 'note' && '📝 Note'}
+                  {selectedScheduleItem.type === 'workout' && '💪 Workout'}
+                  {selectedScheduleItem.type === 'holiday' && `${(selectedScheduleItem.item as Holiday).emoji} Holiday`}
+                </Text>
+
+                {selectedScheduleItem.type === 'task' && (
+                  <View style={styles.scheduleItemDetails}>
+                    <Text style={styles.scheduleItemName}>{(selectedScheduleItem.item as Task).name}</Text>
+                    <Text style={styles.scheduleItemInfo}>
+                      Priority: {(selectedScheduleItem.item as Task).priority}
+                    </Text>
+                    <Text style={styles.scheduleItemInfo}>
+                      Date: {(selectedScheduleItem.item as Task).date}
+                    </Text>
+                    {(selectedScheduleItem.item as Task).time && (
+                      <Text style={styles.scheduleItemInfo}>
+                        Time: {(selectedScheduleItem.item as Task).time}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {selectedScheduleItem.type === 'event' && (
+                  <View style={styles.scheduleItemDetails}>
+                    <Text style={styles.scheduleItemName}>{(selectedScheduleItem.item as Event).name}</Text>
+                    <Text style={styles.scheduleItemInfo}>
+                      Date: {(selectedScheduleItem.item as Event).date}
+                    </Text>
+                    {(selectedScheduleItem.item as Event).time && (
+                      <Text style={styles.scheduleItemInfo}>
+                        Time: {(selectedScheduleItem.item as Event).time}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {selectedScheduleItem.type === 'note' && (
+                  <View style={styles.scheduleItemDetails}>
+                    <Text style={styles.scheduleItemName}>{(selectedScheduleItem.item as Note).name}</Text>
+                    <Text style={styles.scheduleItemInfo}>
+                      Date: {(selectedScheduleItem.item as Note).date}
+                    </Text>
+                    {(selectedScheduleItem.item as Note).time && (
+                      <Text style={styles.scheduleItemInfo}>
+                        Time: {(selectedScheduleItem.item as Note).time}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {selectedScheduleItem.type === 'workout' && (
+                  <View style={styles.scheduleItemDetails}>
+                    <Text style={styles.scheduleItemName}>{(selectedScheduleItem.item as Workout).name}</Text>
+                    <Text style={styles.scheduleItemInfo}>
+                      Date: {(selectedScheduleItem.item as Workout).date}
+                    </Text>
+                    <Text style={styles.scheduleItemInfo}>
+                      Duration: {(selectedScheduleItem.item as Workout).duration} min
+                    </Text>
+                  </View>
+                )}
+
+                {selectedScheduleItem.type === 'holiday' && (
+                  <View style={styles.scheduleItemDetails}>
+                    <Text style={styles.scheduleItemName}>{(selectedScheduleItem.item as Holiday).name}</Text>
+                    <Text style={styles.scheduleItemInfo}>
+                      Date: {(selectedScheduleItem.item as Holiday).date}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.scheduleItemActions}>
+                  {selectedScheduleItem.type === 'task' && (
+                    <TouchableOpacity
+                      style={[styles.scheduleItemButton, styles.completeButton]}
+                      onPress={() => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        toggleTask((selectedScheduleItem.item as Task).id);
+                        setScheduleItemModalVisible(false);
+                        setSelectedScheduleItem(null);
+                      }}
+                    >
+                      <Text style={styles.scheduleItemButtonText}>✓ Complete</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.scheduleItemButton, styles.editButton]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setScheduleItemModalVisible(false);
+                      setSelectedScheduleItem(null);
+                      if (selectedScheduleItem.type === 'task') router.push('/tasks');
+                      else if (selectedScheduleItem.type === 'event') router.push('/calendar');
+                      else if (selectedScheduleItem.type === 'note') router.push('/notes');
+                      else if (selectedScheduleItem.type === 'workout') router.push('/workout');
+                    }}
+                  >
+                    <Text style={styles.scheduleItemButtonText}>✏️ Edit</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.scheduleItemButton, styles.deleteButton]}
+                    onPress={() => {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                      if (selectedScheduleItem.type === 'task') {
+                        deleteTask((selectedScheduleItem.item as Task).id);
+                      } else if (selectedScheduleItem.type === 'event') {
+                        deleteEvent((selectedScheduleItem.item as Event).id);
+                      } else if (selectedScheduleItem.type === 'note') {
+                        deleteNote((selectedScheduleItem.item as Note).id);
+                      } else if (selectedScheduleItem.type === 'workout') {
+                        deleteWorkout((selectedScheduleItem.item as Workout).id);
+                      } else if (selectedScheduleItem.type === 'holiday') {
+                        deleteHoliday((selectedScheduleItem.item as Holiday).id);
+                      }
+                      setScheduleItemModalVisible(false);
+                      setSelectedScheduleItem(null);
+                    }}
+                  >
+                    <Text style={styles.scheduleItemButtonText}>🗑️ Delete</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setScheduleItemModalVisible(false);
+                    setSelectedScheduleItem(null);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </Pressable>
       </Modal>
@@ -2201,6 +2410,73 @@ const styles = StyleSheet.create({
   },
   weatherLoadingText: {
     fontSize: 14,
+    color: Colors.textDim,
+  },
+  overdueTag: {
+    backgroundColor: Colors.danger,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  overdueTagText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '700' as const,
+  },
+  scheduleItemModal: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  scheduleItemDetails: {
+    marginVertical: 16,
+  },
+  scheduleItemName: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  scheduleItemInfo: {
+    fontSize: 14,
+    color: Colors.textDim,
+    marginBottom: 4,
+  },
+  scheduleItemActions: {
+    gap: 12,
+    marginBottom: 12,
+  },
+  scheduleItemButton: {
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  scheduleItemButtonText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: 'white',
+  },
+  completeButton: {
+    backgroundColor: Colors.success,
+  },
+  editButton: {
+    backgroundColor: Colors.primary,
+  },
+  deleteButton: {
+    backgroundColor: Colors.danger,
+  },
+  cancelButton: {
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
     color: Colors.textDim,
   },
 });
