@@ -9,6 +9,8 @@ import {
   Modal,
   Image,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -378,7 +380,17 @@ export default function GiftsScreen() {
         onRequestClose={() => setPersonModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView 
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Person</Text>
             <TextInput
               style={styles.modalInput}
@@ -426,7 +438,9 @@ export default function GiftsScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -437,8 +451,18 @@ export default function GiftsScreen() {
         onRequestClose={() => setGiftModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScroll}>
-            <View style={styles.modalContent}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView 
+              style={styles.modalScroll}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Add Gift Idea</Text>
               
               <TextInput
@@ -528,8 +552,9 @@ export default function GiftsScreen() {
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
-            </View>
-          </ScrollView>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -798,13 +823,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalScroll: {
-    maxHeight: '80%',
+    flex: 1,
   },
   modalContent: {
     backgroundColor: Colors.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
+    paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 20,

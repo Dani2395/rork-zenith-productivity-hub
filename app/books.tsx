@@ -417,13 +417,19 @@ export default function BooksScreen() {
           setModalVisible(false);
         }}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{ flex: 1 }}
-        >
-          <View style={styles.modalOverlay}>
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalContent}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView 
+              style={styles.modalScroll} 
+              showsVerticalScrollIndicator={false} 
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
+              <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
                 {editingBook ? 'Edit Book' : 'Add Book'}
               </Text>
@@ -572,10 +578,10 @@ export default function BooksScreen() {
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
-            </View>
-          </ScrollView>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
-        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -784,14 +790,14 @@ const styles = StyleSheet.create({
   },
   modalScroll: {
     flex: 1,
-    marginTop: 60,
   },
   modalContent: {
     backgroundColor: Colors.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    minHeight: 600,
+    marginTop: 60,
+    paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 20,
