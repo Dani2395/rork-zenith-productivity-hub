@@ -61,6 +61,8 @@
  
   ,
   "overrides": {
-    "@teovilla/react-native-web-maps>expo-location": "19.0.8"
+    "@teovilla/react-native-web-maps": {
+      "expo-location": "19.0.8"
+    }
   }
 }
