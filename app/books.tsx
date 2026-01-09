@@ -35,6 +35,7 @@ export default function BooksScreen() {
   const [bookThoughts, setBookThoughts] = useState('');
   const [bookQuotes, setBookQuotes] = useState('');
   const [bookCover, setBookCover] = useState('');
+  const [bookSpineColor, setBookSpineColor] = useState('#8B4513');
 
   const resetForm = () => {
     setBookTitle('');
@@ -46,6 +47,7 @@ export default function BooksScreen() {
     setBookThoughts('');
     setBookQuotes('');
     setBookCover('');
+    setBookSpineColor('#8B4513');
     setEditingBook(null);
   };
 
@@ -60,6 +62,7 @@ export default function BooksScreen() {
     setBookThoughts(book.thoughts || '');
     setBookQuotes(book.quotes || '');
     setBookCover(book.cover || '');
+    setBookSpineColor(book.spineColor || '#8B4513');
     setModalVisible(true);
   };
 
@@ -90,6 +93,7 @@ export default function BooksScreen() {
         quotes: bookQuotes.trim(),
         rating: bookRating,
         cover: bookCover.trim(),
+        spineColor: bookSpineColor,
       });
     } else {
       addBook({
@@ -102,6 +106,7 @@ export default function BooksScreen() {
         quotes: bookQuotes.trim(),
         rating: bookRating,
         cover: bookCover.trim(),
+        spineColor: bookSpineColor,
       });
     }
 
@@ -159,17 +164,19 @@ export default function BooksScreen() {
     '#D2691E', '#B8860B', '#DAA520', '#6B4423', '#8B7355',
     '#BC8F8F', '#CD5C5C', '#8B4789', '#9370DB', '#8B668B',
     '#4682B4', '#5F9EA0', '#6495ED', '#4169E1', '#191970',
+    '#DC143C', '#FF6347', '#FF4500', '#FF8C00', '#FFD700',
+    '#32CD32', '#00CED1', '#1E90FF', '#9400D3', '#FF1493',
   ];
 
-  const getBookSpineColor = (bookId: number) => {
-    return bookSpineColors[bookId % bookSpineColors.length];
+  const getBookSpineColor = (book: Book) => {
+    return book.spineColor || bookSpineColors[book.id % bookSpineColors.length];
   };
 
   const renderBookSpine = (book: typeof books[0]) => {
     return (
       <TouchableOpacity
         key={book.id}
-        style={[styles.bookSpine, { backgroundColor: getBookSpineColor(book.id) }]}
+        style={[styles.bookSpine, { backgroundColor: getBookSpineColor(book) }]}
         onPress={() => loadBookForEdit(book)}
         activeOpacity={0.7}
       >
@@ -498,6 +505,31 @@ export default function BooksScreen() {
                   <Image source={{ uri: bookCover }} style={styles.coverPreviewImage} />
                 </View>
               )}
+
+              <Text style={styles.inputLabel}>Book Spine Color 📚</Text>
+              <Text style={styles.inputSubLabel}>Pick a color for your book spine on the shelf</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorPickerScroll}>
+                <View style={styles.colorPickerContainer}>
+                  {bookSpineColors.map((color, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.colorOption,
+                        { backgroundColor: color },
+                        bookSpineColor === color && styles.colorOptionSelected,
+                      ]}
+                      onPress={() => {
+                        setBookSpineColor(color);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                    >
+                      {bookSpineColor === color && (
+                        <Text style={styles.colorCheckmark}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
 
               <TextInput
                 style={[styles.modalInput, styles.modalTextarea]}
@@ -895,48 +927,60 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bookshelfContainer: {
-    backgroundColor: '#f5f5dc',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#2a1810',
+    borderRadius: 20,
+    padding: 20,
     marginTop: 8,
+    borderWidth: 3,
+    borderColor: '#5d4037',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   shelf: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
   shelfBooks: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-    paddingHorizontal: 8,
+    gap: 10,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    alignItems: 'flex-end',
   },
   shelfWood: {
-    height: 12,
-    backgroundColor: '#8B4513',
-    borderRadius: 4,
+    height: 16,
+    backgroundColor: '#5d4037',
+    borderRadius: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
-    borderBottomWidth: 2,
-    borderBottomColor: '#6B3410',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
+    borderTopWidth: 2,
+    borderTopColor: '#8B4513',
+    borderBottomWidth: 3,
+    borderBottomColor: '#3e2723',
   },
   bookSpine: {
-    width: 60,
-    height: 180,
-    borderRadius: 4,
-    padding: 8,
+    width: 65,
+    height: 190,
+    borderRadius: 6,
+    padding: 10,
     justifyContent: 'space-between',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
-    borderRightWidth: 2,
-    borderRightColor: 'rgba(0,0,0,0.2)',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.3)',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 6,
+    borderRightWidth: 3,
+    borderRightColor: 'rgba(0,0,0,0.3)',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(255,255,255,0.2)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.15)',
   },
   bookSpineTitle: {
     fontSize: 11,
@@ -966,5 +1010,48 @@ const styles = StyleSheet.create({
   },
   bookSpineStar: {
     fontSize: 8,
+  },
+  inputSubLabel: {
+    fontSize: 11,
+    color: Colors.textDim,
+    marginBottom: 12,
+    fontStyle: 'italic' as const,
+  },
+  colorPickerScroll: {
+    marginBottom: 16,
+  },
+  colorPickerContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  colorOption: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  colorOptionSelected: {
+    borderColor: '#fff',
+    borderWidth: 3,
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  colorCheckmark: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: '700' as const,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 });

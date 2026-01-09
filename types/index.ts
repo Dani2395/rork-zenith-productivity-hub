@@ -133,6 +133,7 @@ export interface Book {
   rating: number;
   cover?: string;
   dateAdded: string;
+  spineColor?: string;
 }
 
 export interface Budget {
