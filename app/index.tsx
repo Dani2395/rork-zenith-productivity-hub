@@ -1735,10 +1735,10 @@ export default function HomeScreen() {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setScheduleItemModalVisible(false);
                       setSelectedScheduleItem(null);
-                      if (selectedScheduleItem.type === 'task') router.push('/tasks');
-                      else if (selectedScheduleItem.type === 'event') router.push('/calendar');
-                      else if (selectedScheduleItem.type === 'note') router.push('/notes');
-                      else if (selectedScheduleItem.type === 'workout') router.push('/workout');
+                      if (selectedScheduleItem.type === 'task') router.push('/tasks' as any);
+                      else if (selectedScheduleItem.type === 'event') router.push('/calendar' as any);
+                      else if (selectedScheduleItem.type === 'note') router.push('/notes' as any);
+                      else if (selectedScheduleItem.type === 'workout') router.push('/workout' as any);
                     }}
                   >
                     <Text style={styles.scheduleItemButtonText}>✏️ Edit</Text>
