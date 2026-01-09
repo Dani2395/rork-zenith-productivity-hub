@@ -100,7 +100,6 @@ export default function NotesScreen() {
     setNoteLockPin('');
     setNoteDate('');
     setNoteTime('');
-    setNoteAudioRecordings([]);
     setEditingNote(null);
   };
 
@@ -187,7 +186,6 @@ export default function NotesScreen() {
     setNoteLockPin(note.lockPin || '');
     setNoteDate(note.date || '');
     setNoteTime(note.time || '');
-    setNoteAudioRecordings(note.audioRecordings || []);
     setModalVisible(true);
   };
 
