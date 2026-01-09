@@ -87,12 +87,9 @@ export default function HomeScreen() {
     deleteTask,
     toggleTask,
     addEvent,
-    updateEvent,
     deleteEvent,
     addNote,
-    updateNote,
     deleteNote,
-    updateWorkout,
     deleteWorkout,
   } = useData();
 
@@ -133,7 +130,6 @@ export default function HomeScreen() {
     type: 'task' | 'event' | 'note' | 'workout' | 'holiday';
     item: Task | Event | Note | Workout | Holiday;
   } | null>(null);
-  const [editingScheduleItem, setEditingScheduleItem] = useState(false);
 
   // Quick Add Modal States
   const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
@@ -350,7 +346,6 @@ export default function HomeScreen() {
         time: quickAddTime,
         recurring: 'none',
         completed: false,
-        createdDate: timestamp,
       });
     } else if (quickAddType === 'event') {
       addEvent({
@@ -359,7 +354,6 @@ export default function HomeScreen() {
         date: dateToUse,
         time: quickAddTime,
         recurring: 'none',
-        createdDate: timestamp,
       });
     } else if (quickAddType === 'note') {
       addNote({
@@ -2665,6 +2659,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600' as const,
     color: Colors.textDim,
+  },
+  modalTextarea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textDim,
+    marginBottom: 8,
   },
   prioritySelector: {
     marginBottom: 16,

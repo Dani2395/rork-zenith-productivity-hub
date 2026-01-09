@@ -511,6 +511,7 @@ export default function TasksScreen() {
                 </LinearGradient>
               </TouchableOpacity>
               </View>
+              </View>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
