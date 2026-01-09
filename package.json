@@ -3,9 +3,9 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "bunx rork start -p h96jir40y63q3f5j7vksw --tunnel",
-    "start-web": "bunx rork start -p h96jir40y63q3f5j7vksw --web --tunnel",
-    "start-web-dev": "DEBUG=expo* bunx rork start -p h96jir40y63q3f5j7vksw --web --tunnel",
+    "start": "expo start --tunnel",
+    "start-web": "expo start --web --tunnel",
+    "start-web-dev": "DEBUG=expo* expo start --web --tunnel",
     "lint": "expo lint",
     "android": "expo run:android",
     "ios": "expo run:ios"
@@ -18,20 +18,20 @@
     "@stardazed/streams-text-encoding": "^1.0.2",
     "@tanstack/react-query": "^5.83.0",
     "@ungap/structured-clone": "^1.3.0",
-    "expo": "~54.0.27",
+    "expo": "~54.0.31",
     "expo-blur": "~15.0.8",
-    "expo-constants": "~18.0.11",
+    "expo-constants": "~18.0.13",
     "expo-document-picker": "~14.0.8",
     "expo-font": "~14.0.10",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
     "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.8",
-    "expo-linking": "~8.0.10",
+    "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.16",
-    "expo-router": "~6.0.17",
-    "expo-splash-screen": "~31.0.12",
+    "expo-router": "~6.0.21",
+    "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-symbols": "~1.0.8",
     "expo-system-ui": "~6.0.9",
@@ -58,4 +58,9 @@
     "typescript": "~5.9.2"
   },
   "private": true
+ 
+  ,
+  "overrides": {
+    "@teovilla/react-native-web-maps>expo-location": "19.0.8"
+  }
 }

@@ -521,7 +521,7 @@ export default function CalendarScreen() {
           <View style={styles.modalOverlay}>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
               <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Event</Text>
+                <Text style={styles.modalTitle}>Add Event</Text>
             <Text style={styles.modalSubtitle}>
               {selectedDate && new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
                 weekday: 'long',
@@ -573,6 +573,7 @@ export default function CalendarScreen() {
                 </LinearGradient>
               </TouchableOpacity>
               </View>
+            </View>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
