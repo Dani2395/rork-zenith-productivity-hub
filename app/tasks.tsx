@@ -194,6 +194,16 @@ export default function TasksScreen() {
     { key: 'completed', label: 'Completed' },
   ];
 
+  const formatTimeDisplay = (timeStr: string) => {
+    if (!timeStr) return '';
+    const [hourStr, minuteStr] = timeStr.split(':');
+    const hour24 = parseInt(hourStr);
+    const minute = parseInt(minuteStr);
+    const period = hour24 >= 12 ? 'PM' : 'AM';
+    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+    return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
+  };
+
   const priorityColors = {
     high: Colors.danger,
     medium: Colors.warning,
@@ -338,7 +348,7 @@ export default function TasksScreen() {
                         📅 {task.date}
                       </Text>
                     )}
-                    {task.time && <Text style={styles.taskMetaText}>⏰ {task.time}</Text>}
+                    {task.time && <Text style={styles.taskMetaText}>⏰ {formatTimeDisplay(task.time)}</Text>}
                     <Text
                       style={[
                         styles.taskPriority,

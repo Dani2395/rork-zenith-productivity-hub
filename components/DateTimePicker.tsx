@@ -35,12 +35,23 @@ export default function DateTimePicker({
   const [selectedDate, setSelectedDate] = useState<Date>(
     date ? new Date(date) : new Date()
   );
-  const [selectedHour, setSelectedHour] = useState(
-    time ? parseInt(time.split(':')[0]) : 9
-  );
+  const [selectedHour, setSelectedHour] = useState(() => {
+    if (time) {
+      const hour = parseInt(time.split(':')[0]);
+      return hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    }
+    return 9;
+  });
   const [selectedMinute, setSelectedMinute] = useState(
     time ? parseInt(time.split(':')[1]) : 0
   );
+  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>(() => {
+    if (time) {
+      const hour = parseInt(time.split(':')[0]);
+      return hour >= 12 ? 'PM' : 'AM';
+    }
+    return 'AM';
+  });
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -58,8 +69,24 @@ export default function DateTimePicker({
     return `${year}-${month}-${day}`;
   };
 
-  const formatTime = (hour: number, minute: number) => {
-    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const formatTime = (hour: number, minute: number, period: 'AM' | 'PM') => {
+    let hour24 = hour;
+    if (period === 'PM' && hour !== 12) {
+      hour24 = hour + 12;
+    } else if (period === 'AM' && hour === 12) {
+      hour24 = 0;
+    }
+    return `${String(hour24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  };
+
+  const formatTimeDisplay = (timeStr: string) => {
+    if (!timeStr) return '';
+    const [hourStr, minuteStr] = timeStr.split(':');
+    const hour24 = parseInt(hourStr);
+    const minute = parseInt(minuteStr);
+    const period = hour24 >= 12 ? 'PM' : 'AM';
+    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+    return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
   };
 
   const handleDateSelect = () => {
@@ -69,7 +96,7 @@ export default function DateTimePicker({
   };
 
   const handleTimeSelect = () => {
-    const formatted = formatTime(selectedHour, selectedMinute);
+    const formatted = formatTime(selectedHour, selectedMinute, selectedPeriod);
     onTimeChange(formatted);
     setTimeModalVisible(false);
   };
@@ -128,7 +155,7 @@ export default function DateTimePicker({
           >
             <Clock size={18} color={Colors.secondary} />
             <Text style={styles.inputButtonText}>
-              {time || 'Select Time'}
+              {time ? formatTimeDisplay(time) : 'Select Time'}
             </Text>
           </TouchableOpacity>
         )}
@@ -216,25 +243,28 @@ export default function DateTimePicker({
               <View style={styles.timePicker}>
                 <Text style={styles.timeLabel}>Hour</Text>
                 <ScrollView style={styles.timeScroll} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <TouchableOpacity
-                      key={i}
-                      style={[
-                        styles.timeOption,
-                        selectedHour === i && styles.timeOptionSelected,
-                      ]}
-                      onPress={() => setSelectedHour(i)}
-                    >
-                      <Text
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const hour = i + 1;
+                    return (
+                      <TouchableOpacity
+                        key={i}
                         style={[
-                          styles.timeOptionText,
-                          selectedHour === i && styles.timeOptionTextSelected,
+                          styles.timeOption,
+                          selectedHour === hour && styles.timeOptionSelected,
                         ]}
+                        onPress={() => setSelectedHour(hour)}
                       >
-                        {String(i).padStart(2, '0')}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.timeOptionText,
+                            selectedHour === hour && styles.timeOptionTextSelected,
+                          ]}
+                        >
+                          {String(hour).padStart(2, '0')}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
               </View>
 
@@ -263,6 +293,44 @@ export default function DateTimePicker({
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+              </View>
+
+              <View style={styles.timePicker}>
+                <Text style={styles.timeLabel}>Period</Text>
+                <View style={styles.periodPicker}>
+                  <TouchableOpacity
+                    style={[
+                      styles.periodOption,
+                      selectedPeriod === 'AM' && styles.periodOptionSelected,
+                    ]}
+                    onPress={() => setSelectedPeriod('AM')}
+                  >
+                    <Text
+                      style={[
+                        styles.periodOptionText,
+                        selectedPeriod === 'AM' && styles.periodOptionTextSelected,
+                      ]}
+                    >
+                      AM
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.periodOption,
+                      selectedPeriod === 'PM' && styles.periodOptionSelected,
+                    ]}
+                    onPress={() => setSelectedPeriod('PM')}
+                  >
+                    <Text
+                      style={[
+                        styles.periodOptionText,
+                        selectedPeriod === 'PM' && styles.periodOptionTextSelected,
+                      ]}
+                    >
+                      PM
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -439,6 +507,30 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700' as const,
     color: Colors.text,
+    marginTop: 24,
+  },
+  periodPicker: {
+    height: 200,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  periodOption: {
+    padding: 16,
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  periodOptionSelected: {
+    backgroundColor: Colors.primary,
+  },
+  periodOptionText: {
+    fontSize: 18,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  periodOptionTextSelected: {
+    color: 'white',
+    fontWeight: '700' as const,
   },
   modalButtons: {
     flexDirection: 'row',

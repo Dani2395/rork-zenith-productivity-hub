@@ -41,6 +41,16 @@ export default function CalendarScreen() {
   const [holidayAnimation, setHolidayAnimation] = useState<Holiday['animation']>('sparkles');
   const [holidayImage, setHolidayImage] = useState('');
 
+  const formatTimeDisplay = (timeStr: string) => {
+    if (!timeStr) return '';
+    const [hourStr, minuteStr] = timeStr.split(':');
+    const hour24 = parseInt(hourStr);
+    const minute = parseInt(minuteStr);
+    const period = hour24 >= 12 ? 'PM' : 'AM';
+    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+    return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
+  };
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
@@ -464,7 +474,7 @@ export default function CalendarScreen() {
                 </View>
                 <View style={styles.eventContent}>
                   <Text style={styles.eventName}>{event.name}</Text>
-                  {event.time && <Text style={styles.eventTime}>{event.time}</Text>}
+                  {event.time && <Text style={styles.eventTime}>{formatTimeDisplay(event.time)}</Text>}
                   {event.desc && <Text style={styles.eventDesc}>{event.desc}</Text>}
                 </View>
               </View>
@@ -477,7 +487,7 @@ export default function CalendarScreen() {
                 </View>
                 <View style={styles.eventContent}>
                   <Text style={styles.eventName}>{task.name}</Text>
-                  {task.time && <Text style={styles.eventTime}>{task.time}</Text>}
+                  {task.time && <Text style={styles.eventTime}>{formatTimeDisplay(task.time)}</Text>}
                 </View>
               </View>
             ))}
