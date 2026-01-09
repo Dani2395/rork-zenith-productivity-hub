@@ -134,6 +134,7 @@ export interface Book {
   cover?: string;
   dateAdded: string;
   spineColor?: string;
+  spineImage?: string;
 }
 
 export interface Budget {

@@ -36,6 +36,7 @@ export default function BooksScreen() {
   const [bookQuotes, setBookQuotes] = useState('');
   const [bookCover, setBookCover] = useState('');
   const [bookSpineColor, setBookSpineColor] = useState('#8B4513');
+  const [bookSpineImage, setBookSpineImage] = useState('');
 
   const resetForm = () => {
     setBookTitle('');
@@ -48,6 +49,7 @@ export default function BooksScreen() {
     setBookQuotes('');
     setBookCover('');
     setBookSpineColor('#8B4513');
+    setBookSpineImage('');
     setEditingBook(null);
   };
 
@@ -63,6 +65,7 @@ export default function BooksScreen() {
     setBookQuotes(book.quotes || '');
     setBookCover(book.cover || '');
     setBookSpineColor(book.spineColor || '#8B4513');
+    setBookSpineImage(book.spineImage || '');
     setModalVisible(true);
   };
 
@@ -76,6 +79,19 @@ export default function BooksScreen() {
 
     if (!result.canceled) {
       setBookCover(result.assets[0].uri);
+    }
+  };
+
+  const pickSpineImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setBookSpineImage(result.assets[0].uri);
     }
   };
 
@@ -94,6 +110,7 @@ export default function BooksScreen() {
         rating: bookRating,
         cover: bookCover.trim(),
         spineColor: bookSpineColor,
+        spineImage: bookSpineImage.trim(),
       });
     } else {
       addBook({
@@ -107,6 +124,7 @@ export default function BooksScreen() {
         rating: bookRating,
         cover: bookCover.trim(),
         spineColor: bookSpineColor,
+        spineImage: bookSpineImage.trim(),
       });
     }
 
@@ -173,6 +191,23 @@ export default function BooksScreen() {
   };
 
   const renderBookSpine = (book: typeof books[0]) => {
+    if (book.spineImage) {
+      return (
+        <TouchableOpacity
+          key={book.id}
+          style={styles.bookSpine}
+          onPress={() => loadBookForEdit(book)}
+          activeOpacity={0.7}
+        >
+          <Image 
+            source={{ uri: book.spineImage }} 
+            style={styles.bookSpineImage}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
+      );
+    }
+
     return (
       <TouchableOpacity
         key={book.id}
@@ -512,30 +547,62 @@ export default function BooksScreen() {
                 </View>
               )}
 
-              <Text style={styles.inputLabel}>Book Spine Color 📚</Text>
-              <Text style={styles.inputSubLabel}>Pick a color for your book spine on the shelf</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorPickerScroll}>
-                <View style={styles.colorPickerContainer}>
-                  {bookSpineColors.map((color, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.colorOption,
-                        { backgroundColor: color },
-                        bookSpineColor === color && styles.colorOptionSelected,
-                      ]}
-                      onPress={() => {
-                        setBookSpineColor(color);
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      }}
+              <Text style={styles.inputLabel}>Book Spine Appearance 📚</Text>
+              <Text style={styles.inputSubLabel}>Customize how your book looks on the shelf</Text>
+              
+              <View style={styles.spineOptionsContainer}>
+                <TouchableOpacity 
+                  style={[styles.spineOptionButton, !bookSpineImage && styles.spineOptionButtonActive]}
+                  onPress={() => setBookSpineImage('')}
+                >
+                  <Text style={[styles.spineOptionText, !bookSpineImage && styles.spineOptionTextActive]}>Color</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.spineOptionButton, bookSpineImage && styles.spineOptionButtonActive]}
+                  onPress={pickSpineImage}
+                >
+                  <ImageIcon size={16} color={bookSpineImage ? 'white' : Colors.textDim} />
+                  <Text style={[styles.spineOptionText, bookSpineImage && styles.spineOptionTextActive]}>Custom Image</Text>
+                </TouchableOpacity>
+              </View>
+
+              {bookSpineImage ? (
+                <View style={styles.spineImagePreviewContainer}>
+                  <Text style={styles.inputSubLabel}>Book Spine Preview</Text>
+                  <View style={styles.spinePreviewWrapper}>
+                    <Image source={{ uri: bookSpineImage }} style={styles.spineImagePreview} resizeMode="cover" />
+                    <TouchableOpacity 
+                      style={styles.changeSpineImageButton}
+                      onPress={pickSpineImage}
                     >
-                      {bookSpineColor === color && (
-                        <Text style={styles.colorCheckmark}>✓</Text>
-                      )}
+                      <Text style={styles.changeSpineImageButtonText}>Change Image</Text>
                     </TouchableOpacity>
-                  ))}
+                  </View>
                 </View>
-              </ScrollView>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorPickerScroll}>
+                  <View style={styles.colorPickerContainer}>
+                    {bookSpineColors.map((color, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.colorOption,
+                          { backgroundColor: color },
+                          bookSpineColor === color && styles.colorOptionSelected,
+                        ]}
+                        onPress={() => {
+                          setBookSpineColor(color);
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }}
+                      >
+                        {bookSpineColor === color && (
+                          <Text style={styles.colorCheckmark}>✓</Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              )}
 
               <TextInput
                 style={[styles.modalInput, styles.modalTextarea]}
@@ -1059,5 +1126,66 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  bookSpineImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 6,
+  },
+  spineOptionsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  spineOptionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  spineOptionButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  spineOptionText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.textDim,
+  },
+  spineOptionTextActive: {
+    color: 'white',
+  },
+  spineImagePreviewContainer: {
+    marginBottom: 16,
+  },
+  spinePreviewWrapper: {
+    alignItems: 'center',
+  },
+  spineImagePreview: {
+    width: 80,
+    height: 200,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    marginBottom: 12,
+  },
+  changeSpineImageButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  changeSpineImageButtonText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.primary,
   },
 });

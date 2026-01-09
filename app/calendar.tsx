@@ -255,7 +255,9 @@ export default function CalendarScreen() {
   };
 
   const goToToday = () => {
-    setCurrentDate(new Date());
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDate(todayString);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
@@ -768,7 +770,7 @@ const styles = StyleSheet.create({
   },
   calendarDay: {
     width: '14.28%',
-    aspectRatio: 0.85,
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
