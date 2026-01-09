@@ -8,6 +8,8 @@ import {
   TextInput,
   Modal,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -373,8 +375,13 @@ export default function TasksScreen() {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+              <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
               {editingTask ? '✏️ Edit Task' : 'Add Task'}
             </Text>
@@ -503,9 +510,10 @@ export default function TasksScreen() {
                   <Text style={styles.modalButtonText}>Save Task</Text>
                 </LinearGradient>
               </TouchableOpacity>
-            </View>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -519,7 +527,11 @@ export default function TasksScreen() {
           setNewCategoryLabel('');
         }}
       >
-        <View style={styles.categoryModalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.categoryModalOverlay}>
           <View style={styles.categoryModalContent}>
             <Settings size={48} color={Colors.primary} />
             <Text style={styles.categoryModalTitle}>{editingCategoryId ? 'Edit Category' : 'Add Category'}</Text>
@@ -596,6 +608,7 @@ export default function TasksScreen() {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

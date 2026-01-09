@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -1228,8 +1229,12 @@ export default function HomeScreen() {
           setSubtasks([]);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{editingPriority ? 'Edit Priority' : 'Add Priority'}</Text>
               <TextInput
@@ -1327,6 +1332,7 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -1343,8 +1349,12 @@ export default function HomeScreen() {
           setEditingHolidayId(null);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{editingHolidayId ? 'Edit Holiday' : 'Add Holiday'}</Text>
               
@@ -1472,6 +1482,7 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -1521,8 +1532,12 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={() => setQuickAddModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
                 {quickAddType === 'task' && '✅ Quick Add Task'}
@@ -1609,6 +1624,7 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal

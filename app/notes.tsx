@@ -9,6 +9,8 @@ import {
   Modal,
   Image,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -512,8 +514,12 @@ export default function NotesScreen() {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScroll}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
                 {editingNote ? '✏️ Edit Note' : 'Add Note'}
@@ -680,6 +686,7 @@ export default function NotesScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal

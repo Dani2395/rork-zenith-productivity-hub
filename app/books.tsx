@@ -9,6 +9,8 @@ import {
   Modal,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -408,8 +410,12 @@ export default function BooksScreen() {
           setModalVisible(false);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
                 {editingBook ? 'Edit Book' : 'Add Book'}
@@ -537,6 +543,7 @@ export default function BooksScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

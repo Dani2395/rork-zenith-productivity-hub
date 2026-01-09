@@ -9,6 +9,8 @@ import {
   TextInput,
   Animated,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -512,8 +514,13 @@ export default function CalendarScreen() {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+              <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Event</Text>
             <Text style={styles.modalSubtitle}>
               {selectedDate && new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
@@ -565,9 +572,10 @@ export default function CalendarScreen() {
                   <Text style={styles.modalButtonText}>Save Event</Text>
                 </LinearGradient>
               </TouchableOpacity>
-            </View>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -579,8 +587,12 @@ export default function CalendarScreen() {
           setEditingHoliday(null);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{editingHoliday ? 'Edit Holiday' : 'Add Holiday'}</Text>
               
@@ -675,6 +687,7 @@ export default function CalendarScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <TouchableOpacity
