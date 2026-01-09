@@ -42,7 +42,7 @@ import {
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { SubTask, Holiday, Task, Event, Workout, Note } from '@/types';
+import { SubTask, Holiday, Task, Event, Workout, Note, MoodEntry } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -395,6 +395,78 @@ export default function HomeScreen() {
 
   // Overdue tasks (from previous days that weren't completed)
   const overdueTasks = tasks.filter(t => t.date < today && !t.completed);
+
+  // Timeline items
+  const getTimelineItems = () => {
+    const items: {
+      time: string;
+      type: 'task' | 'event' | 'note' | 'workout' | 'holiday' | 'mood';
+      data: Task | Event | Note | Workout | Holiday | MoodEntry;
+      sortTime: string;
+    }[] = [];
+
+    todayTasks.forEach(task => {
+      items.push({
+        time: task.time || '',
+        type: 'task',
+        data: task,
+        sortTime: task.time || '99:99',
+      });
+    });
+
+    todayEvents.forEach(event => {
+      items.push({
+        time: event.time || '',
+        type: 'event',
+        data: event,
+        sortTime: event.time || '99:99',
+      });
+    });
+
+    todayNotes.forEach(note => {
+      if (note.time) {
+        items.push({
+          time: note.time,
+          type: 'note',
+          data: note,
+          sortTime: note.time,
+        });
+      }
+    });
+
+    todayWorkouts.forEach(workout => {
+      items.push({
+        time: '',
+        type: 'workout',
+        data: workout,
+        sortTime: '99:99',
+      });
+    });
+
+    todayHolidays.forEach(holiday => {
+      items.push({
+        time: '',
+        type: 'holiday',
+        data: holiday,
+        sortTime: '00:00',
+      });
+    });
+
+    todayMoods.forEach(mood => {
+      items.push({
+        time: mood.time || '',
+        type: 'mood',
+        data: mood,
+        sortTime: mood.time || '99:99',
+      });
+    });
+
+    return items.sort((a, b) => a.sortTime.localeCompare(b.sortTime));
+  };
+
+  const timelineItems = getTimelineItems();
+  const itemsWithTime = timelineItems.filter(item => item.time && item.sortTime !== '99:99');
+  const itemsWithoutTime = timelineItems.filter(item => !item.time || item.sortTime === '99:99');
 
   const moodEmojis = ['😄', '😊', '😐', '😔', '😢'];
   const moodCounts = moodEmojis.reduce((acc, emoji) => {
@@ -1016,34 +1088,23 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>📅 Today&apos;s Schedule</Text>
-            {todayTasks.length === 0 && todayEvents.length === 0 && todayWorkouts.length === 0 && todayNotes.length === 0 && todayHolidays.length === 0 && overdueTasks.length === 0 ? (
+            <Text style={styles.cardTitle}>📅 Today&apos;s Timeline</Text>
+            {timelineItems.length === 0 && overdueTasks.length === 0 ? (
               <Text style={styles.emptyText}>Nothing scheduled for today 🎉</Text>
             ) : (
-              <View style={styles.scheduleList}>
-                {[
-                  ...overdueTasks.map(task => ({ ...task, type: 'task' as const, sortTime: task.time || '00:00', isOverdue: true })),
-                  ...todayHolidays.map(holiday => ({ ...holiday, type: 'holiday' as const, sortTime: '00:00', isOverdue: false })),
-                  ...todayTasks.map(task => ({ ...task, type: 'task' as const, sortTime: task.time || '23:59', isOverdue: false })),
-                  ...todayEvents.map(event => ({ ...event, type: 'event' as const, sortTime: event.time || '23:59', isOverdue: false })),
-                  ...todayWorkouts.map(workout => ({ ...workout, type: 'workout' as const, sortTime: '23:59', isOverdue: false })),
-                  ...todayNotes.map(note => ({ ...note, type: 'note' as const, sortTime: note.time || '23:59', isOverdue: false }))
-                ].sort((a, b) => {
-                  // Overdue items first
-                  if (a.isOverdue && !b.isOverdue) return -1;
-                  if (!a.isOverdue && b.isOverdue) return 1;
-                  // Then sort by time
-                  return a.sortTime.localeCompare(b.sortTime);
-                }).map((item) => {
-                  if (item.type === 'task') {
-                    const task = item as Task & { type: 'task'; sortTime: string; isOverdue: boolean };
-                    return (
+              <View>
+                {overdueTasks.length > 0 && (
+                  <View style={styles.timelineSection}>
+                    <View style={styles.timelineSectionHeader}>
+                      <View style={styles.timelineDot} />
+                      <Text style={styles.timelineSectionTitle}>⚠️ Overdue</Text>
+                    </View>
+                    {overdueTasks.map(task => (
                       <TouchableOpacity
-                        key={`task-${task.id}`}
+                        key={`overdue-${task.id}`}
                         style={[
-                          styles.scheduleItem,
-                          { borderLeftColor: task.priority === 'high' ? Colors.danger : task.priority === 'medium' ? Colors.warning : Colors.success },
-                          task.completed && { opacity: 0.6 },
+                          styles.timelineItem,
+                          { borderLeftColor: Colors.danger },
                         ]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1055,109 +1116,225 @@ export default function HomeScreen() {
                           setScheduleItemModalVisible(true);
                         }}
                       >
-                        <Text style={styles.scheduleIcon}>{task.completed ? '✅' : '⬜'}</Text>
-                        <View style={styles.scheduleContent}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Text style={[styles.scheduleTitle, task.completed && { textDecorationLine: 'line-through', color: Colors.textDim }]}>
-                              {task.name}
-                            </Text>
-                            {task.isOverdue && !task.completed && (
-                              <View style={styles.overdueTag}>
-                                <Text style={styles.overdueTagText}>OVERDUE</Text>
+                        <Text style={styles.timelineItemIcon}>{task.completed ? '✅' : '⬜'}</Text>
+                        <View style={styles.timelineItemContent}>
+                          <Text style={styles.timelineItemTitle}>{task.name}</Text>
+                          <Text style={styles.timelineItemTime}>
+                            {task.time || 'No time'} • {task.date}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {itemsWithTime.length > 0 && (
+                  <View style={styles.timelineSection}>
+                    <View style={styles.timelineSectionHeader}>
+                      <View style={styles.timelineDot} />
+                      <Text style={styles.timelineSectionTitle}>⏰ Scheduled</Text>
+                    </View>
+                    {itemsWithTime.map((item, index) => {
+                      const showTime = index === 0 || item.time !== itemsWithTime[index - 1]?.time;
+                      return (
+                        <View key={`timeline-${item.type}-${(item.data as any).id || index}`}>
+                          {showTime && item.time && (
+                            <View style={styles.timeMarker}>
+                              <View style={styles.timeLine} />
+                              <View style={styles.timeMarkerDot} />
+                              <Text style={styles.timeMarkerText}>{item.time}</Text>
+                            </View>
+                          )}
+                          {item.type === 'task' && (
+                            <TouchableOpacity
+                              style={[
+                                styles.timelineItem,
+                                { borderLeftColor: (item.data as Task).priority === 'high' ? Colors.danger : (item.data as Task).priority === 'medium' ? Colors.warning : Colors.success },
+                                (item.data as Task).completed && { opacity: 0.6 },
+                              ]}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                updateTask((item.data as Task).id, { completed: !(item.data as Task).completed, completedDate: !(item.data as Task).completed ? today : undefined });
+                              }}
+                              onLongPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                setSelectedScheduleItem({ type: 'task', item: item.data as Task });
+                                setScheduleItemModalVisible(true);
+                              }}
+                            >
+                              <Text style={styles.timelineItemIcon}>{(item.data as Task).completed ? '✅' : '⬜'}</Text>
+                              <View style={styles.timelineItemContent}>
+                                <Text style={[
+                                  styles.timelineItemTitle,
+                                  (item.data as Task).completed && { textDecorationLine: 'line-through', color: Colors.textDim }
+                                ]}>
+                                  {(item.data as Task).name}
+                                </Text>
+                                {(item.data as Task).desc && (
+                                  <Text style={styles.timelineItemDesc} numberOfLines={1}>
+                                    {(item.data as Task).desc}
+                                  </Text>
+                                )}
                               </View>
-                            )}
-                          </View>
-                          {task.time && (
-                            <Text style={[styles.scheduleTime, task.completed && { textDecorationLine: 'line-through' }]}>
-                              {task.time}
-                            </Text>
+                            </TouchableOpacity>
+                          )}
+                          {item.type === 'event' && (
+                            <TouchableOpacity
+                              style={[styles.timelineItem, { borderLeftColor: Colors.secondary }]}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setSelectedScheduleItem({ type: 'event', item: item.data as Event });
+                                setScheduleItemModalVisible(true);
+                              }}
+                            >
+                              <Text style={styles.timelineItemIcon}>📅</Text>
+                              <View style={styles.timelineItemContent}>
+                                <Text style={styles.timelineItemTitle}>{(item.data as Event).name}</Text>
+                                {(item.data as Event).desc && (
+                                  <Text style={styles.timelineItemDesc} numberOfLines={1}>
+                                    {(item.data as Event).desc}
+                                  </Text>
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                          )}
+                          {item.type === 'note' && (
+                            <TouchableOpacity
+                              style={[styles.timelineItem, { borderLeftColor: '#A7D8F0' }]}
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setSelectedScheduleItem({ type: 'note', item: item.data as Note });
+                                setScheduleItemModalVisible(true);
+                              }}
+                            >
+                              <Text style={styles.timelineItemIcon}>📝</Text>
+                              <View style={styles.timelineItemContent}>
+                                <Text style={styles.timelineItemTitle}>{(item.data as Note).name}</Text>
+                                <Text style={styles.timelineItemDesc} numberOfLines={2}>
+                                  {(item.data as Note).text}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          )}
+                          {item.type === 'mood' && (
+                            <View style={[styles.timelineItem, { borderLeftColor: Colors.primary }]}>
+                              <Text style={styles.timelineItemIcon}>{(item.data as MoodEntry).emoji}</Text>
+                              <View style={styles.timelineItemContent}>
+                                <Text style={styles.timelineItemTitle}>Mood Entry</Text>
+                                {(item.data as MoodEntry).note && (
+                                  <Text style={styles.timelineItemDesc} numberOfLines={1}>
+                                    {(item.data as MoodEntry).note}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
                           )}
                         </View>
-                      </TouchableOpacity>
-                    );
-                  } else if (item.type === 'event') {
-                    const event = item as Event & { type: 'event'; sortTime: string };
-                    return (
-                      <TouchableOpacity
-                        key={`event-${event.id}`}
-                        style={styles.scheduleItem}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setSelectedScheduleItem({ type: 'event', item: event });
-                          setScheduleItemModalVisible(true);
-                        }}
-                      >
-                        <Text style={styles.scheduleIcon}>📅</Text>
-                        <View style={styles.scheduleContent}>
-                          <Text style={styles.scheduleTitle}>{event.name}</Text>
-                          {event.time && (
-                            <Text style={styles.scheduleTime}>{event.time}</Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  } else if (item.type === 'workout') {
-                    const workout = item as Workout & { type: 'workout'; sortTime: string };
-                    return (
-                      <TouchableOpacity
-                        key={`workout-${workout.id}`}
-                        style={styles.scheduleItem}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setSelectedScheduleItem({ type: 'workout', item: workout });
-                          setScheduleItemModalVisible(true);
-                        }}
-                      >
-                        <Text style={styles.scheduleIcon}>💪</Text>
-                        <View style={styles.scheduleContent}>
-                          <Text style={styles.scheduleTitle}>{workout.name}</Text>
-                          {workout.duration > 0 && (
-                            <Text style={styles.scheduleTime}>{workout.duration} min</Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  } else if (item.type === 'holiday') {
-                    const holiday = item as Holiday & { type: 'holiday'; sortTime: string };
-                    return (
-                      <TouchableOpacity
-                        key={`holiday-${holiday.id}`}
-                        style={styles.scheduleItem}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setSelectedScheduleItem({ type: 'holiday', item: holiday });
-                          setScheduleItemModalVisible(true);
-                        }}
-                      >
-                        <Text style={styles.scheduleIcon}>{holiday.emoji}</Text>
-                        <View style={styles.scheduleContent}>
-                          <Text style={styles.scheduleTitle}>{holiday.name}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  } else {
-                    const note = item as Note & { type: 'note'; sortTime: string };
-                    return (
-                      <TouchableOpacity
-                        key={`note-${note.id}`}
-                        style={styles.scheduleItem}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setSelectedScheduleItem({ type: 'note', item: note });
-                          setScheduleItemModalVisible(true);
-                        }}
-                      >
-                        <Text style={styles.scheduleIcon}>📝</Text>
-                        <View style={styles.scheduleContent}>
-                          <Text style={styles.scheduleTitle}>{note.name}</Text>
-                          {note.time && (
-                            <Text style={styles.scheduleTime}>{note.time}</Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  }
-                })}
+                      );
+                    })}
+                  </View>
+                )}
+
+                {itemsWithoutTime.length > 0 && (
+                  <View style={styles.timelineSection}>
+                    <View style={styles.timelineSectionHeader}>
+                      <View style={styles.timelineDot} />
+                      <Text style={styles.timelineSectionTitle}>📋 All Day</Text>
+                    </View>
+                    {itemsWithoutTime.map((item, index) => (
+                      <View key={`allday-${item.type}-${(item.data as any).id || index}`}>
+                        {item.type === 'task' && (
+                          <TouchableOpacity
+                            style={[
+                              styles.timelineItem,
+                              { borderLeftColor: (item.data as Task).priority === 'high' ? Colors.danger : (item.data as Task).priority === 'medium' ? Colors.warning : Colors.success },
+                              (item.data as Task).completed && { opacity: 0.6 },
+                            ]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              updateTask((item.data as Task).id, { completed: !(item.data as Task).completed, completedDate: !(item.data as Task).completed ? today : undefined });
+                            }}
+                            onLongPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                              setSelectedScheduleItem({ type: 'task', item: item.data as Task });
+                              setScheduleItemModalVisible(true);
+                            }}
+                          >
+                            <Text style={styles.timelineItemIcon}>{(item.data as Task).completed ? '✅' : '⬜'}</Text>
+                            <View style={styles.timelineItemContent}>
+                              <Text style={[
+                                styles.timelineItemTitle,
+                                (item.data as Task).completed && { textDecorationLine: 'line-through', color: Colors.textDim }
+                              ]}>
+                                {(item.data as Task).name}
+                              </Text>
+                              {(item.data as Task).desc && (
+                                <Text style={styles.timelineItemDesc} numberOfLines={1}>
+                                  {(item.data as Task).desc}
+                                </Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                        {item.type === 'event' && (
+                          <TouchableOpacity
+                            style={[styles.timelineItem, { borderLeftColor: Colors.secondary }]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setSelectedScheduleItem({ type: 'event', item: item.data as Event });
+                              setScheduleItemModalVisible(true);
+                            }}
+                          >
+                            <Text style={styles.timelineItemIcon}>📅</Text>
+                            <View style={styles.timelineItemContent}>
+                              <Text style={styles.timelineItemTitle}>{(item.data as Event).name}</Text>
+                              {(item.data as Event).desc && (
+                                <Text style={styles.timelineItemDesc} numberOfLines={1}>
+                                  {(item.data as Event).desc}
+                                </Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                        {item.type === 'workout' && (
+                          <TouchableOpacity
+                            style={[styles.timelineItem, { borderLeftColor: '#10b981' }]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setSelectedScheduleItem({ type: 'workout', item: item.data as Workout });
+                              setScheduleItemModalVisible(true);
+                            }}
+                          >
+                            <Text style={styles.timelineItemIcon}>💪</Text>
+                            <View style={styles.timelineItemContent}>
+                              <Text style={styles.timelineItemTitle}>{(item.data as Workout).name}</Text>
+                              {(item.data as Workout).duration > 0 && (
+                                <Text style={styles.timelineItemDesc}>
+                                  {(item.data as Workout).duration} min
+                                </Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                        {item.type === 'holiday' && (
+                          <TouchableOpacity
+                            style={[styles.timelineItem, { borderLeftColor: '#fbbf24' }]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setSelectedScheduleItem({ type: 'holiday', item: item.data as Holiday });
+                              setScheduleItemModalVisible(true);
+                            }}
+                          >
+                            <Text style={styles.timelineItemIcon}>{(item.data as Holiday).emoji}</Text>
+                            <View style={styles.timelineItemContent}>
+                              <Text style={styles.timelineItemTitle}>{(item.data as Holiday).name}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -2215,6 +2392,87 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textDim,
     marginTop: 2,
+  },
+  timelineSection: {
+    marginBottom: 20,
+  },
+  timelineSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
+  timelineSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  timeMarker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+    marginLeft: 4,
+    gap: 8,
+  },
+  timeLine: {
+    width: 2,
+    height: 16,
+    backgroundColor: Colors.border,
+  },
+  timeMarkerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.card,
+  },
+  timeMarkerText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.primary,
+    letterSpacing: 0.5,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
+    gap: 12,
+    marginBottom: 8,
+    marginLeft: 16,
+  },
+  timelineItemIcon: {
+    fontSize: 20,
+    marginTop: 2,
+  },
+  timelineItemContent: {
+    flex: 1,
+  },
+  timelineItemTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  timelineItemTime: {
+    fontSize: 11,
+    color: Colors.textDim,
+  },
+  timelineItemDesc: {
+    fontSize: 12,
+    color: Colors.textDim,
+    marginTop: 2,
+    lineHeight: 16,
   },
   fab: {
     position: 'absolute',
