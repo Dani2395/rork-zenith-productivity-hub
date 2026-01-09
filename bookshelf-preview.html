@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookshelf Preview - Zenith Productivity Hub</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: white;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #999;
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+        .bookshelf-container {
+            background-color: #2a1810;
+            border-radius: 20px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 3px solid #5d4037;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .shelf {
+            margin-bottom: 32px;
+        }
+        .shelf-books {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding: 0 12px;
+            align-items: flex-end;
+        }
+        .shelf-wood {
+            height: 16px;
+            background-color: #5d4037;
+            border-radius: 8px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+            border-top: 2px solid #8B4513;
+            border-bottom: 3px solid #3e2723;
+        }
+        .book-spine {
+            width: 65px;
+            height: 190px;
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 3px 3px 8px rgba(0,0,0,0.5);
+            border-right: 3px solid rgba(0,0,0,0.3);
+            border-left: 2px solid rgba(255,255,255,0.2);
+            border-top: 1px solid rgba(255,255,255,0.15);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .book-spine:hover {
+            transform: translateY(-5px);
+        }
+        .book-spine-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: white;
+            text-align: center;
+            line-height: 14px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+        .book-spine-author {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .book-spine-author-text {
+            font-size: 8px;
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            font-style: italic;
+        }
+        .book-spine-rating {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .book-spine-star {
+            font-size: 8px;
+        }
+        .color-palette {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+        .color-palette h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .color-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .color-option {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .color-option:hover {
+            border-color: #fff;
+            transform: scale(1.1);
+        }
+        .section-title {
+            font-size: 18px;
+            margin: 30px 0 15px 0;
+            color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Bookshelf Preview</h1>
+        <p class="subtitle">Your Beautiful Library in Zenith Productivity Hub</p>
+
+        <div class="color-palette">
+            <h2>🎨 Available Spine Colors (30 options)</h2>
+            <div class="color-options">
+                <div class="color-option" style="background: #8B4513;" title="Saddle Brown"></div>
+                <div class="color-option" style="background: #A0522D;" title="Sienna"></div>
+                <div class="color-option" style="background: #CD853F;" title="Peru"></div>
+                <div class="color-option" style="background: #DEB887;" title="Burlywood"></div>
+                <div class="color-option" style="background: #F4A460;" title="Sandy Brown"></div>
+                <div class="color-option" style="background: #D2691E;" title="Chocolate"></div>
+                <div class="color-option" style="background: #B8860B;" title="Dark Goldenrod"></div>
+                <div class="color-option" style="background: #DAA520;" title="Goldenrod"></div>
+                <div class="color-option" style="background: #6B4423;" title="Dark Brown"></div>
+                <div class="color-option" style="background: #8B7355;" title="Tan"></div>
+                <div class="color-option" style="background: #BC8F8F;" title="Rosy Brown"></div>
+                <div class="color-option" style="background: #CD5C5C;" title="Indian Red"></div>
+                <div class="color-option" style="background: #8B4789;" title="Purple"></div>
+                <div class="color-option" style="background: #9370DB;" title="Medium Purple"></div>
+                <div class="color-option" style="background: #8B668B;" title="Plum"></div>
+                <div class="color-option" style="background: #4682B4;" title="Steel Blue"></div>
+                <div class="color-option" style="background: #5F9EA0;" title="Cadet Blue"></div>
+                <div class="color-option" style="background: #6495ED;" title="Cornflower Blue"></div>
+                <div class="color-option" style="background: #4169E1;" title="Royal Blue"></div>
+                <div class="color-option" style="background: #191970;" title="Midnight Blue"></div>
+                <div class="color-option" style="background: #DC143C;" title="Crimson"></div>
+                <div class="color-option" style="background: #FF6347;" title="Tomato"></div>
+                <div class="color-option" style="background: #FF4500;" title="Orange Red"></div>
+                <div class="color-option" style="background: #FF8C00;" title="Dark Orange"></div>
+                <div class="color-option" style="background: #FFD700;" title="Gold"></div>
+                <div class="color-option" style="background: #32CD32;" title="Lime Green"></div>
+                <div class="color-option" style="background: #00CED1;" title="Dark Turquoise"></div>
+                <div class="color-option" style="background: #1E90FF;" title="Dodger Blue"></div>
+                <div class="color-option" style="background: #9400D3;" title="Dark Violet"></div>
+                <div class="color-option" style="background: #FF1493;" title="Deep Pink"></div>
+            </div>
+        </div>
+
+        <p class="section-title">Example Bookshelf with Mixed Colors:</p>
+        <div class="bookshelf-container">
+            <!-- Shelf 1 -->
+            <div class="shelf">
+                <div class="shelf-books">
+                    <div class="book-spine" style="background: #8B4513;">
+                        <div class="book-spine-title">The Great Gatsby</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">F. Scott Fitzgerald</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #DC143C;">
+                        <div class="book-spine-title">1984</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">George Orwell</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #4169E1;">
+                        <div class="book-spine-title">To Kill a Mockingbird</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">Harper Lee</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #32CD32;">
+                        <div class="book-spine-title">Pride & Prejudice</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">Jane Austen</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #9400D3;">
+                        <div class="book-spine-title">The Hobbit</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">J.R.R. Tolkien</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="shelf-wood"></div>
+            </div>
+
+            <!-- Shelf 2 -->
+            <div class="shelf">
+                <div class="shelf-books">
+                    <div class="book-spine" style="background: #FFD700;">
+                        <div class="book-spine-title">Harry Potter</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">J.K. Rowling</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #FF6347;">
+                        <div class="book-spine-title">Atomic Habits</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">James Clear</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #00CED1;">
+                        <div class="book-spine-title">Sapiens</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">Yuval Noah Harari</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #9370DB;">
+                        <div class="book-spine-title">Dune</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">Frank Herbert</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                    <div class="book-spine" style="background: #CD5C5C;">
+                        <div class="book-spine-title">The Alchemist</div>
+                        <div class="book-spine-author">
+                            <div class="book-spine-author-text">Paulo Coelho</div>
+                        </div>
+                        <div class="book-spine-rating">
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                            <span class="book-spine-star">⭐</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="shelf-wood"></div>
+            </div>
+        </div>
+
+        <p style="text-align: center; margin-top: 30px; color: #999; font-size: 14px;">
+            ✨ Hover over books to see the interactive effect! ✨<br>
+            Each book spine can be customized with any of the 30 colors above.
+        </p>
+    </div>
+</body>
+</html>

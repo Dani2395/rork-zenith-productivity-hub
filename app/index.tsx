@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -391,7 +392,7 @@ export default function HomeScreen() {
   };
 
   // Today's items
-  const todayTasks = tasks.filter(t => t.date === today && !t.completed);
+  const todayTasks = tasks.filter(t => t.date === today);
   const todayEvents = events.filter(e => e.date === today);
   const todayWorkouts = workouts.filter(w => w.date === today);
   const todayNotes = notes.filter(n => n.date === today);
@@ -1048,25 +1049,34 @@ export default function HomeScreen() {
                         style={[
                           styles.scheduleItem,
                           { borderLeftColor: task.priority === 'high' ? Colors.danger : task.priority === 'medium' ? Colors.warning : Colors.success },
+                          task.completed && { opacity: 0.6 },
                         ]}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateTask(task.id, { completed: !task.completed, completedDate: !task.completed ? today : undefined });
+                        }}
+                        onLongPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                           setSelectedScheduleItem({ type: 'task', item: task });
                           setScheduleItemModalVisible(true);
                         }}
                       >
-                        <Text style={styles.scheduleIcon}>✅</Text>
+                        <Text style={styles.scheduleIcon}>{task.completed ? '✅' : '⬜'}</Text>
                         <View style={styles.scheduleContent}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Text style={styles.scheduleTitle}>{task.name}</Text>
-                            {task.isOverdue && (
+                            <Text style={[styles.scheduleTitle, task.completed && { textDecorationLine: 'line-through', color: Colors.textDim }]}>
+                              {task.name}
+                            </Text>
+                            {task.isOverdue && !task.completed && (
                               <View style={styles.overdueTag}>
                                 <Text style={styles.overdueTagText}>OVERDUE</Text>
                               </View>
                             )}
                           </View>
                           {task.time && (
-                            <Text style={styles.scheduleTime}>{task.time}</Text>
+                            <Text style={[styles.scheduleTime, task.completed && { textDecorationLine: 'line-through' }]}>
+                              {task.time}
+                            </Text>
                           )}
                         </View>
                       </TouchableOpacity>
@@ -1228,8 +1238,12 @@ export default function HomeScreen() {
           setSubtasks([]);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{editingPriority ? 'Edit Priority' : 'Add Priority'}</Text>
               <TextInput
@@ -1327,6 +1341,7 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -1343,8 +1358,12 @@ export default function HomeScreen() {
           setEditingHolidayId(null);
         }}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{editingHolidayId ? 'Edit Holiday' : 'Add Holiday'}</Text>
               
@@ -1472,6 +1491,7 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -1521,8 +1541,12 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={() => setQuickAddModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
                 {quickAddType === 'task' && '✅ Quick Add Task'}
@@ -1609,6 +1633,7 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
