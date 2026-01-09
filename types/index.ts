@@ -38,7 +38,6 @@ export interface Note {
   lockPin?: string;
   notificationId?: string;
   reminderTime?: string;
-  audioRecordings?: string[];
 }
 
 export interface Event {
