@@ -274,7 +274,8 @@ export default function GiftsScreen() {
           {giftPeople.length === 0 ? (
             <Text style={styles.emptyText}>No people added yet</Text>
           ) : (
-          giftPeople.map(person => {
+            <>
+            {giftPeople.map(person => {
             const isExpanded = expandedPersons.has(person.id);
 
             return (
@@ -368,7 +369,8 @@ export default function GiftsScreen() {
                 )}
               </View>
             );
-          })
+          })}
+            </>
           )}
         </ScrollView>
       )}
