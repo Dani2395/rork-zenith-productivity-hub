@@ -510,7 +510,8 @@ export default function TasksScreen() {
                   <Text style={styles.modalButtonText}>Save Task</Text>
                 </LinearGradient>
               </TouchableOpacity>
-              </View>
+            </View>
+          </View>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>

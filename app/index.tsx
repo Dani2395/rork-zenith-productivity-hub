@@ -350,7 +350,6 @@ export default function HomeScreen() {
         time: quickAddTime,
         recurring: 'none',
         completed: false,
-        createdDate: timestamp,
       });
     } else if (quickAddType === 'event') {
       addEvent({
@@ -359,7 +358,6 @@ export default function HomeScreen() {
         date: dateToUse,
         time: quickAddTime,
         recurring: 'none',
-        createdDate: timestamp,
       });
     } else if (quickAddType === 'note') {
       addNote({
@@ -2267,6 +2265,16 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 14,
     marginBottom: 16,
+  },
+  modalTextarea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textDim,
+    marginBottom: 8,
   },
   dateTimeRow: {
     flexDirection: 'row',
