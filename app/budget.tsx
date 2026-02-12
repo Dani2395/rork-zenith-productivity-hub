@@ -25,6 +25,7 @@ import {
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
 
@@ -320,11 +321,34 @@ export default function BudgetScreen() {
     ]);
   };
 
+  const parseDate = (dateStr: string): string => {
+    const trimmed = dateStr.trim();
+    // Already in YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    // MM/DD/YYYY
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
+      const [m, d, y] = trimmed.split('/');
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    // DD/MM/YYYY (fallback)
+    if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(trimmed)) {
+      const [m, d, y] = trimmed.split('-');
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    // Try native Date parsing as last resort
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  };
+
   const handleUploadStatement = async () => {
     try {
       setUploadStatus('Picking file...');
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/plain', 'application/pdf'],
+        type: ['text/csv', 'text/plain', 'text/comma-separated-values', 'application/csv'],
+        copyToCacheDirectory: true,
       });
 
       if (result.canceled) {
@@ -332,56 +356,98 @@ export default function BudgetScreen() {
         return;
       }
 
-      setUploadStatus('Processing...');
-      
-      if (result.assets[0].mimeType === 'text/csv' || result.assets[0].name.endsWith('.csv')) {
-        const fileUri = result.assets[0].uri;
-        const response = await fetch(fileUri);
-        const text = await response.text();
-        
-        const lines = text.split('\n');
-        let imported = 0;
-        
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-          
-          const parts = line.split(',');
-          if (parts.length < 3) continue;
-          
-          const date = parts[0]?.trim();
-          const description = parts[1]?.trim();
-          const amountStr = parts[2]?.trim().replace(/[^0-9.-]/g, '');
-          const amount = Math.abs(parseFloat(amountStr));
-          
-          if (!date || !amount || isNaN(amount)) continue;
-          
-          const isExpense = parseFloat(amountStr) < 0;
-          
-          addTransaction({
-            amount,
-            description: description || (isExpense ? 'Expense' : 'Income'),
-            date: date.includes('/') ? date : new Date().toISOString().split('T')[0],
-            type: isExpense ? 'expense' : 'income',
-          });
-          
-          imported++;
-        }
-        
-        setUploadStatus(`✅ Imported ${imported} transactions`);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setTimeout(() => {
-          setUploadModalVisible(false);
-          setUploadStatus('');
-        }, 2000);
-      } else {
-        setUploadStatus('❌ Please upload a CSV file');
+      const file = result.assets[0];
+      const fileName = file.name?.toLowerCase() || '';
+      const mimeType = file.mimeType?.toLowerCase() || '';
+
+      if (
+        !fileName.endsWith('.csv') &&
+        !fileName.endsWith('.txt') &&
+        !mimeType.includes('csv') &&
+        !mimeType.includes('text')
+      ) {
+        setUploadStatus('Please upload a CSV or text file');
         setTimeout(() => setUploadStatus(''), 3000);
+        return;
       }
+
+      setUploadStatus('Reading file...');
+
+      let text: string;
+      try {
+        text = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      } catch (readError) {
+        console.log('FileSystem read failed, trying fetch fallback:', readError);
+        const response = await fetch(file.uri);
+        text = await response.text();
+      }
+
+      if (!text || text.trim().length === 0) {
+        setUploadStatus('File appears to be empty');
+        setTimeout(() => setUploadStatus(''), 3000);
+        return;
+      }
+
+      setUploadStatus('Processing transactions...');
+
+      const lines = text.split(/\r?\n/);
+      let imported = 0;
+      let skipped = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const parts = line.split(',');
+        if (parts.length < 3) {
+          skipped++;
+          continue;
+        }
+
+        const dateStr = parts[0]?.trim();
+        const description = parts[1]?.trim();
+        const amountStr = parts[2]?.trim().replace(/[^0-9.\-]/g, '');
+        const amountNum = parseFloat(amountStr);
+
+        if (!dateStr || isNaN(amountNum) || amountNum === 0) {
+          skipped++;
+          continue;
+        }
+
+        const isExpense = amountNum < 0;
+        const amount = Math.abs(amountNum);
+        const date = parseDate(dateStr);
+
+        addTransaction({
+          amount,
+          description: description || (isExpense ? 'Expense' : 'Income'),
+          date,
+          type: isExpense ? 'expense' : 'income',
+        });
+
+        imported++;
+      }
+
+      if (imported === 0) {
+        setUploadStatus(
+          `No transactions could be imported${skipped > 0 ? ` (${skipped} rows skipped)` : ''}. Check the CSV format.`
+        );
+        setTimeout(() => setUploadStatus(''), 4000);
+        return;
+      }
+
+      setUploadStatus(`Imported ${imported} transactions${skipped > 0 ? ` (${skipped} rows skipped)` : ''}`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => {
+        setUploadModalVisible(false);
+        setUploadStatus('');
+      }, 2000);
     } catch (error) {
       console.log('Upload error:', error);
-      setUploadStatus('❌ Error processing file');
-      setTimeout(() => setUploadStatus(''), 3000);
+      setUploadStatus('Error processing file. Please check the format and try again.');
+      setTimeout(() => setUploadStatus(''), 4000);
     }
   };
 
