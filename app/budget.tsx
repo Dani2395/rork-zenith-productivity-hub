@@ -668,13 +668,13 @@ export default function BudgetScreen() {
           {budgets.length === 0 ? (
             <Text style={styles.emptyText}>No budgets set up yet</Text>
           ) : (
-            budgets.map(budget => {
+            budgets.map((budget, idx) => {
               const percent = Math.min(100, Math.round((budget.spent / budget.amount) * 100));
               const isOverBudget = budget.spent > budget.amount;
 
               return (
                 <TouchableOpacity
-                  key={budget.id}
+                  key={`budget-${budget.id}-${idx}`}
                   style={styles.budgetCard}
                   onPress={() => openBudgetModal(budget)}
                   activeOpacity={0.7}
@@ -740,9 +740,9 @@ export default function BudgetScreen() {
           {debts.length === 0 ? (
             <Text style={styles.emptyText}>No debts tracked</Text>
           ) : (
-            debts.map(debt => (
+            debts.map((debt, idx) => (
               <TouchableOpacity
-                key={debt.id}
+                key={`debt-${debt.id}-${idx}`}
                 style={styles.debtCard}
                 onPress={() => openDebtModal(debt)}
                 activeOpacity={0.7}
@@ -785,11 +785,11 @@ export default function BudgetScreen() {
           {savings.length === 0 ? (
             <Text style={styles.emptyText}>No savings goals yet</Text>
           ) : (
-            savings.map(goal => {
+            savings.map((goal, idx) => {
               const progress = Math.min(100, (goal.current / goal.target) * 100);
               return (
                 <TouchableOpacity
-                  key={goal.id}
+                  key={`savings-${goal.id}-${idx}`}
                   style={styles.savingsCard}
                   onPress={() => openSavingsModal(goal)}
                   activeOpacity={0.7}
@@ -845,13 +845,13 @@ export default function BudgetScreen() {
             [...transactions]
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .slice(0, 15)
-              .map(t => {
+              .map((t, idx) => {
                 const budget = budgets.find(b => b.id === t.budgetId);
                 const isIncome = t.type === 'income';
 
                 return (
                   <TouchableOpacity
-                    key={t.id}
+                    key={`txn-${t.id}-${idx}`}
                     style={[
                       styles.transactionCard,
                       { borderLeftColor: isIncome ? Colors.success : Colors.danger },
