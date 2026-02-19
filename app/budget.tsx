@@ -379,12 +379,27 @@ export default function BudgetScreen() {
 
       let text: string;
       if (Platform.OS === 'web') {
-        // On web (Rork), expo-file-system is unavailable; use fetch with the blob URI
-        const response = await fetch(file.uri);
-        if (!response.ok) {
-          throw new Error(`Failed to read file: ${response.status}`);
+        // On web (Rork), use FileReader API with the underlying File object
+        const webFile = (file as any).file as File | undefined;
+        if (webFile) {
+          text = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const result = e.target?.result;
+              if (typeof result === 'string') {
+                resolve(result);
+              } else {
+                reject(new Error('FileReader did not return text'));
+              }
+            };
+            reader.onerror = () => reject(new Error('FileReader failed'));
+            reader.readAsText(webFile);
+          });
+        } else {
+          const response = await fetch(file.uri);
+          if (!response.ok) throw new Error(`Failed to read file: ${response.status}`);
+          text = await response.text();
         }
-        text = await response.text();
       } else {
         try {
           text = await FileSystem.readAsStringAsync(file.uri, {
