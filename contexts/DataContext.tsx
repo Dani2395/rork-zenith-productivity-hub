@@ -26,6 +26,9 @@ import {
   Category,
 } from '@/types';
 
+let _idCounter = 0;
+const uniqueId = () => Date.now() * 1000 + (++_idCounter % 1000);
+
 const DEFAULT_TASK_LISTS: TaskList[] = [
   { id: 1, name: 'Personal', icon: '👤', color: '#6366f1' },
   { id: 2, name: 'Work', icon: '💼', color: '#8b5cf6' },
@@ -202,7 +205,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   const addTask = useCallback((task: Omit<Task, 'id' | 'createdDate'>) => {
     const newTask: Task = {
       ...task,
-      id: Date.now(),
+      id: uniqueId(),
       createdDate: new Date().toISOString().split('T')[0],
     };
     setTasks(prev => {
@@ -248,7 +251,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   const addNote = useCallback((note: Omit<Note, 'id'>) => {
     const newNote: Note = {
       ...note,
-      id: Date.now(),
+      id: uniqueId(),
     };
     setNotes(prev => {
       const updated = [...prev, newNote];
@@ -274,7 +277,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addTaskList = useCallback((name: string, icon: string, color: string) => {
-    const newList: TaskList = { id: Date.now(), name, icon, color };
+    const newList: TaskList = { id: uniqueId(), name, icon, color };
     setTaskLists(prev => {
       const updated = [...prev, newList];
       saveData('taskLists', updated);
@@ -306,7 +309,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   const addEvent = useCallback((event: Omit<Event, 'id' | 'createdDate'>) => {
     const newEvent: Event = {
       ...event,
-      id: Date.now(),
+      id: uniqueId(),
       createdDate: new Date().toISOString().split('T')[0],
     };
     setEvents(prev => {
@@ -333,7 +336,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addHabit = useCallback((name: string) => {
-    const newHabit: Habit = { id: Date.now(), name };
+    const newHabit: Habit = { id: uniqueId(), name };
     setHabits(prev => {
       const updated = [...prev, newHabit];
       saveData('habits', updated);
@@ -368,7 +371,7 @@ export const [DataProvider, useData] = createContextHook(() => {
 
   const addPriority = useCallback((date: string, task: string, priorityDate?: string, priorityTime?: string) => {
     const newPriority: Priority = {
-      id: Date.now(),
+      id: uniqueId(),
       task,
       completed: false,
       createdDate: date,
@@ -463,7 +466,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addWorkout = useCallback((workout: Omit<Workout, 'id'>) => {
-    const newWorkout: Workout = { ...workout, id: Date.now() };
+    const newWorkout: Workout = { ...workout, id: uniqueId() };
     setWorkouts(prev => {
       const updated = [...prev, newWorkout];
       saveData('workouts', updated);
@@ -488,7 +491,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addWorkoutTemplate = useCallback((template: Omit<WorkoutTemplate, 'id'>) => {
-    const newTemplate: WorkoutTemplate = { ...template, id: Date.now() };
+    const newTemplate: WorkoutTemplate = { ...template, id: uniqueId() };
     setWorkoutTemplates(prev => {
       const updated = [...prev, newTemplate];
       saveData('workoutTemplates', updated);
@@ -515,7 +518,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   const addBook = useCallback((book: Omit<Book, 'id' | 'dateAdded'>) => {
     const newBook: Book = {
       ...book,
-      id: Date.now(),
+      id: uniqueId(),
       dateAdded: new Date().toISOString().split('T')[0],
     };
     setBooks(prev => {
@@ -534,7 +537,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addBudget = useCallback((budget: Omit<Budget, 'id' | 'spent'>) => {
-    const newBudget: Budget = { ...budget, id: Date.now(), spent: 0 };
+    const newBudget: Budget = { ...budget, id: uniqueId(), spent: 0 };
     setBudgets(prev => {
       const updated = [...prev, newBudget];
       saveData('budgets', updated);
@@ -559,7 +562,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
-    const newTransaction: Transaction = { ...transaction, id: Date.now() };
+    const newTransaction: Transaction = { ...transaction, id: uniqueId() };
     setTransactions(prev => {
       const updated = [...prev, newTransaction];
       saveData('transactions', updated);
@@ -682,7 +685,7 @@ export const [DataProvider, useData] = createContextHook(() => {
 
   const addGiftPerson = useCallback((name: string, tag: GiftPerson['tag']) => {
     const newPerson: GiftPerson = {
-      id: Date.now(),
+      id: uniqueId(),
       name,
       tag,
       gifts: [],
@@ -701,7 +704,7 @@ export const [DataProvider, useData] = createContextHook(() => {
         if (p.id === personId) {
           return {
             ...p,
-            gifts: [...p.gifts, { ...gift, id: Date.now() }],
+            gifts: [...p.gifts, { ...gift, id: uniqueId() }],
           };
         }
         return p;
@@ -760,7 +763,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addDebt = useCallback((debt: Omit<Debt, 'id'>) => {
-    const newDebt: Debt = { ...debt, id: Date.now() };
+    const newDebt: Debt = { ...debt, id: uniqueId() };
     setDebts(prev => {
       const updated = [...prev, newDebt];
       saveData('debts', updated);
@@ -777,7 +780,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   }, [saveData]);
 
   const addSavings = useCallback((savings: Omit<Savings, 'id'>) => {
-    const newSavings: Savings = { ...savings, id: Date.now() };
+    const newSavings: Savings = { ...savings, id: uniqueId() };
     setSavings(prev => {
       const updated = [...prev, newSavings];
       saveData('savings', updated);
@@ -867,7 +870,7 @@ export const [DataProvider, useData] = createContextHook(() => {
     updateGiftItem,
     holidays,
     addHoliday: (holiday: Omit<Holiday, 'id'>) => {
-      const newHoliday: Holiday = { ...holiday, id: Date.now() };
+      const newHoliday: Holiday = { ...holiday, id: uniqueId() };
       setHolidays(prev => {
         const updated = [...prev, newHoliday];
         saveData('holidays', updated);
@@ -891,7 +894,7 @@ export const [DataProvider, useData] = createContextHook(() => {
     noteCategories,
     taskCategories,
     addNoteCategory: (value: string, label: string) => {
-      const newCategory: Category = { id: Date.now(), value, label, type: 'note' };
+      const newCategory: Category = { id: uniqueId(), value, label, type: 'note' };
       setNoteCategories(prev => {
         const updated = [...prev, newCategory];
         saveData('noteCategories', updated);
@@ -913,7 +916,7 @@ export const [DataProvider, useData] = createContextHook(() => {
       });
     },
     addTaskCategory: (value: string, label: string) => {
-      const newCategory: Category = { id: Date.now(), value, label, type: 'task' };
+      const newCategory: Category = { id: uniqueId(), value, label, type: 'task' };
       setTaskCategories(prev => {
         const updated = [...prev, newCategory];
         saveData('taskCategories', updated);
