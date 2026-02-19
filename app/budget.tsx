@@ -578,7 +578,15 @@ export default function BudgetScreen() {
       console.log('Opening DocumentPicker...');
 
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
+        type: [
+          'application/pdf',
+          'text/csv',
+          'text/plain',
+          'text/comma-separated-values',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'public.comma-separated-values-text',
+        ],
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -601,58 +609,9 @@ export default function BudgetScreen() {
       console.log('File picked:', fileName, mimeType, file.uri, 'size:', file.size);
 
       if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
-        setUploadModalVisible(true);
-        setIsUploading(true);
-        setUploadStatus('Attempting to read PDF...');
-
-        let pdfTextContent = '';
-        let pdfReadSuccess = false;
-
-        const pdfMethods = [
-          async () => {
-            const content = await FileSystem.readAsStringAsync(file.uri, {
-              encoding: FileSystem.EncodingType.UTF8,
-            });
-            console.log('PDF UTF8 read length:', content.length);
-            return content;
-          },
-          async () => {
-            const content = await FileSystem.readAsStringAsync(file.uri);
-            console.log('PDF default read length:', content.length);
-            return content;
-          },
-          async () => {
-            const response = await fetch(file.uri);
-            const content = await response.text();
-            console.log('PDF fetch read length:', content.length);
-            return content;
-          },
-        ];
-
-        for (const method of pdfMethods) {
-          try {
-            const content = await method();
-            if (content && content.includes(',') && content.split('\n').length > 2) {
-              pdfTextContent = content;
-              pdfReadSuccess = true;
-              break;
-            }
-          } catch (e) {
-            console.log('PDF read method failed:', e);
-          }
-        }
-
-        if (pdfReadSuccess && pdfTextContent) {
-          processCSVText(pdfTextContent);
-          return;
-        }
-
-        setUploadStatus('');
-        setIsUploading(false);
-        setUploadModalVisible(false);
         Alert.alert(
-          'PDF Cannot Be Parsed',
-          'This PDF cannot be read as text data. Most bank PDFs contain formatted layouts that cannot be directly imported.\n\nTo import transactions:\n1. Log in to your bank\'s website\n2. Go to transaction history or statements\n3. Look for a "Download" or "Export" option\n4. Choose CSV or Excel format\n5. Upload that file here'
+          'PDF Selected',
+          'PDF bank statements cannot be imported directly. Please export your transactions as CSV from your bank\'s website and upload the CSV file instead.\n\nSteps:\n1. Log in to your bank\'s website\n2. Go to transaction history\n3. Download as CSV\n4. Upload that CSV here'
         );
         return;
       }
