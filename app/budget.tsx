@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -83,6 +83,7 @@ export default function BudgetScreen() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<any>(null);
 
   const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -344,7 +345,100 @@ export default function BudgetScreen() {
     return new Date().toISOString().split('T')[0];
   };
 
+  const processCSVText = (text: string) => {
+    setUploadStatus('Processing transactions...');
+
+    const lines = text.split(/\r?\n/);
+    let imported = 0;
+    let skipped = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const parts = line.split(',');
+      if (parts.length < 3) {
+        skipped++;
+        continue;
+      }
+
+      const dateStr = parts[0]?.trim();
+      const description = parts[1]?.trim();
+      const amountStr = parts[2]?.trim().replace(/[^0-9.\-]/g, '');
+      const amountNum = parseFloat(amountStr);
+
+      if (!dateStr || isNaN(amountNum) || amountNum === 0) {
+        skipped++;
+        continue;
+      }
+
+      const isExpense = amountNum < 0;
+      const amount = Math.abs(amountNum);
+      const date = parseDate(dateStr);
+
+      addTransaction({
+        amount,
+        description: description || (isExpense ? 'Expense' : 'Income'),
+        date,
+        type: isExpense ? 'expense' : 'income',
+      });
+
+      imported++;
+    }
+
+    if (imported === 0) {
+      setUploadStatus(
+        `No transactions could be imported${skipped > 0 ? ` (${skipped} rows skipped)` : ''}. Check the CSV format.`
+      );
+      setIsUploading(false);
+      setTimeout(() => setUploadStatus(''), 5000);
+      return;
+    }
+
+    setUploadStatus(`Imported ${imported} transactions${skipped > 0 ? ` (${skipped} rows skipped)` : ''}`);
+    setIsUploading(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => {
+      setUploadModalVisible(false);
+      setUploadStatus('');
+    }, 2000);
+  };
+
+  const handleWebFileSelect = (event: any) => {
+    const selectedFile = event.target.files?.[0];
+    // Reset input so the same file can be selected again next time
+    if (event.target) event.target.value = '';
+    if (!selectedFile) return;
+
+    setIsUploading(true);
+    setUploadStatus('Reading file...');
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text || text.trim().length === 0) {
+        setUploadStatus('File appears to be empty');
+        setIsUploading(false);
+        setTimeout(() => setUploadStatus(''), 3000);
+        return;
+      }
+      processCSVText(text);
+    };
+    reader.onerror = () => {
+      setUploadStatus('Error reading file. Please try again.');
+      setIsUploading(false);
+      setTimeout(() => setUploadStatus(''), 5000);
+    };
+    reader.readAsText(selectedFile);
+  };
+
   const handleUploadStatement = async () => {
+    // On web (Rork), use a hidden <input type="file"> for reliable file reading
+    if (Platform.OS === 'web') {
+      fileInputRef.current?.click();
+      return;
+    }
+
     try {
       setIsUploading(true);
       setUploadStatus('Picking file...');
@@ -378,38 +472,13 @@ export default function BudgetScreen() {
       setUploadStatus('Reading file...');
 
       let text: string;
-      if (Platform.OS === 'web') {
-        // On web (Rork), use FileReader API with the underlying File object
-        const webFile = (file as any).file as File | undefined;
-        if (webFile) {
-          text = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const result = e.target?.result;
-              if (typeof result === 'string') {
-                resolve(result);
-              } else {
-                reject(new Error('FileReader did not return text'));
-              }
-            };
-            reader.onerror = () => reject(new Error('FileReader failed'));
-            reader.readAsText(webFile);
-          });
-        } else {
-          const response = await fetch(file.uri);
-          if (!response.ok) throw new Error(`Failed to read file: ${response.status}`);
-          text = await response.text();
-        }
-      } else {
-        try {
-          text = await FileSystem.readAsStringAsync(file.uri, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-        } catch (readError) {
-          console.log('FileSystem read failed, trying fetch fallback:', readError);
-          const response = await fetch(file.uri);
-          text = await response.text();
-        }
+      try {
+        text = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      } catch (readError) {
+        const response = await fetch(file.uri);
+        text = await response.text();
       }
 
       if (!text || text.trim().length === 0) {
@@ -419,67 +488,12 @@ export default function BudgetScreen() {
         return;
       }
 
-      setUploadStatus('Processing transactions...');
-
-      const lines = text.split(/\r?\n/);
-      let imported = 0;
-      let skipped = 0;
-
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        const parts = line.split(',');
-        if (parts.length < 3) {
-          skipped++;
-          continue;
-        }
-
-        const dateStr = parts[0]?.trim();
-        const description = parts[1]?.trim();
-        const amountStr = parts[2]?.trim().replace(/[^0-9.\-]/g, '');
-        const amountNum = parseFloat(amountStr);
-
-        if (!dateStr || isNaN(amountNum) || amountNum === 0) {
-          skipped++;
-          continue;
-        }
-
-        const isExpense = amountNum < 0;
-        const amount = Math.abs(amountNum);
-        const date = parseDate(dateStr);
-
-        addTransaction({
-          amount,
-          description: description || (isExpense ? 'Expense' : 'Income'),
-          date,
-          type: isExpense ? 'expense' : 'income',
-        });
-
-        imported++;
-      }
-
-      if (imported === 0) {
-        setUploadStatus(
-          `No transactions could be imported${skipped > 0 ? ` (${skipped} rows skipped)` : ''}. Check the CSV format.`
-        );
-        setIsUploading(false);
-        setTimeout(() => setUploadStatus(''), 4000);
-        return;
-      }
-
-      setUploadStatus(`Imported ${imported} transactions${skipped > 0 ? ` (${skipped} rows skipped)` : ''}`);
-      setIsUploading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => {
-        setUploadModalVisible(false);
-        setUploadStatus('');
-      }, 2000);
+      processCSVText(text);
     } catch (error) {
       console.log('Upload error:', error);
       setUploadStatus('Error processing file. Please check the format and try again.');
       setIsUploading(false);
-      setTimeout(() => setUploadStatus(''), 4000);
+      setTimeout(() => setUploadStatus(''), 5000);
     }
   };
 
@@ -1193,6 +1207,14 @@ export default function BudgetScreen() {
           </View>
         </View>
       </Modal>
+
+      {Platform.OS === 'web' && React.createElement('input', {
+        type: 'file',
+        accept: '.csv,.txt,text/csv,text/plain',
+        ref: fileInputRef,
+        onChange: handleWebFileSelect,
+        style: { display: 'none' },
+      })}
     </SafeAreaView>
   );
 }
