@@ -150,6 +150,7 @@ export const MERCHANT_CATEGORIES: Record<string, string> = {
   'paypal': 'Transfers',
   'apple pay': 'Transfers',
   'transfer': 'Transfers',
+  'wire': 'Transfers',
   'direct deposit': 'Income',
   'payroll': 'Income',
   'salary': 'Income',
@@ -158,6 +159,9 @@ export const MERCHANT_CATEGORIES: Record<string, string> = {
   'refund': 'Income',
   'cashback': 'Income',
   'cash back': 'Income',
+  'dividend': 'Income',
+  'bonus': 'Income',
+  'rebate': 'Income',
   'airbnb': 'Travel',
   'hotel': 'Travel',
   'marriott': 'Travel',
@@ -178,23 +182,77 @@ export const MERCHANT_CATEGORIES: Record<string, string> = {
   'state farm': 'Insurance',
   'allstate': 'Insurance',
   'progressive': 'Insurance',
+  'usaa': 'Insurance',
+  'liberty mutual': 'Insurance',
   'rent': 'Housing',
   'mortgage': 'Housing',
   'lease': 'Housing',
   'landlord': 'Housing',
   'property': 'Housing',
+  'hoa': 'Housing',
+  'condo': 'Housing',
+  'apple': 'Shopping',
+  'google': 'Bills & Utilities',
+  'microsoft': 'Shopping',
+  'adobe': 'Shopping',
+  'dropbox': 'Bills & Utilities',
+  'icloud': 'Bills & Utilities',
+  'tiktok': 'Entertainment',
+  'twitch': 'Entertainment',
+  'crunchyroll': 'Entertainment',
+  'audible': 'Entertainment',
+  'kindle': 'Entertainment',
+  'seamless': 'Food & Dining',
+  'gopuff': 'Shopping',
+  'dave & buster': 'Entertainment',
+  'topgolf': 'Entertainment',
+  'bowling': 'Entertainment',
+  'spa': 'Health',
+  'salon': 'Health',
+  'barber': 'Health',
+  'great clips': 'Health',
+  'supercuts': 'Health',
+  'petco': 'Pets',
+  'petsmart': 'Pets',
+  'chewy': 'Pets',
+  'veterinar': 'Pets',
+  'vet clinic': 'Pets',
+  'daycare': 'Kids',
+  'school': 'Education',
+  'tuition': 'Education',
+  'student loan': 'Education',
+  'coursera': 'Education',
+  'udemy': 'Education',
+  'car wash': 'Gas & Auto',
+  'parking': 'Transportation',
+  'toll': 'Transportation',
+  'turnpike': 'Transportation',
+  'ez pass': 'Transportation',
+  'ezpass': 'Transportation',
+  'metro': 'Transportation',
+  'transit': 'Transportation',
+  'mta': 'Transportation',
+  'cta': 'Transportation',
+  'bart': 'Transportation',
 };
 
 export const cleanDescription = (raw: string): string => {
   if (!raw) return '';
   let cleaned = raw.replace(/^[\s"']+|[\s"']+$/g, '');
-  cleaned = cleaned.replace(/\b[A-Z0-9]{6,}\b/g, ' ');
-  cleaned = cleaned.replace(/\b\d{4,}\b/g, ' ');
+
+  cleaned = cleaned.replace(/\b[A-Z0-9]{8,}\b/g, ' ');
+  cleaned = cleaned.replace(/\b[0-9]{4,}\b/g, ' ');
   cleaned = cleaned.replace(/\b[A-Za-z0-9]{2,4}\*[A-Za-z0-9]+/g, ' ');
-  cleaned = cleaned.replace(/\b(POS|ACH|DEBIT|CREDIT|PURCHASE|WITHDRAWAL|CHECKCARD|RECURRING|PREAUTHORIZED|PENDING|POSTED|WEB|ONLINE|MOBILE|ELECTRONIC|ORIG CO NAME|CO ENTRY|SEC|CCD|PPD|TEL|WEB ID|TRACE|IND ID|IND NAME|TFR|XFER|PMT|BIL|CHK|DDA|SAV)\b/gi, ' ');
   cleaned = cleaned.replace(/#\S+/g, ' ');
-  cleaned = cleaned.replace(/\b\d{1,2}\/\d{1,2}\b/g, ' ');
+  cleaned = cleaned.replace(/\b(POS|ACH|DEBIT|CREDIT|PURCHASE|WITHDRAWAL|CHECKCARD|RECURRING|PREAUTHORIZED|PENDING|POSTED|WEB|ONLINE|MOBILE|ELECTRONIC|ORIG CO NAME|CO ENTRY|SEC|CCD|PPD|TEL|WEB ID|TRACE|IND ID|IND NAME|TFR|XFER|PMT|BIL|CHK|DDA|SAV|INT|EXT|VISA|MASTERCARD|MC|CARD|TRANSACTION|ORIG|ENTRY|DESCR|REF|AUTH|MERCH|SQ|TST|BK|BKG|AUTOPAY|AUTO PAY|AUTO-PAY|PAYMENT|PYMT|REC|HOLD|FEE|SVC|MEMO|MISCELLANEOUS|MISC|INST|NBR|NUM)\b/gi, ' ');
+  cleaned = cleaned.replace(/\b\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?\b/g, ' ');
   cleaned = cleaned.replace(/\*+/g, ' ');
+  cleaned = cleaned.replace(/\bX{2,}\d*\b/gi, ' ');
+  cleaned = cleaned.replace(/\b[A-Z]{1,3}\d{5,}\b/g, ' ');
+  cleaned = cleaned.replace(/\b\d+[A-Z]+\d+\b/g, ' ');
+  cleaned = cleaned.replace(/\b[a-f0-9]{6,}\b/gi, ' ');
+  cleaned = cleaned.replace(/[_\-]{2,}/g, ' ');
+  cleaned = cleaned.replace(/\b\d{1,3}\b/g, ' ');
   cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
 
   const knownMerchants = Object.keys(MERCHANT_CATEGORIES);
@@ -202,28 +260,34 @@ export const cleanDescription = (raw: string): string => {
   for (const merchant of knownMerchants) {
     const idx = lowerCleaned.indexOf(merchant);
     if (idx !== -1) {
-      const extracted = cleaned.substring(idx, idx + merchant.length);
-      const words = extracted.split(/\s+/);
-      const titleCase = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-      return titleCase;
+      let endIdx = idx + merchant.length;
+      const afterMerchant = cleaned.substring(endIdx).trim();
+      const extraWord = afterMerchant.match(/^([A-Za-z]+)/);
+      if (extraWord && extraWord[1].length > 1 && !/^\d/.test(extraWord[1])) {
+        const fullName = cleaned.substring(idx, endIdx) + ' ' + extraWord[1];
+        return toTitleCase(fullName.trim());
+      }
+      return toTitleCase(cleaned.substring(idx, endIdx).trim());
     }
   }
 
-  if (cleaned.length > 30) {
-    const words = cleaned.split(/\s+/);
-    const meaningful = words.filter(w => w.length > 1 && !/^\d+$/.test(w));
-    cleaned = meaningful.slice(0, 4).join(' ');
-  }
+  const words = cleaned.split(/\s+/).filter(w =>
+    w.length > 1 &&
+    !/^\d+$/.test(w) &&
+    !/^[A-Z0-9]{6,}$/.test(w)
+  );
 
-  if (cleaned.length > 0) {
-    const words = cleaned.split(/\s+/);
-    cleaned = words.map(w => {
-      if (w.length <= 3 && w === w.toUpperCase()) return w;
-      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-    }).join(' ');
-  }
+  if (words.length === 0) return 'Unknown';
 
-  return cleaned || 'Unknown';
+  cleaned = words.slice(0, 3).join(' ');
+  return toTitleCase(cleaned);
+};
+
+const toTitleCase = (str: string): string => {
+  return str.split(/\s+/).map(w => {
+    if (w.length <= 3 && w === w.toUpperCase()) return w;
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(' ');
 };
 
 export const categorizeTransaction = (description: string): string | undefined => {
