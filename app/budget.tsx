@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -83,7 +83,6 @@ export default function BudgetScreen() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<any>(null);
 
   const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -404,38 +403,47 @@ export default function BudgetScreen() {
     }, 2000);
   };
 
-  const handleWebFileSelect = (event: any) => {
-    const selectedFile = event.target.files?.[0];
-    // Reset input so the same file can be selected again next time
-    if (event.target) event.target.value = '';
-    if (!selectedFile) return;
-
-    setIsUploading(true);
-    setUploadStatus('Reading file...');
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (!text || text.trim().length === 0) {
-        setUploadStatus('File appears to be empty');
-        setIsUploading(false);
-        setTimeout(() => setUploadStatus(''), 3000);
+  const triggerWebFilePicker = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt,text/csv,text/plain';
+    input.onchange = (event: any) => {
+      const selectedFile = event.target?.files?.[0];
+      if (!selectedFile) {
+        console.log('No file selected');
         return;
       }
-      processCSVText(text);
+
+      console.log('File selected:', selectedFile.name, selectedFile.type, selectedFile.size);
+      setIsUploading(true);
+      setUploadStatus('Reading file...');
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        console.log('File read complete, length:', text?.length);
+        if (!text || text.trim().length === 0) {
+          setUploadStatus('File appears to be empty');
+          setIsUploading(false);
+          setTimeout(() => setUploadStatus(''), 3000);
+          return;
+        }
+        processCSVText(text);
+      };
+      reader.onerror = () => {
+        console.log('FileReader error');
+        setUploadStatus('Error reading file. Please try again.');
+        setIsUploading(false);
+        setTimeout(() => setUploadStatus(''), 5000);
+      };
+      reader.readAsText(selectedFile);
     };
-    reader.onerror = () => {
-      setUploadStatus('Error reading file. Please try again.');
-      setIsUploading(false);
-      setTimeout(() => setUploadStatus(''), 5000);
-    };
-    reader.readAsText(selectedFile);
+    input.click();
   };
 
   const handleUploadStatement = async () => {
-    // On web (Rork), use a hidden <input type="file"> for reliable file reading
     if (Platform.OS === 'web') {
-      fileInputRef.current?.click();
+      triggerWebFilePicker();
       return;
     }
 
@@ -1208,13 +1216,6 @@ export default function BudgetScreen() {
         </View>
       </Modal>
 
-      {Platform.OS === 'web' && React.createElement('input', {
-        type: 'file',
-        accept: '.csv,.txt,text/csv,text/plain',
-        ref: fileInputRef,
-        onChange: handleWebFileSelect,
-        style: { display: 'none' },
-      })}
     </SafeAreaView>
   );
 }
