@@ -240,29 +240,14 @@ export const cleanDescription = (raw: string): string => {
   if (!raw) return '';
   let cleaned = raw.replace(/^[\s"']+|[\s"']+$/g, '');
 
-  cleaned = cleaned.replace(/\b[A-Z0-9]{8,}\b/g, ' ');
-  cleaned = cleaned.replace(/\b[0-9]{4,}\b/g, ' ');
-  cleaned = cleaned.replace(/\b[A-Za-z0-9]{2,4}\*[A-Za-z0-9]+/g, ' ');
-  cleaned = cleaned.replace(/#\S+/g, ' ');
-  cleaned = cleaned.replace(/\b(POS|ACH|DEBIT|CREDIT|PURCHASE|WITHDRAWAL|CHECKCARD|RECURRING|PREAUTHORIZED|PENDING|POSTED|WEB|ONLINE|MOBILE|ELECTRONIC|ORIG CO NAME|CO ENTRY|SEC|CCD|PPD|TEL|WEB ID|TRACE|IND ID|IND NAME|TFR|XFER|PMT|BIL|CHK|DDA|SAV|INT|EXT|VISA|MASTERCARD|MC|CARD|TRANSACTION|ORIG|ENTRY|DESCR|REF|AUTH|MERCH|SQ|TST|BK|BKG|AUTOPAY|AUTO PAY|AUTO-PAY|PAYMENT|PYMT|REC|HOLD|FEE|SVC|MEMO|MISCELLANEOUS|MISC|INST|NBR|NUM)\b/gi, ' ');
-  cleaned = cleaned.replace(/\b\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?\b/g, ' ');
-  cleaned = cleaned.replace(/\*+/g, ' ');
-  cleaned = cleaned.replace(/\bX{2,}\d*\b/gi, ' ');
-  cleaned = cleaned.replace(/\b[A-Z]{1,3}\d{5,}\b/g, ' ');
-  cleaned = cleaned.replace(/\b\d+[A-Z]+\d+\b/g, ' ');
-  cleaned = cleaned.replace(/\b[a-f0-9]{6,}\b/gi, ' ');
-  cleaned = cleaned.replace(/[_\-]{2,}/g, ' ');
-  cleaned = cleaned.replace(/\b\d{1,3}\b/g, ' ');
-  cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
-
   const knownMerchants = Object.keys(MERCHANT_CATEGORIES);
-  const lowerCleaned = cleaned.toLowerCase();
+  const lowerRaw = cleaned.toLowerCase();
   for (const merchant of knownMerchants) {
-    const idx = lowerCleaned.indexOf(merchant);
+    const idx = lowerRaw.indexOf(merchant);
     if (idx !== -1) {
-      let endIdx = idx + merchant.length;
+      const endIdx = idx + merchant.length;
       const afterMerchant = cleaned.substring(endIdx).trim();
-      const extraWord = afterMerchant.match(/^([A-Za-z]+)/);
+      const extraWord = afterMerchant.match(/^([A-Za-z][A-Za-z'-]+)/);
       if (extraWord && extraWord[1].length > 1 && !/^\d/.test(extraWord[1])) {
         const fullName = cleaned.substring(idx, endIdx) + ' ' + extraWord[1];
         return toTitleCase(fullName.trim());
@@ -271,16 +256,37 @@ export const cleanDescription = (raw: string): string => {
     }
   }
 
+  cleaned = cleaned.replace(/\b[A-Z0-9]{8,}\b/g, ' ');
+  cleaned = cleaned.replace(/\b[0-9]{4,}\b/g, ' ');
+  cleaned = cleaned.replace(/\b[A-Za-z0-9]{2,4}\*[A-Za-z0-9]+/g, ' ');
+  cleaned = cleaned.replace(/#\S+/g, ' ');
+  cleaned = cleaned.replace(/\b(POS|ACH|DEBIT|CREDIT|PURCHASE|WITHDRAWAL|CHECKCARD|RECURRING|PREAUTHORIZED|PENDING|POSTED|WEB|ONLINE|MOBILE|ELECTRONIC|ORIG CO NAME|CO ENTRY|SEC|CCD|PPD|TEL|WEB ID|TRACE|IND ID|IND NAME|TFR|XFER|PMT|BIL|CHK|DDA|SAV|INT|EXT|VISA|MASTERCARD|MC|CARD|TRANSACTION|ORIG|ENTRY|DESCR|REF|AUTH|MERCH|SQ|TST|BK|BKG|AUTOPAY|AUTO PAY|AUTO-PAY|PAYMENT|PYMT|REC|HOLD|FEE|SVC|MEMO|MISCELLANEOUS|MISC|INST|NBR|NUM|DR|CR|DB|INTERAC|INTERNET|WITHDRAWAL|DEPOSIT|WIRE|TRANSFER|FROM|TO|ACCT|ACCOUNT|CHECK|NO|EXTERNAL|INTERNAL|BRANCH|ATM|TERMINAL|LOCATION|CITY|STATE|COUNTRY|PROVINCE|CA|US|USA|TX|NY|FL|IL|OH|PA|GA|NC|MI|NJ|VA|WA|AZ|MA|TN|IN|MO|MD|WI|MN|CO|AL|SC|LA|KY|OR|OK|CT|UT|IA|NV|AR|MS|KS|NM|NE|WV|ID|HI|NH|ME|MT|RI|DE|SD|ND|AK|VT|WY|DC)\b/gi, ' ');
+  cleaned = cleaned.replace(/\b\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?\b/g, ' ');
+  cleaned = cleaned.replace(/\*+/g, ' ');
+  cleaned = cleaned.replace(/\bX{2,}\d*\b/gi, ' ');
+  cleaned = cleaned.replace(/\b[A-Z]{1,3}\d{5,}\b/g, ' ');
+  cleaned = cleaned.replace(/\b\d+[A-Z]+\d+\b/gi, ' ');
+  cleaned = cleaned.replace(/\b[a-f0-9]{6,}\b/gi, ' ');
+  cleaned = cleaned.replace(/[_\-]{2,}/g, ' ');
+  cleaned = cleaned.replace(/\b\d{1,3}\b/g, ' ');
+  cleaned = cleaned.replace(/\b[A-Z]{2}\d{2,}\b/g, ' ');
+  cleaned = cleaned.replace(/\b\d{2,}[A-Z]{2,}\b/g, ' ');
+  cleaned = cleaned.replace(/\b[A-Z]\d[A-Z]\s*\d[A-Z]\d\b/g, ' ');
+  cleaned = cleaned.replace(/\b\d{3,}\b/g, ' ');
+  cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
   const words = cleaned.split(/\s+/).filter(w =>
     w.length > 1 &&
     !/^\d+$/.test(w) &&
-    !/^[A-Z0-9]{6,}$/.test(w)
+    !/^[A-Z0-9]{6,}$/.test(w) &&
+    !/^[0-9]+[A-Za-z]+$/.test(w) &&
+    !/^[A-Za-z]+[0-9]{3,}$/.test(w)
   );
 
   if (words.length === 0) return 'Unknown';
 
-  cleaned = words.slice(0, 3).join(' ');
-  return toTitleCase(cleaned);
+  const nameWords = words.slice(0, 3).join(' ');
+  return toTitleCase(nameWords);
 };
 
 const toTitleCase = (str: string): string => {

@@ -53,17 +53,77 @@ const extractBetweenMarkers = (raw: string): string[] => {
   return lines;
 };
 
+const mergeFragmentedLines = (lines: string[]): string[] => {
+  const merged: string[] = [];
+  let currentLine = '';
+  const datePattern = /\b\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?\b/;
+  const amountPattern = /\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d{2})\s*$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    if (datePattern.test(line) && currentLine) {
+      merged.push(currentLine.trim());
+      currentLine = line;
+    } else if (currentLine && amountPattern.test(line)) {
+      currentLine += ' ' + line;
+      merged.push(currentLine.trim());
+      currentLine = '';
+    } else if (datePattern.test(line)) {
+      currentLine = line;
+    } else if (currentLine) {
+      currentLine += ' ' + line;
+    } else {
+      merged.push(line);
+    }
+  }
+
+  if (currentLine) {
+    merged.push(currentLine.trim());
+  }
+
+  return merged;
+};
+
 const findTransactionPatterns = (text: string): string[] => {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const lines = mergeFragmentedLines(rawLines);
   const transactionLines: string[] = [];
 
-  const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/;
+  const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
   const amountPattern = /\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/;
+
+  const skipPatterns = [
+    /\b(balance|opening|closing|beginning|ending|previous|statement|summary|page|total|account\s*(number|no|#)?)\b/i,
+    /\b(routing|transit|acct|member)\s*(number|no|#|id)?\s*:?\s*\d/i,
+  ];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    if (skipPatterns.some(p => p.test(line))) continue;
+
     if (datePattern.test(line) && amountPattern.test(line)) {
       transactionLines.push(line);
+      continue;
+    }
+
+    if (datePattern.test(line) && i + 1 < lines.length) {
+      const nextLine = lines[i + 1];
+      if (amountPattern.test(nextLine) && !datePattern.test(nextLine)) {
+        transactionLines.push(line + ' ' + nextLine);
+        i++;
+        continue;
+      }
+      if (i + 2 < lines.length) {
+        const lineAfter = lines[i + 2];
+        if (amountPattern.test(lineAfter) && !datePattern.test(nextLine)) {
+          transactionLines.push(line + ' ' + nextLine + ' ' + lineAfter);
+          i += 2;
+          continue;
+        }
+      }
     }
   }
 
@@ -72,7 +132,7 @@ const findTransactionPatterns = (text: string): string[] => {
 
 const buildCSVFromTransactions = (transactionLines: string[]): string => {
   const csvRows: string[] = ['Date,Description,Amount'];
-  const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/;
+  const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
   const amountPattern = /(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
 
   for (const line of transactionLines) {
@@ -96,8 +156,9 @@ const buildCSVFromTransactions = (transactionLines: string[]): string => {
 
     const amount = amounts[amounts.length - 1];
 
-    if (desc && amount) {
-      csvRows.push(`${date},"${desc}",${amount}`);
+    if (amount) {
+      const finalDesc = desc || 'Transaction';
+      csvRows.push(`${date},"${finalDesc}",${amount}`);
     }
   }
 
