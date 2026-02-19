@@ -879,30 +879,26 @@ export default function BudgetScreen() {
 
       const methods = [
         async () => {
-          const content = await FileSystem.readAsStringAsync(file.uri, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-          console.log('Method 1 (FileSystem UTF8) success, length:', content.length);
-          return content;
-        },
-        async () => {
-          const content = await FileSystem.readAsStringAsync(file.uri);
-          console.log('Method 2 (FileSystem default) success, length:', content.length);
-          return content;
+          const fileObj = new FileSystem.File(file.uri);
+          if (fileObj.exists) {
+            const content = await fileObj.text();
+            console.log('Method 1 (File.text) success, length:', content.length);
+            return content;
+          }
+          throw new Error('File does not exist');
         },
         async () => {
           const response = await fetch(file.uri);
           const content = await response.text();
-          console.log('Method 3 (fetch) success, length:', content.length);
+          console.log('Method 2 (fetch) success, length:', content.length);
           return content;
         },
         async () => {
-          const cacheUri = FileSystem.cacheDirectory + 'upload_' + Date.now() + '.csv';
-          await FileSystem.copyAsync({ from: file.uri, to: cacheUri });
-          const content = await FileSystem.readAsStringAsync(cacheUri, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-          console.log('Method 4 (copy+read) success, length:', content.length);
+          const cacheFile = new FileSystem.File(FileSystem.Paths.cache, 'upload_' + Date.now() + '.csv');
+          const srcFile = new FileSystem.File(file.uri);
+          srcFile.copy(cacheFile);
+          const content = await cacheFile.text();
+          console.log('Method 3 (copy+read) success, length:', content.length);
           return content;
         },
       ];
