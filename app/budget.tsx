@@ -574,10 +574,19 @@ export default function BudgetScreen() {
     try {
       setIsUploading(true);
       setUploadStatus('Picking file...');
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/plain', 'text/comma-separated-values', 'application/csv', 'application/vnd.ms-excel', 'application/pdf', '*/*'],
-        copyToCacheDirectory: true,
-      });
+
+      let result;
+      try {
+        result = await DocumentPicker.getDocumentAsync({
+          type: '*/*',
+          copyToCacheDirectory: true,
+        });
+      } catch (pickerError) {
+        console.log('DocumentPicker error, retrying with no type filter:', pickerError);
+        result = await DocumentPicker.getDocumentAsync({
+          copyToCacheDirectory: true,
+        });
+      }
 
       console.log('DocumentPicker result:', JSON.stringify(result));
 
@@ -587,28 +596,29 @@ export default function BudgetScreen() {
         return;
       }
 
-      const file = result.assets[0];
-      if (!file) {
+      const file = result.assets?.[0];
+      if (!file || !file.uri) {
         setUploadStatus('No file selected');
         setIsUploading(false);
         return;
       }
 
-      const fileName = file.name?.toLowerCase() || '';
-      console.log('File picked:', fileName, file.mimeType, file.uri);
+      const fileName = (file.name || '').toLowerCase();
+      const mimeType = (file.mimeType || '').toLowerCase();
+      console.log('File picked:', fileName, mimeType, file.uri, 'size:', file.size);
 
-      if (fileName.endsWith('.pdf')) {
+      if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
         setUploadStatus('PDF files cannot be imported directly. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.');
         setIsUploading(false);
         return;
       }
 
-      if (
-        !fileName.endsWith('.csv') &&
-        !fileName.endsWith('.txt') &&
-        !fileName.endsWith('.tsv')
-      ) {
-        setUploadStatus('Please upload a CSV or text file (.csv or .txt)');
+      const isTextFile = fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.tsv') ||
+        mimeType.includes('csv') || mimeType.includes('text') || mimeType.includes('comma') ||
+        mimeType.includes('excel') || mimeType === 'application/octet-stream' || mimeType === '';
+
+      if (!isTextFile) {
+        setUploadStatus(`Unsupported file type: ${mimeType || 'unknown'}. Please upload a CSV or text file.`);
         setIsUploading(false);
         return;
       }
@@ -618,29 +628,50 @@ export default function BudgetScreen() {
       let text = '';
       let readSuccess = false;
 
-      try {
-        text = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        readSuccess = true;
-        console.log('FileSystem read success, length:', text.length);
-      } catch (readError) {
-        console.log('FileSystem read failed:', readError);
-      }
-
-      if (!readSuccess) {
-        try {
+      const methods = [
+        async () => {
+          const content = await FileSystem.readAsStringAsync(file.uri, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          console.log('Method 1 (FileSystem UTF8) success, length:', content.length);
+          return content;
+        },
+        async () => {
+          const content = await FileSystem.readAsStringAsync(file.uri);
+          console.log('Method 2 (FileSystem default) success, length:', content.length);
+          return content;
+        },
+        async () => {
           const response = await fetch(file.uri);
-          text = await response.text();
-          readSuccess = true;
-          console.log('Fetch read success, length:', text.length);
-        } catch (fetchError) {
-          console.log('Fetch read failed:', fetchError);
+          const content = await response.text();
+          console.log('Method 3 (fetch) success, length:', content.length);
+          return content;
+        },
+        async () => {
+          const cacheUri = FileSystem.cacheDirectory + 'upload_' + Date.now() + '.csv';
+          await FileSystem.copyAsync({ from: file.uri, to: cacheUri });
+          const content = await FileSystem.readAsStringAsync(cacheUri, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          console.log('Method 4 (copy+read) success, length:', content.length);
+          return content;
+        },
+      ];
+
+      for (let i = 0; i < methods.length; i++) {
+        try {
+          text = await methods[i]();
+          if (text && text.trim().length > 0) {
+            readSuccess = true;
+            break;
+          }
+        } catch (err) {
+          console.log(`Read method ${i + 1} failed:`, err);
         }
       }
 
       if (!readSuccess || !text || text.trim().length === 0) {
-        setUploadStatus('Could not read the file. Try a different CSV file.');
+        setUploadStatus('Could not read the file. Make sure it is a valid CSV/text file and try again.');
         setIsUploading(false);
         return;
       }
