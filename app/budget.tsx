@@ -567,39 +567,40 @@ export default function BudgetScreen() {
 
   const handleUploadStatement = async () => {
     if (Platform.OS === 'web') {
+      setUploadModalVisible(true);
       triggerWebFilePicker();
       return;
     }
 
     try {
-      setIsUploading(true);
-      setUploadStatus('Picking file...');
+      console.log('Opening DocumentPicker...');
 
-      let result;
-      try {
-        result = await DocumentPicker.getDocumentAsync({
-          type: '*/*',
-          copyToCacheDirectory: true,
-        });
-      } catch (pickerError) {
-        console.log('DocumentPicker error, retrying with no type filter:', pickerError);
-        result = await DocumentPicker.getDocumentAsync({
-          copyToCacheDirectory: true,
-        });
-      }
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'text/csv',
+          'text/plain',
+          'text/comma-separated-values',
+          'text/tab-separated-values',
+          'application/csv',
+          'application/vnd.ms-excel',
+          'application/octet-stream',
+          'application/pdf',
+          '*/*',
+        ],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
 
       console.log('DocumentPicker result:', JSON.stringify(result));
 
       if (result.canceled) {
-        setUploadStatus('');
-        setIsUploading(false);
+        console.log('User cancelled picker');
         return;
       }
 
       const file = result.assets?.[0];
       if (!file || !file.uri) {
-        setUploadStatus('No file selected');
-        setIsUploading(false);
+        Alert.alert('Error', 'No file was selected. Please try again.');
         return;
       }
 
@@ -608,21 +609,15 @@ export default function BudgetScreen() {
       console.log('File picked:', fileName, mimeType, file.uri, 'size:', file.size);
 
       if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
-        setUploadStatus('PDF files cannot be imported directly. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.');
-        setIsUploading(false);
+        Alert.alert(
+          'PDF Not Supported',
+          'PDF files cannot be imported directly. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.'
+        );
         return;
       }
 
-      const isTextFile = fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.tsv') ||
-        mimeType.includes('csv') || mimeType.includes('text') || mimeType.includes('comma') ||
-        mimeType.includes('excel') || mimeType === 'application/octet-stream' || mimeType === '';
-
-      if (!isTextFile) {
-        setUploadStatus(`Unsupported file type: ${mimeType || 'unknown'}. Please upload a CSV or text file.`);
-        setIsUploading(false);
-        return;
-      }
-
+      setUploadModalVisible(true);
+      setIsUploading(true);
       setUploadStatus('Reading file...');
 
       let text = '';
@@ -679,7 +674,7 @@ export default function BudgetScreen() {
       processCSVText(text);
     } catch (error) {
       console.log('Upload error:', error);
-      setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}. Try again.`);
+      Alert.alert('Upload Error', `${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
       setIsUploading(false);
     }
   };
@@ -763,7 +758,7 @@ export default function BudgetScreen() {
 
         <TouchableOpacity
           style={styles.uploadButton}
-          onPress={() => setUploadModalVisible(true)}
+          onPress={handleUploadStatement}
         >
           <Upload size={18} color={Colors.primary} />
           <Text style={styles.uploadButtonText}>Upload Bank Statement (CSV)</Text>
@@ -1348,24 +1343,25 @@ export default function BudgetScreen() {
         visible={uploadModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setUploadModalVisible(false)}
+        onRequestClose={() => {
+          setUploadModalVisible(false);
+          setUploadStatus('');
+          setIsUploading(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Upload Bank Statement</Text>
-            <Text style={styles.uploadInstructions}>
-              Upload a CSV file with the following format:{`\n\n`}
-              Date, Description, Amount{`\n`}
-              2024-01-15, Grocery Store, -45.99{`\n`}
-              2024-01-16, Salary Deposit, 2500.00{`\n\n`}
-              Negative amounts are expenses, positive are income.
-            </Text>
+            <Text style={styles.modalTitle}>Upload Status</Text>
             
             {uploadStatus ? (
               <View style={styles.uploadStatusContainer}>
                 <Text style={styles.uploadStatus}>{uploadStatus}</Text>
               </View>
-            ) : null}
+            ) : (
+              <View style={styles.uploadStatusContainer}>
+                <Text style={styles.uploadStatus}>Processing...</Text>
+              </View>
+            )}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -1376,19 +1372,7 @@ export default function BudgetScreen() {
                   setIsUploading(false);
                 }}
               >
-                <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalButtonPrimary}
-                onPress={handleUploadStatement}
-                disabled={isUploading}
-              >
-                <LinearGradient
-                  colors={[Colors.primary, Colors.secondary]}
-                  style={styles.modalButtonGradient}
-                >
-                  <Text style={styles.modalButtonText}>Choose File</Text>
-                </LinearGradient>
+                <Text style={styles.modalButtonTextSecondary}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
