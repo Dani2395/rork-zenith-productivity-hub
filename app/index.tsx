@@ -1137,7 +1137,7 @@ export default function HomeScreen() {
                     {itemsWithTime.map((item, index) => {
                       const showTime = index === 0 || item.time !== itemsWithTime[index - 1]?.time;
                       return (
-                        <View key={`timeline-${item.type}-${(item.data as any).id || index}`}>
+                        <View key={`timeline-${item.type}-${index}-${(item.data as any).id ?? 'no-id'}`}>
                           {showTime && item.time && (
                             <View style={styles.timeMarker}>
                               <View style={styles.timeLine} />
@@ -1242,7 +1242,7 @@ export default function HomeScreen() {
                       <Text style={styles.timelineSectionTitle}>📋 All Day</Text>
                     </View>
                     {itemsWithoutTime.map((item, index) => (
-                      <View key={`allday-${item.type}-${(item.data as any).id || index}`}>
+                      <View key={`allday-${item.type}-${index}-${(item.data as any).id ?? 'no-id'}`}>
                         {item.type === 'task' && (
                           <TouchableOpacity
                             style={[

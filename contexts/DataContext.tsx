@@ -27,7 +27,17 @@ import {
 } from '@/types';
 
 let _idCounter = 0;
-const uniqueId = () => Date.now() * 1000 + (++_idCounter % 1000);
+let _lastTimestamp = 0;
+const uniqueId = () => {
+  const now = Date.now();
+  if (now === _lastTimestamp) {
+    _idCounter++;
+  } else {
+    _lastTimestamp = now;
+    _idCounter = 0;
+  }
+  return now * 10000 + _idCounter;
+};
 
 const DEFAULT_TASK_LISTS: TaskList[] = [
   { id: 1, name: 'Personal', icon: '👤', color: '#6366f1' },
