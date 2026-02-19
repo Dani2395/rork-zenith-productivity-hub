@@ -322,6 +322,251 @@ export default function BudgetScreen() {
     ]);
   };
 
+  const MERCHANT_CATEGORIES: Record<string, string> = {
+    'doordash': 'Food & Dining',
+    'door dash': 'Food & Dining',
+    'uber eats': 'Food & Dining',
+    'ubereats': 'Food & Dining',
+    'grubhub': 'Food & Dining',
+    'postmates': 'Food & Dining',
+    'instacart': 'Groceries',
+    'mcdonald': 'Food & Dining',
+    'starbucks': 'Food & Dining',
+    'chipotle': 'Food & Dining',
+    'chick-fil-a': 'Food & Dining',
+    'chickfila': 'Food & Dining',
+    'taco bell': 'Food & Dining',
+    'wendy': 'Food & Dining',
+    'burger king': 'Food & Dining',
+    'subway': 'Food & Dining',
+    'pizza hut': 'Food & Dining',
+    'domino': 'Food & Dining',
+    'panera': 'Food & Dining',
+    'dunkin': 'Food & Dining',
+    'panda express': 'Food & Dining',
+    'popeyes': 'Food & Dining',
+    'sonic': 'Food & Dining',
+    'ihop': 'Food & Dining',
+    'denny': 'Food & Dining',
+    'applebee': 'Food & Dining',
+    'olive garden': 'Food & Dining',
+    'red lobster': 'Food & Dining',
+    'outback': 'Food & Dining',
+    'chili': 'Food & Dining',
+    'buffalo wild': 'Food & Dining',
+    'wingstop': 'Food & Dining',
+    'five guys': 'Food & Dining',
+    'whataburger': 'Food & Dining',
+    'jack in the box': 'Food & Dining',
+    'arby': 'Food & Dining',
+    'zaxby': 'Food & Dining',
+    'raising cane': 'Food & Dining',
+    'walmart': 'Groceries',
+    'wal-mart': 'Groceries',
+    'target': 'Shopping',
+    'costco': 'Groceries',
+    'kroger': 'Groceries',
+    'publix': 'Groceries',
+    'aldi': 'Groceries',
+    'trader joe': 'Groceries',
+    'whole foods': 'Groceries',
+    'safeway': 'Groceries',
+    'heb': 'Groceries',
+    'h-e-b': 'Groceries',
+    'food lion': 'Groceries',
+    'piggly wiggly': 'Groceries',
+    'winn dixie': 'Groceries',
+    'sam\'s club': 'Groceries',
+    'sams club': 'Groceries',
+    'amazon': 'Shopping',
+    'amzn': 'Shopping',
+    'ebay': 'Shopping',
+    'etsy': 'Shopping',
+    'best buy': 'Shopping',
+    'home depot': 'Home',
+    'lowe\'s': 'Home',
+    'lowes': 'Home',
+    'ikea': 'Home',
+    'wayfair': 'Home',
+    'uber': 'Transportation',
+    'lyft': 'Transportation',
+    'shell': 'Gas & Auto',
+    'exxon': 'Gas & Auto',
+    'chevron': 'Gas & Auto',
+    'bp ': 'Gas & Auto',
+    'circle k': 'Gas & Auto',
+    'speedway': 'Gas & Auto',
+    'marathon': 'Gas & Auto',
+    'wawa': 'Gas & Auto',
+    'quiktrip': 'Gas & Auto',
+    'racetrac': 'Gas & Auto',
+    'sunoco': 'Gas & Auto',
+    'valero': 'Gas & Auto',
+    'murphy': 'Gas & Auto',
+    'autozone': 'Gas & Auto',
+    'o\'reilly': 'Gas & Auto',
+    'jiffy lube': 'Gas & Auto',
+    'netflix': 'Entertainment',
+    'spotify': 'Entertainment',
+    'hulu': 'Entertainment',
+    'disney+': 'Entertainment',
+    'disney plus': 'Entertainment',
+    'hbo': 'Entertainment',
+    'apple music': 'Entertainment',
+    'apple tv': 'Entertainment',
+    'youtube': 'Entertainment',
+    'paramount': 'Entertainment',
+    'peacock': 'Entertainment',
+    'amc': 'Entertainment',
+    'regal': 'Entertainment',
+    'cinemark': 'Entertainment',
+    'xbox': 'Entertainment',
+    'playstation': 'Entertainment',
+    'steam': 'Entertainment',
+    'nintendo': 'Entertainment',
+    'at&t': 'Bills & Utilities',
+    'verizon': 'Bills & Utilities',
+    't-mobile': 'Bills & Utilities',
+    'tmobile': 'Bills & Utilities',
+    'sprint': 'Bills & Utilities',
+    'comcast': 'Bills & Utilities',
+    'xfinity': 'Bills & Utilities',
+    'spectrum': 'Bills & Utilities',
+    'cox': 'Bills & Utilities',
+    'electric': 'Bills & Utilities',
+    'water bill': 'Bills & Utilities',
+    'gas bill': 'Bills & Utilities',
+    'internet': 'Bills & Utilities',
+    'cvs': 'Health',
+    'walgreens': 'Health',
+    'rite aid': 'Health',
+    'pharmacy': 'Health',
+    'medical': 'Health',
+    'doctor': 'Health',
+    'dental': 'Health',
+    'hospital': 'Health',
+    'urgent care': 'Health',
+    'gym': 'Health',
+    'planet fitness': 'Health',
+    'la fitness': 'Health',
+    'anytime fitness': 'Health',
+    'equinox': 'Health',
+    'ross': 'Shopping',
+    'tj maxx': 'Shopping',
+    'marshalls': 'Shopping',
+    'old navy': 'Shopping',
+    'gap': 'Shopping',
+    'h&m': 'Shopping',
+    'zara': 'Shopping',
+    'nike': 'Shopping',
+    'adidas': 'Shopping',
+    'foot locker': 'Shopping',
+    'dollar tree': 'Shopping',
+    'dollar general': 'Shopping',
+    'family dollar': 'Shopping',
+    'bath & body': 'Shopping',
+    'sephora': 'Shopping',
+    'ulta': 'Shopping',
+    'venmo': 'Transfers',
+    'zelle': 'Transfers',
+    'cashapp': 'Transfers',
+    'cash app': 'Transfers',
+    'paypal': 'Transfers',
+    'apple pay': 'Transfers',
+    'transfer': 'Transfers',
+    'direct deposit': 'Income',
+    'payroll': 'Income',
+    'salary': 'Income',
+    'deposit': 'Income',
+    'interest': 'Income',
+    'refund': 'Income',
+    'cashback': 'Income',
+    'cash back': 'Income',
+    'airbnb': 'Travel',
+    'hotel': 'Travel',
+    'marriott': 'Travel',
+    'hilton': 'Travel',
+    'hyatt': 'Travel',
+    'airline': 'Travel',
+    'delta': 'Travel',
+    'united': 'Travel',
+    'american air': 'Travel',
+    'southwest': 'Travel',
+    'jetblue': 'Travel',
+    'spirit air': 'Travel',
+    'frontier': 'Travel',
+    'expedia': 'Travel',
+    'booking.com': 'Travel',
+    'insurance': 'Insurance',
+    'geico': 'Insurance',
+    'state farm': 'Insurance',
+    'allstate': 'Insurance',
+    'progressive': 'Insurance',
+    'rent': 'Housing',
+    'mortgage': 'Housing',
+    'lease': 'Housing',
+    'landlord': 'Housing',
+    'property': 'Housing',
+  };
+
+  const cleanDescription = (raw: string): string => {
+    if (!raw) return '';
+    let cleaned = raw.replace(/^[\s"']+|[\s"']+$/g, '');
+    cleaned = cleaned.replace(/\b[A-Z0-9]{6,}\b/g, ' ');
+    cleaned = cleaned.replace(/\b\d{4,}\b/g, ' ');
+    cleaned = cleaned.replace(/\b[A-Za-z0-9]{2,4}\*[A-Za-z0-9]+/g, ' ');
+    cleaned = cleaned.replace(/\b(POS|ACH|DEBIT|CREDIT|PURCHASE|WITHDRAWAL|CHECKCARD|RECURRING|PREAUTHORIZED|PENDING|POSTED|WEB|ONLINE|MOBILE|ELECTRONIC|ORIG CO NAME|CO ENTRY|SEC|CCD|PPD|TEL|WEB ID|TRACE|IND ID|IND NAME|TFR|XFER|PMT|BIL|CHK|DDA|SAV)\b/gi, ' ');
+    cleaned = cleaned.replace(/#\S+/g, ' ');
+    cleaned = cleaned.replace(/\b\d{1,2}\/\d{1,2}\b/g, ' ');
+    cleaned = cleaned.replace(/\*+/g, ' ');
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+    const knownMerchants = Object.keys(MERCHANT_CATEGORIES);
+    const lowerCleaned = cleaned.toLowerCase();
+    for (const merchant of knownMerchants) {
+      const idx = lowerCleaned.indexOf(merchant);
+      if (idx !== -1) {
+        const extracted = cleaned.substring(idx, idx + merchant.length);
+        const words = extracted.split(/\s+/);
+        const titleCase = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        return titleCase;
+      }
+    }
+
+    if (cleaned.length > 30) {
+      const words = cleaned.split(/\s+/);
+      const meaningful = words.filter(w => w.length > 1 && !/^\d+$/.test(w));
+      cleaned = meaningful.slice(0, 4).join(' ');
+    }
+
+    if (cleaned.length > 0) {
+      const words = cleaned.split(/\s+/);
+      cleaned = words.map(w => {
+        if (w.length <= 3 && w === w.toUpperCase()) return w;
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      }).join(' ');
+    }
+
+    return cleaned || 'Unknown';
+  };
+
+  const categorizeTransaction = (description: string): string | undefined => {
+    const lower = description.toLowerCase();
+    for (const [keyword, category] of Object.entries(MERCHANT_CATEGORIES)) {
+      if (lower.includes(keyword)) {
+        return category;
+      }
+    }
+    return undefined;
+  };
+
+  const findMatchingBudget = (category: string | undefined): number | undefined => {
+    if (!category) return undefined;
+    const lowerCat = category.toLowerCase();
+    const match = budgets.find(b => b.name.toLowerCase() === lowerCat || b.name.toLowerCase().includes(lowerCat) || lowerCat.includes(b.name.toLowerCase()));
+    return match?.id;
+  };
+
   const parseDate = (dateStr: string): string => {
     const trimmed = dateStr.trim().replace(/^"|"$/g, '');
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
@@ -473,11 +718,20 @@ export default function BudgetScreen() {
         const amount = Math.abs(amountNum);
         const date = parseDate(dateStr);
 
+        const cleanedName = cleanDescription(description);
+        const category = categorizeTransaction(description) || categorizeTransaction(cleanedName);
+        const matchedBudgetId = isExpense ? findMatchingBudget(category) : undefined;
+
+        const finalDescription = category
+          ? `${cleanedName} (${category})`
+          : cleanedName || (isExpense ? 'Expense' : 'Income');
+
         addTransaction({
           amount,
-          description: description || (isExpense ? 'Expense' : 'Income'),
+          description: finalDescription,
           date,
           type: isExpense ? 'expense' : 'income',
+          budgetId: matchedBudgetId,
         });
 
         imported++;
