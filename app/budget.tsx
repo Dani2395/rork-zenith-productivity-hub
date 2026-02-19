@@ -512,7 +512,7 @@ export default function BudgetScreen() {
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.csv,.txt,.pdf,text/csv,text/plain,application/pdf,application/vnd.ms-excel';
+      input.accept = '.csv,.txt,.pdf,.xls,.xlsx,text/csv,text/plain,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       input.style.display = 'none';
       document.body.appendChild(input);
 
@@ -526,15 +526,17 @@ export default function BudgetScreen() {
 
         console.log('File selected:', selectedFile.name, selectedFile.type, selectedFile.size);
 
+        setIsUploading(true);
+        setUploadStatus('Reading file...');
+
         const webFileName = selectedFile.name?.toLowerCase() || '';
+
         if (webFileName.endsWith('.pdf')) {
-          setUploadStatus('PDF files cannot be imported directly. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.');
+          setUploadStatus('PDF files cannot be parsed directly in the app. Please export your bank statement as CSV from your bank\'s website and upload the CSV instead.');
+          setIsUploading(false);
           document.body.removeChild(input);
           return;
         }
-
-        setIsUploading(true);
-        setUploadStatus('Reading file...');
 
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -576,7 +578,15 @@ export default function BudgetScreen() {
       console.log('Opening DocumentPicker...');
 
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
+        type: [
+          'text/csv',
+          'text/plain',
+          'text/comma-separated-values',
+          'application/csv',
+          'application/pdf',
+          'application/vnd.ms-excel',
+          '*/*',
+        ],
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -601,26 +611,56 @@ export default function BudgetScreen() {
       if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
         setUploadModalVisible(true);
         setIsUploading(true);
-        setUploadStatus('Trying to read PDF...');
+        setUploadStatus('Attempting to read PDF...');
 
-        try {
-          const text = await FileSystem.readAsStringAsync(file.uri, {
-            encoding: FileSystem.EncodingType.UTF8,
-          });
-          if (text && text.includes(',') && text.split('\n').length > 1) {
-            processCSVText(text);
-            return;
+        let pdfTextContent = '';
+        let pdfReadSuccess = false;
+
+        const pdfMethods = [
+          async () => {
+            const content = await FileSystem.readAsStringAsync(file.uri, {
+              encoding: FileSystem.EncodingType.UTF8,
+            });
+            console.log('PDF UTF8 read length:', content.length);
+            return content;
+          },
+          async () => {
+            const content = await FileSystem.readAsStringAsync(file.uri);
+            console.log('PDF default read length:', content.length);
+            return content;
+          },
+          async () => {
+            const response = await fetch(file.uri);
+            const content = await response.text();
+            console.log('PDF fetch read length:', content.length);
+            return content;
+          },
+        ];
+
+        for (const method of pdfMethods) {
+          try {
+            const content = await method();
+            if (content && content.includes(',') && content.split('\n').length > 2) {
+              pdfTextContent = content;
+              pdfReadSuccess = true;
+              break;
+            }
+          } catch (e) {
+            console.log('PDF read method failed:', e);
           }
-        } catch (e) {
-          console.log('PDF read attempt failed:', e);
+        }
+
+        if (pdfReadSuccess && pdfTextContent) {
+          processCSVText(pdfTextContent);
+          return;
         }
 
         setUploadStatus('');
         setIsUploading(false);
         setUploadModalVisible(false);
         Alert.alert(
-          'PDF Not Supported',
-          'This PDF cannot be read as text. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.\n\nMost banks offer CSV/Excel download options in their transaction history or statements section.'
+          'PDF Cannot Be Parsed',
+          'This PDF cannot be read as text data. Most bank PDFs contain formatted layouts that cannot be directly imported.\n\nTo import transactions:\n1. Log in to your bank\'s website\n2. Go to transaction history or statements\n3. Look for a "Download" or "Export" option\n4. Choose CSV or Excel format\n5. Upload that file here'
         );
         return;
       }
@@ -770,7 +810,7 @@ export default function BudgetScreen() {
           onPress={handleUploadStatement}
         >
           <Upload size={18} color={Colors.primary} />
-          <Text style={styles.uploadButtonText}>Upload Bank Statement (CSV)</Text>
+          <Text style={styles.uploadButtonText}>Upload Bank Statement (CSV/PDF)</Text>
         </TouchableOpacity>
 
         <View style={styles.section}>
