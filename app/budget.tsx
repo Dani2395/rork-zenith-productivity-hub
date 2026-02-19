@@ -82,6 +82,7 @@ export default function BudgetScreen() {
 
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -345,6 +346,7 @@ export default function BudgetScreen() {
 
   const handleUploadStatement = async () => {
     try {
+      setIsUploading(true);
       setUploadStatus('Picking file...');
       const result = await DocumentPicker.getDocumentAsync({
         type: ['text/csv', 'text/plain', 'text/comma-separated-values', 'application/csv'],
@@ -353,6 +355,7 @@ export default function BudgetScreen() {
 
       if (result.canceled) {
         setUploadStatus('');
+        setIsUploading(false);
         return;
       }
 
@@ -367,6 +370,7 @@ export default function BudgetScreen() {
         !mimeType.includes('text')
       ) {
         setUploadStatus('Please upload a CSV or text file');
+        setIsUploading(false);
         setTimeout(() => setUploadStatus(''), 3000);
         return;
       }
@@ -374,18 +378,28 @@ export default function BudgetScreen() {
       setUploadStatus('Reading file...');
 
       let text: string;
-      try {
-        text = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-      } catch (readError) {
-        console.log('FileSystem read failed, trying fetch fallback:', readError);
+      if (Platform.OS === 'web') {
+        // On web (Rork), expo-file-system is unavailable; use fetch with the blob URI
         const response = await fetch(file.uri);
+        if (!response.ok) {
+          throw new Error(`Failed to read file: ${response.status}`);
+        }
         text = await response.text();
+      } else {
+        try {
+          text = await FileSystem.readAsStringAsync(file.uri, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+        } catch (readError) {
+          console.log('FileSystem read failed, trying fetch fallback:', readError);
+          const response = await fetch(file.uri);
+          text = await response.text();
+        }
       }
 
       if (!text || text.trim().length === 0) {
         setUploadStatus('File appears to be empty');
+        setIsUploading(false);
         setTimeout(() => setUploadStatus(''), 3000);
         return;
       }
@@ -434,11 +448,13 @@ export default function BudgetScreen() {
         setUploadStatus(
           `No transactions could be imported${skipped > 0 ? ` (${skipped} rows skipped)` : ''}. Check the CSV format.`
         );
+        setIsUploading(false);
         setTimeout(() => setUploadStatus(''), 4000);
         return;
       }
 
       setUploadStatus(`Imported ${imported} transactions${skipped > 0 ? ` (${skipped} rows skipped)` : ''}`);
+      setIsUploading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTimeout(() => {
         setUploadModalVisible(false);
@@ -447,6 +463,7 @@ export default function BudgetScreen() {
     } catch (error) {
       console.log('Upload error:', error);
       setUploadStatus('Error processing file. Please check the format and try again.');
+      setIsUploading(false);
       setTimeout(() => setUploadStatus(''), 4000);
     }
   };
@@ -1140,14 +1157,15 @@ export default function BudgetScreen() {
                 onPress={() => {
                   setUploadModalVisible(false);
                   setUploadStatus('');
+                  setIsUploading(false);
                 }}
               >
                 <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.modalButtonPrimary} 
+              <TouchableOpacity
+                style={styles.modalButtonPrimary}
                 onPress={handleUploadStatement}
-                disabled={!!uploadStatus && !uploadStatus.startsWith('❌')}
+                disabled={isUploading}
               >
                 <LinearGradient
                   colors={[Colors.primary, Colors.secondary]}
