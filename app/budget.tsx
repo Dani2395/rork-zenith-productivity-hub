@@ -458,6 +458,42 @@ export default function BudgetScreen() {
     }
   };
 
+  const readFileContent = async (uri: string, isPDF: boolean): Promise<string> => {
+    console.log('readFileContent: trying fetch for URI:', uri);
+    try {
+      const response = await fetch(uri);
+      if (isPDF) {
+        const arrayBuffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binaryStr = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binaryStr += String.fromCharCode(bytes[i]);
+        }
+        console.log('readFileContent: fetch binary success, length:', binaryStr.length);
+        return binaryStr;
+      }
+      const text = await response.text();
+      console.log('readFileContent: fetch text success, length:', text.length);
+      return text;
+    } catch (err) {
+      console.log('readFileContent: fetch failed:', err);
+    }
+
+    console.log('readFileContent: trying FileSystem.File...');
+    try {
+      const fileObj = new FileSystem.File(uri);
+      if (fileObj.exists) {
+        const content = await fileObj.text();
+        console.log('readFileContent: FileSystem.File success, length:', content.length);
+        return content;
+      }
+    } catch (err) {
+      console.log('readFileContent: FileSystem.File failed:', err);
+    }
+
+    throw new Error('All file reading methods failed');
+  };
+
   const handleUploadStatement = async () => {
     if (Platform.OS === 'web') {
       setUploadModalVisible(true);
@@ -506,58 +542,28 @@ export default function BudgetScreen() {
       setUploadStatus('Reading file...');
 
       let text = '';
-      let readSuccess = false;
-
-      const methods = [
-        async () => {
-          const fileObj = new FileSystem.File(file.uri);
-          if (fileObj.exists) {
-            const content = await fileObj.text();
-            console.log('Method 1 (File.text) success, length:', content.length);
-            return content;
-          }
-          throw new Error('File does not exist');
-        },
-        async () => {
-          const response = await fetch(file.uri);
-          const content = await response.text();
-          console.log('Method 2 (fetch) success, length:', content.length);
-          return content;
-        },
-        async () => {
-          const cacheFile = new FileSystem.File(FileSystem.Paths.cache, 'upload_' + Date.now() + '.csv');
-          const srcFile = new FileSystem.File(file.uri);
-          srcFile.copy(cacheFile);
-          const content = await cacheFile.text();
-          console.log('Method 3 (copy+read) success, length:', content.length);
-          return content;
-        },
-      ];
-
-      for (let i = 0; i < methods.length; i++) {
-        try {
-          text = await methods[i]();
-          if (text && text.trim().length > 0) {
-            readSuccess = true;
-            break;
-          }
-        } catch (err) {
-          console.log(`Read method ${i + 1} failed:`, err);
-        }
+      try {
+        text = await readFileContent(file.uri, isPDF);
+      } catch (err) {
+        console.log('All read methods failed:', err);
+        setUploadStatus('Could not read the file. Make sure it is a valid CSV/text file and try again.');
+        setIsUploading(false);
+        return;
       }
 
-      if (!readSuccess || !text || text.trim().length === 0) {
-        setUploadStatus('Could not read the file. Make sure it is a valid CSV/text file and try again.');
+      if (!text || text.trim().length === 0) {
+        setUploadStatus('File appears to be empty. Please try a different file.');
         setIsUploading(false);
         return;
       }
 
       if (isPDF || isPDFContent(text)) {
         setUploadStatus('Extracting transactions from PDF...');
-        console.log('Detected PDF content, extracting...');
+        console.log('Detected PDF content, extracting text length:', text.length);
         try {
           const extracted = extractTextFromPDF(text);
           console.log('PDF extracted text length:', extracted.length);
+          console.log('PDF extracted preview:', extracted.substring(0, 300));
           if (!extracted || extracted.trim().length === 0) {
             setUploadStatus('Could not extract transactions from this PDF. It may be image-based (scanned). Please try exporting as CSV from your bank\'s website.');
             setIsUploading(false);
@@ -575,7 +581,7 @@ export default function BudgetScreen() {
       processCSVText(text);
     } catch (error) {
       console.log('Upload error:', error);
-      Alert.alert('Upload Error', `${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+      setUploadStatus(`Upload error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
       setIsUploading(false);
     }
   };
