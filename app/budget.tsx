@@ -576,17 +576,7 @@ export default function BudgetScreen() {
       console.log('Opening DocumentPicker...');
 
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'text/csv',
-          'text/plain',
-          'text/comma-separated-values',
-          'text/tab-separated-values',
-          'application/csv',
-          'application/vnd.ms-excel',
-          'application/octet-stream',
-          'application/pdf',
-          '*/*',
-        ],
+        type: '*/*',
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -609,9 +599,28 @@ export default function BudgetScreen() {
       console.log('File picked:', fileName, mimeType, file.uri, 'size:', file.size);
 
       if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
+        setUploadModalVisible(true);
+        setIsUploading(true);
+        setUploadStatus('Trying to read PDF...');
+
+        try {
+          const text = await FileSystem.readAsStringAsync(file.uri, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          if (text && text.includes(',') && text.split('\n').length > 1) {
+            processCSVText(text);
+            return;
+          }
+        } catch (e) {
+          console.log('PDF read attempt failed:', e);
+        }
+
+        setUploadStatus('');
+        setIsUploading(false);
+        setUploadModalVisible(false);
         Alert.alert(
           'PDF Not Supported',
-          'PDF files cannot be imported directly. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.'
+          'This PDF cannot be read as text. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.\n\nMost banks offer CSV/Excel download options in their transaction history or statements section.'
         );
         return;
       }
