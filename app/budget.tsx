@@ -512,7 +512,7 @@ export default function BudgetScreen() {
     try {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.csv,.txt,text/csv,text/plain,application/vnd.ms-excel';
+      input.accept = '.csv,.txt,.pdf,text/csv,text/plain,application/pdf,application/vnd.ms-excel';
       input.style.display = 'none';
       document.body.appendChild(input);
 
@@ -525,6 +525,14 @@ export default function BudgetScreen() {
         }
 
         console.log('File selected:', selectedFile.name, selectedFile.type, selectedFile.size);
+
+        const webFileName = selectedFile.name?.toLowerCase() || '';
+        if (webFileName.endsWith('.pdf')) {
+          setUploadStatus('PDF files cannot be imported directly. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.');
+          document.body.removeChild(input);
+          return;
+        }
+
         setIsUploading(true);
         setUploadStatus('Reading file...');
 
@@ -567,7 +575,7 @@ export default function BudgetScreen() {
       setIsUploading(true);
       setUploadStatus('Picking file...');
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/plain', 'text/comma-separated-values', 'application/csv', 'application/vnd.ms-excel', '*/*'],
+        type: ['text/csv', 'text/plain', 'text/comma-separated-values', 'application/csv', 'application/vnd.ms-excel', 'application/pdf', '*/*'],
         copyToCacheDirectory: true,
       });
 
@@ -588,6 +596,12 @@ export default function BudgetScreen() {
 
       const fileName = file.name?.toLowerCase() || '';
       console.log('File picked:', fileName, file.mimeType, file.uri);
+
+      if (fileName.endsWith('.pdf')) {
+        setUploadStatus('PDF files cannot be imported directly. Please export your bank statement as a CSV file from your bank\'s website, then upload the CSV here.');
+        setIsUploading(false);
+        return;
+      }
 
       if (
         !fileName.endsWith('.csv') &&
