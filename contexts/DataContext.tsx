@@ -648,6 +648,16 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData, transactions]);
 
+  const clearAllTransactions = useCallback(() => {
+    setTransactions([]);
+    saveData('transactions', []);
+    setBudgets(prev => {
+      const updated = prev.map(b => ({ ...b, spent: 0 }));
+      saveData('budgets', updated);
+      return updated;
+    });
+  }, [saveData]);
+
   const deleteDebt = useCallback((id: number) => {
     setDebts(prev => {
       const updated = prev.filter(d => d.id !== id);
@@ -864,6 +874,7 @@ export const [DataProvider, useData] = createContextHook(() => {
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    clearAllTransactions,
     addDebt,
     updateDebt,
     deleteDebt,

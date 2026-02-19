@@ -21,6 +21,7 @@ import {
   Trash2,
   Upload,
   Edit2,
+  RotateCcw,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/budgetStyles';
@@ -43,6 +44,7 @@ export default function BudgetScreen() {
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    clearAllTransactions,
     addDebt,
     updateDebt,
     deleteDebt,
@@ -655,13 +657,38 @@ export default function BudgetScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.uploadButton}
-          onPress={handleUploadStatement}
-        >
-          <Upload size={18} color={Colors.primary} />
-          <Text style={styles.uploadButtonText}>Upload Bank Statement (CSV/PDF)</Text>
-        </TouchableOpacity>
+        <View style={styles.uploadRow}>
+          <TouchableOpacity
+            style={styles.uploadButton}
+            onPress={handleUploadStatement}
+          >
+            <Upload size={18} color={Colors.primary} />
+            <Text style={styles.uploadButtonText}>Upload Statement</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={() => {
+              Alert.alert(
+                'Clear All Data',
+                'This will delete all transactions and reset budget spending to $0. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Clear All',
+                    style: 'destructive',
+                    onPress: () => {
+                      clearAllTransactions();
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <RotateCcw size={16} color={Colors.danger} />
+            <Text style={styles.clearButtonText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>💰 Budgets</Text>

@@ -1,17 +1,32 @@
-const decodeStream = (raw: string): string => {
+import pako from 'pako';
+
+const binaryStringToUint8Array = (binaryStr: string): Uint8Array => {
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i) & 0xff;
+  }
+  return bytes;
+};
+
+const decompressStream = (data: Uint8Array): string => {
   try {
+    const decompressed = pako.inflate(data);
     let result = '';
-    for (let i = 0; i < raw.length; i++) {
-      const code = raw.charCodeAt(i);
-      if (code >= 32 && code <= 126) {
-        result += raw[i];
-      } else if (code === 10 || code === 13 || code === 9) {
-        result += '\n';
-      }
+    for (let i = 0; i < decompressed.length; i++) {
+      result += String.fromCharCode(decompressed[i]);
     }
     return result;
   } catch {
-    return raw;
+    try {
+      const decompressed = pako.inflateRaw(data);
+      let result = '';
+      for (let i = 0; i < decompressed.length; i++) {
+        result += String.fromCharCode(decompressed[i]);
+      }
+      return result;
+    } catch {
+      return '';
+    }
   }
 };
 
@@ -39,9 +54,8 @@ const extractTextFromOperators = (content: string): string[] => {
   return lines;
 };
 
-const extractBetweenMarkers = (raw: string): string[] => {
+const extractBTBlocks = (raw: string): string[] => {
   const lines: string[] = [];
-
   const btEtRegex = /BT\s([\s\S]*?)ET/g;
   let match;
   while ((match = btEtRegex.exec(raw)) !== null) {
@@ -49,8 +63,72 @@ const extractBetweenMarkers = (raw: string): string[] => {
     const extracted = extractTextFromOperators(block);
     lines.push(...extracted);
   }
-
   return lines;
+};
+
+const findAllStreams = (binaryStr: string): Uint8Array[] => {
+  const streams: Uint8Array[] = [];
+  const bytes = binaryStringToUint8Array(binaryStr);
+  const streamMarker = [115, 116, 114, 101, 97, 109];
+  const endMarker = [101, 110, 100, 115, 116, 114, 101, 97, 109];
+
+  let i = 0;
+  while (i < bytes.length - 10) {
+    let found = true;
+    for (let j = 0; j < streamMarker.length; j++) {
+      if (bytes[i + j] !== streamMarker[j]) {
+        found = false;
+        break;
+      }
+    }
+
+    if (found) {
+      let start = i + streamMarker.length;
+      if (bytes[start] === 13) start++;
+      if (bytes[start] === 10) start++;
+
+      let endPos = start;
+      while (endPos < bytes.length - endMarker.length) {
+        let endFound = true;
+        for (let j = 0; j < endMarker.length; j++) {
+          if (bytes[endPos + j] !== endMarker[j]) {
+            endFound = false;
+            break;
+          }
+        }
+        if (endFound) break;
+        endPos++;
+      }
+
+      if (endPos > start && endPos < bytes.length) {
+        let actualEnd = endPos;
+        if (actualEnd > start && bytes[actualEnd - 1] === 10) actualEnd--;
+        if (actualEnd > start && bytes[actualEnd - 1] === 13) actualEnd--;
+        
+        if (actualEnd > start) {
+          streams.push(bytes.slice(start, actualEnd));
+        }
+      }
+      i = endPos + endMarker.length;
+    } else {
+      i++;
+    }
+  }
+
+  return streams;
+};
+
+const decodeReadableText = (raw: string): string => {
+  let result = '';
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i);
+    if (code >= 32 && code <= 126) {
+      result += raw[i];
+    } else if (code === 10 || code === 13 || code === 9) {
+      result += '\n';
+    }
+  }
+  return result;
 };
 
 const mergeFragmentedLines = (lines: string[]): string[] => {
@@ -97,6 +175,8 @@ const findTransactionPatterns = (text: string): string[] => {
   const skipPatterns = [
     /\b(balance|opening|closing|beginning|ending|previous|statement|summary|page|total|account\s*(number|no|#)?)\b/i,
     /\b(routing|transit|acct|member)\s*(number|no|#|id)?\s*:?\s*\d/i,
+    /\b(customer\s*service|phone|address|p\.?o\.?\s*box|www\.|http)/i,
+    /\b(continued|page\s+\d|of\s+\d)/i,
   ];
 
   for (let i = 0; i < lines.length; i++) {
@@ -121,6 +201,14 @@ const findTransactionPatterns = (text: string): string[] => {
         if (amountPattern.test(lineAfter) && !datePattern.test(nextLine)) {
           transactionLines.push(line + ' ' + nextLine + ' ' + lineAfter);
           i += 2;
+          continue;
+        }
+      }
+      if (i + 3 < lines.length) {
+        const combined = line + ' ' + nextLine + ' ' + lines[i + 2] + ' ' + lines[i + 3];
+        if (amountPattern.test(combined)) {
+          transactionLines.push(combined);
+          i += 3;
           continue;
         }
       }
@@ -168,52 +256,70 @@ const buildCSVFromTransactions = (transactionLines: string[]): string => {
 export const extractTextFromPDF = (binaryString: string): string => {
   console.log('PDF extractor: starting, binary length:', binaryString.length);
 
-  const decoded = decodeStream(binaryString);
-  const textLines = extractBetweenMarkers(decoded);
-  console.log('PDF extractor: extracted', textLines.length, 'text segments from BT/ET blocks');
+  const allTextLines: string[] = [];
 
-  if (textLines.length > 0) {
-    const fullText = textLines.join('\n');
+  const streams = findAllStreams(binaryString);
+  console.log('PDF extractor: found', streams.length, 'stream objects');
+
+  let decompressedCount = 0;
+  for (const streamData of streams) {
+    const decompressed = decompressStream(streamData);
+    if (decompressed && decompressed.length > 0) {
+      decompressedCount++;
+      const textFromBT = extractBTBlocks(decompressed);
+      if (textFromBT.length > 0) {
+        allTextLines.push(...textFromBT);
+      } else {
+        const textFromOps = extractTextFromOperators(decompressed);
+        if (textFromOps.length > 0) {
+          allTextLines.push(...textFromOps);
+        }
+      }
+    }
+  }
+  console.log('PDF extractor: decompressed', decompressedCount, 'streams, got', allTextLines.length, 'text lines');
+
+  const readableText = decodeReadableText(binaryString);
+  const uncompressedBT = extractBTBlocks(readableText);
+  if (uncompressedBT.length > 0) {
+    console.log('PDF extractor: found', uncompressedBT.length, 'lines from uncompressed BT blocks');
+    allTextLines.push(...uncompressedBT);
+  }
+
+  const uncompressedOps = extractTextFromOperators(readableText);
+  if (uncompressedOps.length > 0) {
+    console.log('PDF extractor: found', uncompressedOps.length, 'lines from uncompressed operators');
+    allTextLines.push(...uncompressedOps);
+  }
+
+  const uniqueLines = [...new Set(allTextLines)];
+  console.log('PDF extractor: total unique text lines:', uniqueLines.length);
+
+  if (uniqueLines.length > 0) {
+    const fullText = uniqueLines.join('\n');
+    console.log('PDF extractor: full extracted text preview:', fullText.substring(0, 500));
+
     const transactionLines = findTransactionPatterns(fullText);
     console.log('PDF extractor: found', transactionLines.length, 'transaction-like lines');
 
     if (transactionLines.length > 0) {
       const csv = buildCSVFromTransactions(transactionLines);
-      console.log('PDF extractor: built CSV with', csv.split('\n').length - 1, 'rows');
+      const rowCount = csv.split('\n').length - 1;
+      console.log('PDF extractor: built CSV with', rowCount, 'rows');
       return csv;
     }
 
     return fullText;
   }
 
-  const streamRegex = /stream\s*\n?([\s\S]*?)\n?endstream/g;
-  const allText: string[] = [];
-  let streamMatch;
-  while ((streamMatch = streamRegex.exec(decoded)) !== null) {
-    const streamContent = streamMatch[1];
-    const textFromStream = extractTextFromOperators(streamContent);
-    allText.push(...textFromStream);
-  }
-  console.log('PDF extractor: extracted', allText.length, 'text segments from streams');
-
-  if (allText.length > 0) {
-    const fullText = allText.join('\n');
-    const transactionLines = findTransactionPatterns(fullText);
-
-    if (transactionLines.length > 0) {
-      return buildCSVFromTransactions(transactionLines);
-    }
-    return fullText;
-  }
-
-  const directLines = findTransactionPatterns(decoded);
+  const directLines = findTransactionPatterns(readableText);
   if (directLines.length > 0) {
     console.log('PDF extractor: found', directLines.length, 'transactions from raw text');
     return buildCSVFromTransactions(directLines);
   }
 
-  console.log('PDF extractor: no structured text found, returning raw readable text');
-  const readableLines = decoded.split('\n')
+  console.log('PDF extractor: no structured text found, returning raw readable lines');
+  const readableLines = readableText.split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 3 && /[a-zA-Z]/.test(l) && !/^[%<\/]/.test(l));
 
