@@ -578,15 +578,7 @@ export default function BudgetScreen() {
       console.log('Opening DocumentPicker...');
 
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'text/csv',
-          'text/plain',
-          'text/comma-separated-values',
-          'application/csv',
-          'application/pdf',
-          'application/vnd.ms-excel',
-          '*/*',
-        ],
+        type: '*/*',
         copyToCacheDirectory: true,
         multiple: false,
       });
