@@ -323,20 +323,21 @@ export default function BudgetScreen() {
   };
 
   const parseDate = (dateStr: string): string => {
-    const trimmed = dateStr.trim();
-    // Already in YYYY-MM-DD format
+    const trimmed = dateStr.trim().replace(/^"|"$/g, '');
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-    // MM/DD/YYYY
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
       const [m, d, y] = trimmed.split('/');
       return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
-    // DD/MM/YYYY (fallback)
+    if (/^\d{1,2}\/\d{1,2}\/\d{2}$/.test(trimmed)) {
+      const [m, d, y] = trimmed.split('/');
+      const fullYear = parseInt(y) > 50 ? `19${y}` : `20${y}`;
+      return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
     if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(trimmed)) {
       const [m, d, y] = trimmed.split('-');
       return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
-    // Try native Date parsing as last resort
     const parsed = new Date(trimmed);
     if (!isNaN(parsed.getTime())) {
       return parsed.toISOString().split('T')[0];
@@ -344,101 +345,216 @@ export default function BudgetScreen() {
     return new Date().toISOString().split('T')[0];
   };
 
-  const processCSVText = (text: string) => {
-    setUploadStatus('Processing transactions...');
-
-    const lines = text.split(/\r?\n/);
-    let imported = 0;
-    let skipped = 0;
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      const parts = line.split(',');
-      if (parts.length < 3) {
-        skipped++;
-        continue;
+  const parseCSVLine = (line: string): string[] => {
+    const fields: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (inQuotes) {
+        if (char === '"' && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else if (char === '"') {
+          inQuotes = false;
+        } else {
+          current += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+        } else if (char === ',') {
+          fields.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
       }
-
-      const dateStr = parts[0]?.trim();
-      const description = parts[1]?.trim();
-      const amountStr = parts[2]?.trim().replace(/[^0-9.\-]/g, '');
-      const amountNum = parseFloat(amountStr);
-
-      if (!dateStr || isNaN(amountNum) || amountNum === 0) {
-        skipped++;
-        continue;
-      }
-
-      const isExpense = amountNum < 0;
-      const amount = Math.abs(amountNum);
-      const date = parseDate(dateStr);
-
-      addTransaction({
-        amount,
-        description: description || (isExpense ? 'Expense' : 'Income'),
-        date,
-        type: isExpense ? 'expense' : 'income',
-      });
-
-      imported++;
     }
-
-    if (imported === 0) {
-      setUploadStatus(
-        `No transactions could be imported${skipped > 0 ? ` (${skipped} rows skipped)` : ''}. Check the CSV format.`
-      );
-      setIsUploading(false);
-      setTimeout(() => setUploadStatus(''), 5000);
-      return;
-    }
-
-    setUploadStatus(`Imported ${imported} transactions${skipped > 0 ? ` (${skipped} rows skipped)` : ''}`);
-    setIsUploading(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTimeout(() => {
-      setUploadModalVisible(false);
-      setUploadStatus('');
-    }, 2000);
+    fields.push(current.trim());
+    return fields;
   };
 
-  const triggerWebFilePicker = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv,.txt,text/csv,text/plain';
-    input.onchange = (event: any) => {
-      const selectedFile = event.target?.files?.[0];
-      if (!selectedFile) {
-        console.log('No file selected');
+  const detectColumns = (headerFields: string[]): { dateCol: number; descCol: number; amountCol: number; debitCol: number; creditCol: number } => {
+    let dateCol = -1;
+    let descCol = -1;
+    let amountCol = -1;
+    let debitCol = -1;
+    let creditCol = -1;
+
+    headerFields.forEach((h, i) => {
+      const lower = h.toLowerCase().replace(/["']/g, '').trim();
+      if (dateCol === -1 && (lower.includes('date') || lower.includes('posted') || lower === 'trans date' || lower === 'transaction date')) {
+        dateCol = i;
+      } else if (lower.includes('debit') || lower === 'withdrawals' || lower === 'withdrawal') {
+        debitCol = i;
+      } else if (lower.includes('credit') || lower === 'deposits' || lower === 'deposit') {
+        creditCol = i;
+      } else if (amountCol === -1 && (lower.includes('amount') || lower === 'sum' || lower === 'value' || lower === 'total')) {
+        amountCol = i;
+      } else if (descCol === -1 && (lower.includes('desc') || lower.includes('memo') || lower.includes('narrative') || lower.includes('detail') || lower.includes('payee') || lower.includes('name') || lower.includes('transaction'))) {
+        descCol = i;
+      }
+    });
+
+    if (dateCol === -1) dateCol = 0;
+    if (descCol === -1) {
+      descCol = headerFields.length > 1 ? 1 : -1;
+    }
+    if (amountCol === -1 && debitCol === -1 && creditCol === -1) {
+      amountCol = headerFields.length > 2 ? 2 : (headerFields.length > 1 ? 1 : 0);
+    }
+
+    return { dateCol, descCol, amountCol, debitCol, creditCol };
+  };
+
+  const processCSVText = (text: string) => {
+    try {
+      setUploadStatus('Processing transactions...');
+      console.log('CSV text length:', text.length);
+      console.log('CSV preview:', text.substring(0, 500));
+
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      console.log('Total non-empty lines:', lines.length);
+
+      if (lines.length < 2) {
+        setUploadStatus('File has no data rows. Need at least a header and one data row.');
+        setIsUploading(false);
         return;
       }
 
-      console.log('File selected:', selectedFile.name, selectedFile.type, selectedFile.size);
-      setIsUploading(true);
-      setUploadStatus('Reading file...');
+      const headerFields = parseCSVLine(lines[0]);
+      console.log('Header fields:', headerFields);
+      const cols = detectColumns(headerFields);
+      console.log('Detected columns:', JSON.stringify(cols));
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
-        console.log('File read complete, length:', text?.length);
-        if (!text || text.trim().length === 0) {
-          setUploadStatus('File appears to be empty');
-          setIsUploading(false);
-          setTimeout(() => setUploadStatus(''), 3000);
+      let imported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const parts = parseCSVLine(line);
+        if (parts.length < 2) {
+          skipped++;
+          continue;
+        }
+
+        const dateStr = parts[cols.dateCol]?.replace(/^"|"$/g, '').trim();
+        const description = cols.descCol >= 0 ? parts[cols.descCol]?.replace(/^"|"$/g, '').trim() : '';
+
+        let amountNum = 0;
+        if (cols.debitCol >= 0 || cols.creditCol >= 0) {
+          const debitStr = cols.debitCol >= 0 ? parts[cols.debitCol]?.replace(/[^0-9.\-]/g, '') : '';
+          const creditStr = cols.creditCol >= 0 ? parts[cols.creditCol]?.replace(/[^0-9.\-]/g, '') : '';
+          const debitVal = parseFloat(debitStr || '0') || 0;
+          const creditVal = parseFloat(creditStr || '0') || 0;
+          if (creditVal > 0) {
+            amountNum = creditVal;
+          } else if (debitVal > 0) {
+            amountNum = -debitVal;
+          } else if (debitVal < 0) {
+            amountNum = debitVal;
+          }
+        } else if (cols.amountCol >= 0) {
+          const amountStr = parts[cols.amountCol]?.replace(/[^0-9.\-]/g, '') || '0';
+          amountNum = parseFloat(amountStr);
+        }
+
+        if (!dateStr || isNaN(amountNum) || amountNum === 0) {
+          skipped++;
+          if (i <= 3) errors.push(`Row ${i}: date="${dateStr}" amount=${amountNum}`);
+          continue;
+        }
+
+        const isExpense = amountNum < 0;
+        const amount = Math.abs(amountNum);
+        const date = parseDate(dateStr);
+
+        addTransaction({
+          amount,
+          description: description || (isExpense ? 'Expense' : 'Income'),
+          date,
+          type: isExpense ? 'expense' : 'income',
+        });
+
+        imported++;
+      }
+
+      console.log('Import results:', { imported, skipped, errors });
+
+      if (imported === 0) {
+        const hint = errors.length > 0 ? `\nDebug: ${errors.join(', ')}` : '';
+        setUploadStatus(
+          `No transactions imported${skipped > 0 ? ` (${skipped} rows skipped)` : ''}. Check CSV format.${hint}`
+        );
+        setIsUploading(false);
+        return;
+      }
+
+      setUploadStatus(`Imported ${imported} transactions${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+      setIsUploading(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => {
+        setUploadModalVisible(false);
+        setUploadStatus('');
+      }, 2500);
+    } catch (err) {
+      console.log('processCSVText error:', err);
+      setUploadStatus(`Error processing CSV: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setIsUploading(false);
+    }
+  };
+
+  const triggerWebFilePicker = () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,.txt,text/csv,text/plain,application/vnd.ms-excel';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+
+      input.onchange = (event: any) => {
+        const selectedFile = event.target?.files?.[0];
+        if (!selectedFile) {
+          console.log('No file selected');
+          document.body.removeChild(input);
           return;
         }
-        processCSVText(text);
+
+        console.log('File selected:', selectedFile.name, selectedFile.type, selectedFile.size);
+        setIsUploading(true);
+        setUploadStatus('Reading file...');
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target?.result as string;
+          console.log('File read complete, length:', text?.length);
+          document.body.removeChild(input);
+          if (!text || text.trim().length === 0) {
+            setUploadStatus('File appears to be empty');
+            setIsUploading(false);
+            return;
+          }
+          processCSVText(text);
+        };
+        reader.onerror = (err) => {
+          console.log('FileReader error:', err);
+          setUploadStatus('Error reading file. Please try again.');
+          setIsUploading(false);
+          document.body.removeChild(input);
+        };
+        reader.readAsText(selectedFile);
       };
-      reader.onerror = () => {
-        console.log('FileReader error');
-        setUploadStatus('Error reading file. Please try again.');
-        setIsUploading(false);
-        setTimeout(() => setUploadStatus(''), 5000);
-      };
-      reader.readAsText(selectedFile);
-    };
-    input.click();
+
+      input.click();
+    } catch (err) {
+      console.log('Web file picker error:', err);
+      setUploadStatus(`Error opening file picker: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setIsUploading(false);
+    }
   };
 
   const handleUploadStatement = async () => {
@@ -451,9 +567,11 @@ export default function BudgetScreen() {
       setIsUploading(true);
       setUploadStatus('Picking file...');
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/plain', 'text/comma-separated-values', 'application/csv'],
+        type: ['text/csv', 'text/plain', 'text/comma-separated-values', 'application/csv', 'application/vnd.ms-excel', '*/*'],
         copyToCacheDirectory: true,
       });
+
+      console.log('DocumentPicker result:', JSON.stringify(result));
 
       if (result.canceled) {
         setUploadStatus('');
@@ -462,46 +580,62 @@ export default function BudgetScreen() {
       }
 
       const file = result.assets[0];
+      if (!file) {
+        setUploadStatus('No file selected');
+        setIsUploading(false);
+        return;
+      }
+
       const fileName = file.name?.toLowerCase() || '';
-      const mimeType = file.mimeType?.toLowerCase() || '';
+      console.log('File picked:', fileName, file.mimeType, file.uri);
 
       if (
         !fileName.endsWith('.csv') &&
         !fileName.endsWith('.txt') &&
-        !mimeType.includes('csv') &&
-        !mimeType.includes('text')
+        !fileName.endsWith('.tsv')
       ) {
-        setUploadStatus('Please upload a CSV or text file');
+        setUploadStatus('Please upload a CSV or text file (.csv or .txt)');
         setIsUploading(false);
-        setTimeout(() => setUploadStatus(''), 3000);
         return;
       }
 
       setUploadStatus('Reading file...');
 
-      let text: string;
+      let text = '';
+      let readSuccess = false;
+
       try {
         text = await FileSystem.readAsStringAsync(file.uri, {
           encoding: FileSystem.EncodingType.UTF8,
         });
+        readSuccess = true;
+        console.log('FileSystem read success, length:', text.length);
       } catch (readError) {
-        const response = await fetch(file.uri);
-        text = await response.text();
+        console.log('FileSystem read failed:', readError);
       }
 
-      if (!text || text.trim().length === 0) {
-        setUploadStatus('File appears to be empty');
+      if (!readSuccess) {
+        try {
+          const response = await fetch(file.uri);
+          text = await response.text();
+          readSuccess = true;
+          console.log('Fetch read success, length:', text.length);
+        } catch (fetchError) {
+          console.log('Fetch read failed:', fetchError);
+        }
+      }
+
+      if (!readSuccess || !text || text.trim().length === 0) {
+        setUploadStatus('Could not read the file. Try a different CSV file.');
         setIsUploading(false);
-        setTimeout(() => setUploadStatus(''), 3000);
         return;
       }
 
       processCSVText(text);
     } catch (error) {
       console.log('Upload error:', error);
-      setUploadStatus('Error processing file. Please check the format and try again.');
+      setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}. Try again.`);
       setIsUploading(false);
-      setTimeout(() => setUploadStatus(''), 5000);
     }
   };
 
