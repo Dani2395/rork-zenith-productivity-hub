@@ -29,6 +29,7 @@ import * as FileSystem from 'expo-file-system';
 import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
 import { processCSVData, cleanDescription, categorizeTransaction } from '@/utils/budgetHelpers';
+import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
 
 export default function BudgetScreen() {
   const {
@@ -390,9 +391,39 @@ export default function BudgetScreen() {
         const webFileName = selectedFile.name?.toLowerCase() || '';
 
         if (webFileName.endsWith('.pdf')) {
-          setUploadStatus('PDF files cannot be parsed directly in the app. Please export your bank statement as CSV from your bank\'s website and upload the CSV instead.');
-          setIsUploading(false);
-          document.body.removeChild(input);
+          const pdfReader = new FileReader();
+          pdfReader.onload = (e) => {
+            try {
+              const binaryStr = e.target?.result as string;
+              console.log('PDF binary read, length:', binaryStr?.length);
+              document.body.removeChild(input);
+              if (!binaryStr || binaryStr.length === 0) {
+                setUploadStatus('PDF file appears to be empty');
+                setIsUploading(false);
+                return;
+              }
+              setUploadStatus('Extracting transactions from PDF...');
+              const extracted = extractTextFromPDF(binaryStr);
+              console.log('PDF extracted text length:', extracted.length);
+              if (!extracted || extracted.trim().length === 0) {
+                setUploadStatus('Could not extract text from this PDF. The PDF may be image-based (scanned). Please try exporting as CSV from your bank\'s website instead.');
+                setIsUploading(false);
+                return;
+              }
+              processCSVText(extracted);
+            } catch (err) {
+              console.log('PDF extraction error:', err);
+              setUploadStatus('Error reading PDF. Please try exporting as CSV from your bank\'s website.');
+              setIsUploading(false);
+              document.body.removeChild(input);
+            }
+          };
+          pdfReader.onerror = () => {
+            setUploadStatus('Error reading PDF file.');
+            setIsUploading(false);
+            document.body.removeChild(input);
+          };
+          pdfReader.readAsBinaryString(selectedFile);
           return;
         }
 
@@ -466,13 +497,7 @@ export default function BudgetScreen() {
       const mimeType = (file.mimeType || '').toLowerCase();
       console.log('File picked:', fileName, mimeType, file.uri, 'size:', file.size);
 
-      if (fileName.endsWith('.pdf') || mimeType === 'application/pdf') {
-        Alert.alert(
-          'PDF Selected',
-          'PDF bank statements cannot be imported directly. Please export your transactions as CSV from your bank\'s website and upload the CSV file instead.\n\nSteps:\n1. Log in to your bank\'s website\n2. Go to transaction history\n3. Download as CSV\n4. Upload that CSV here'
-        );
-        return;
-      }
+      const isPDF = fileName.endsWith('.pdf') || mimeType === 'application/pdf';
 
       setUploadModalVisible(true);
       setIsUploading(true);
@@ -522,6 +547,26 @@ export default function BudgetScreen() {
       if (!readSuccess || !text || text.trim().length === 0) {
         setUploadStatus('Could not read the file. Make sure it is a valid CSV/text file and try again.');
         setIsUploading(false);
+        return;
+      }
+
+      if (isPDF || isPDFContent(text)) {
+        setUploadStatus('Extracting transactions from PDF...');
+        console.log('Detected PDF content, extracting...');
+        try {
+          const extracted = extractTextFromPDF(text);
+          console.log('PDF extracted text length:', extracted.length);
+          if (!extracted || extracted.trim().length === 0) {
+            setUploadStatus('Could not extract transactions from this PDF. It may be image-based (scanned). Please try exporting as CSV from your bank\'s website.');
+            setIsUploading(false);
+            return;
+          }
+          processCSVText(extracted);
+        } catch (err) {
+          console.log('PDF extraction error:', err);
+          setUploadStatus('Error processing PDF. Please try exporting as CSV from your bank\'s website.');
+          setIsUploading(false);
+        }
         return;
       }
 
