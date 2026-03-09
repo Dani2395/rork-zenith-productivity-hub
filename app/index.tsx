@@ -39,6 +39,7 @@ import {
   ChevronRight,
   Trash2,
   Settings,
+  FlaskConical,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
@@ -58,6 +59,7 @@ const NAV_ITEMS = [
   { name: 'Budget', icon: Wallet, route: '/budget' },
   { name: 'Gifts', icon: Gift, route: '/gifts' },
   { name: 'Bingo', icon: Target, route: '/bingo' },
+  { name: 'Test', icon: FlaskConical, route: '/test' },
 ];
 
 export default function HomeScreen() {

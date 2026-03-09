@@ -93,14 +93,23 @@ function RootLayoutNav() {
           title: "Gifts",
         }} 
       />
-      <Stack.Screen 
-        name="bingo" 
-        options={{ 
+      <Stack.Screen
+        name="bingo"
+        options={{
           headerShown: true,
           headerStyle: { backgroundColor: Colors.background },
           headerTintColor: Colors.text,
           title: "2026 Bingo",
-        }} 
+        }}
+      />
+      <Stack.Screen
+        name="test"
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.text,
+          title: "Test",
+        }}
       />
     </Stack>
   );
