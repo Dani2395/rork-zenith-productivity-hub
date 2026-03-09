@@ -102,6 +102,15 @@ function RootLayoutNav() {
           title: "2026 Bingo",
         }} 
       />
+      <Stack.Screen 
+        name="test" 
+        options={{ 
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.text,
+          title: "Test",
+        }} 
+      />
     </Stack>
   );
 }
