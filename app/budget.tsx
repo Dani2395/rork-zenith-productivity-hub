@@ -1522,9 +1522,14 @@ export default function BudgetScreen() {
                   {selectedMonthExpenses.map((t, idx) => {
                     const budget = budgets.find(b => b.id === t.budgetId);
                     return (
-                      <View
+                      <TouchableOpacity
                         key={`me-${t.id}-${idx}`}
                         style={[styles.transactionCard, { borderLeftColor: Colors.danger }]}
+                        onPress={() => {
+                          setMonthDetailVisible(false);
+                          openTransactionModal(t);
+                        }}
+                        activeOpacity={0.7}
                       >
                         <View style={styles.transactionInfo}>
                           <Text style={styles.transactionName}>
@@ -1535,10 +1540,20 @@ export default function BudgetScreen() {
                           )}
                           <Text style={styles.transactionDate}>{t.date}</Text>
                         </View>
-                        <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
-                          -${t.amount.toFixed(2)}
-                        </Text>
-                      </View>
+                        <View style={styles.transactionRight}>
+                          <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
+                            -${t.amount.toFixed(2)}
+                          </Text>
+                          <View style={styles.transactionActions}>
+                            <TouchableOpacity onPress={() => { setMonthDetailVisible(false); openTransactionModal(t); }} style={styles.iconButton}>
+                              <Edit2 size={14} color={Colors.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleDeleteTransaction(t.id)} style={styles.iconButton}>
+                              <Trash2 size={14} color={Colors.danger} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -1548,9 +1563,14 @@ export default function BudgetScreen() {
                 <View style={styles.txnGroup}>
                   <Text style={styles.txnGroupTitle}>💰 Income ({selectedMonthIncomes.length})</Text>
                   {selectedMonthIncomes.map((t, idx) => (
-                    <View
+                    <TouchableOpacity
                       key={`mi-${t.id}-${idx}`}
                       style={[styles.transactionCard, { borderLeftColor: Colors.success }]}
+                      onPress={() => {
+                        setMonthDetailVisible(false);
+                        openTransactionModal(t);
+                      }}
+                      activeOpacity={0.7}
                     >
                       <View style={styles.transactionInfo}>
                         <Text style={styles.transactionName}>
@@ -1558,13 +1578,51 @@ export default function BudgetScreen() {
                         </Text>
                         <Text style={styles.transactionDate}>{t.date}</Text>
                       </View>
-                      <Text style={[styles.transactionAmount, { color: Colors.success }]}>
-                        +${t.amount.toFixed(2)}
-                      </Text>
-                    </View>
+                      <View style={styles.transactionRight}>
+                        <Text style={[styles.transactionAmount, { color: Colors.success }]}>
+                          +${t.amount.toFixed(2)}
+                        </Text>
+                        <View style={styles.transactionActions}>
+                          <TouchableOpacity onPress={() => { setMonthDetailVisible(false); openTransactionModal(t); }} style={styles.iconButton}>
+                            <Edit2 size={14} color={Colors.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteTransaction(t.id)} style={styles.iconButton}>
+                            <Trash2 size={14} color={Colors.danger} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               )}
+
+              {/* Add buttons at bottom of modal */}
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, marginBottom: 16 }}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { flex: 1 }]}
+                  onPress={() => {
+                    setMonthDetailVisible(false);
+                    openTransactionModal(undefined, undefined, 'expense');
+                  }}
+                >
+                  <View style={[styles.actionButtonSecondary, { borderColor: Colors.danger }]}>
+                    <Plus size={16} color={Colors.danger} />
+                    <Text style={[styles.actionButtonTextSecondary, { color: Colors.danger }]}>Add Expense</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, { flex: 1 }]}
+                  onPress={() => {
+                    setMonthDetailVisible(false);
+                    openTransactionModal(undefined, undefined, 'income');
+                  }}
+                >
+                  <View style={[styles.actionButtonSecondary, { borderColor: Colors.success }]}>
+                    <Plus size={16} color={Colors.success} />
+                    <Text style={[styles.actionButtonTextSecondary, { color: Colors.success }]}>Add Income</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>
