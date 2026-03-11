@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,9 @@ import {
   Upload,
   Edit2,
   RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/budgetStyles';
@@ -88,6 +91,9 @@ export default function BudgetScreen() {
   const [uploadStatus, setUploadStatus] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
+  const [monthDetailVisible, setMonthDetailVisible] = useState(false);
+
   const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const monthTransactions = transactions.filter(t => {
@@ -109,6 +115,55 @@ export default function BudgetScreen() {
   const totalDebt = debts.reduce((sum, d) => sum + d.amount, 0);
   const totalSavingsTarget = savings.reduce((sum, s) => sum + s.target, 0);
   const totalSavingsCurrent = savings.reduce((sum, s) => sum + s.current, 0);
+
+  const monthsWithData = useMemo(() => {
+    const monthMap: Record<string, { income: number; expenses: number; transactions: Transaction[] }> = {};
+    for (const t of transactions) {
+      const rawDate = t.date.split('T')[0];
+      const parts = rawDate.split('-');
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const tempDate = new Date(year, month, 1);
+      const key = tempDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      if (!monthMap[key]) {
+        monthMap[key] = { income: 0, expenses: 0, transactions: [] };
+      }
+      if (t.type === 'income') {
+        monthMap[key].income += t.amount;
+      } else {
+        monthMap[key].expenses += t.amount;
+      }
+      monthMap[key].transactions.push(t);
+    }
+    return Object.entries(monthMap)
+      .map(([key, data]) => ({
+        key,
+        income: data.income,
+        expenses: data.expenses,
+        cashflow: data.income - data.expenses,
+        transactions: data.transactions,
+      }))
+      .sort((a, b) => {
+        const [aMonth, aYear] = a.key.split(' ');
+        const [bMonth, bYear] = b.key.split(' ');
+        const dateA = new Date(`${aMonth} 1, ${aYear}`).getTime();
+        const dateB = new Date(`${bMonth} 1, ${bYear}`).getTime();
+        return dateB - dateA;
+      });
+  }, [transactions]);
+
+  const openMonthDetail = (monthKey: string) => {
+    setSelectedMonthKey(monthKey);
+    setMonthDetailVisible(true);
+  };
+
+  const selectedMonthData = monthsWithData.find(m => m.key === selectedMonthKey);
+  const selectedMonthExpenses = (selectedMonthData?.transactions || [])
+    .filter(t => t.type === 'expense')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const selectedMonthIncomes = (selectedMonthData?.transactions || [])
+    .filter(t => t.type === 'income')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const openBudgetModal = (budget?: Budget) => {
     if (budget) {
@@ -870,65 +925,173 @@ export default function BudgetScreen() {
           )}
         </View>
 
+        {/* Monthly Overview */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📋 Recent Transactions</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>📅 Monthly Overview</Text>
+            <Calendar size={18} color={Colors.primary} />
+          </View>
           {transactions.length === 0 ? (
-            <Text style={styles.emptyText}>No transactions yet</Text>
+            <Text style={styles.emptyText}>Upload a bank statement to see your monthly breakdown</Text>
           ) : (
-            [...transactions]
-              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-              .slice(0, 15)
-              .map((t, idx) => {
-                const budget = budgets.find(b => b.id === t.budgetId);
-                const isIncome = t.type === 'income';
-
+            <>
+              {/* Most recent month - expanded detail */}
+              {monthsWithData.length > 0 && (() => {
+                const recentMonth = monthsWithData[0];
+                const recentExpenses = recentMonth.transactions
+                  .filter(t => t.type === 'expense')
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                const recentIncomes = recentMonth.transactions
+                  .filter(t => t.type === 'income')
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 return (
-                  <TouchableOpacity
-                    key={`txn-${t.id}-${idx}`}
-                    style={[
-                      styles.transactionCard,
-                      { borderLeftColor: isIncome ? Colors.success : Colors.danger },
-                    ]}
-                    onPress={() => openTransactionModal(t)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.transactionInfo}>
-                      <Text style={styles.transactionName}>
-                        {isIncome ? '💰' : '💸'}{' '}
-                        {isIncome ? (t.description || 'Income') : (budget?.name || 'Expense')}
-                      </Text>
-                      {t.description && !isIncome && (
-                        <Text style={styles.transactionDesc}>{t.description}</Text>
-                      )}
-                      <Text style={styles.transactionDate}>{t.date}</Text>
-                    </View>
-                    <View style={styles.transactionRight}>
-                      <Text
-                        style={[
-                          styles.transactionAmount,
-                          { color: isIncome ? Colors.success : Colors.danger },
-                        ]}
-                      >
-                        {isIncome ? '+' : '-'}${t.amount.toFixed(2)}
-                      </Text>
-                      <View style={styles.transactionActions}>
-                        <TouchableOpacity
-                          onPress={() => openTransactionModal(t)}
-                          style={styles.iconButton}
-                        >
-                          <Edit2 size={14} color={Colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteTransaction(t.id)}
-                          style={styles.iconButton}
-                        >
-                          <Trash2 size={14} color={Colors.danger} />
-                        </TouchableOpacity>
+                  <View style={styles.currentMonthDetail}>
+                    <View style={styles.currentMonthHeader}>
+                      <Text style={styles.currentMonthTitle}>{recentMonth.key}</Text>
+                      <View style={styles.currentMonthBadge}>
+                        <Text style={styles.currentMonthBadgeText}>Most Recent</Text>
                       </View>
                     </View>
-                  </TouchableOpacity>
+                    <View style={styles.monthSummaryRow}>
+                      <View style={styles.monthSummaryItem}>
+                        <Text style={styles.monthSummaryLabel}>Income</Text>
+                        <Text style={[styles.monthSummaryValue, { color: Colors.success }]}>
+                          +${recentMonth.income.toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.monthSummaryDivider} />
+                      <View style={styles.monthSummaryItem}>
+                        <Text style={styles.monthSummaryLabel}>Expenses</Text>
+                        <Text style={[styles.monthSummaryValue, { color: Colors.danger }]}>
+                          -${recentMonth.expenses.toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.monthSummaryDivider} />
+                      <View style={styles.monthSummaryItem}>
+                        <Text style={styles.monthSummaryLabel}>Cashflow</Text>
+                        <Text style={[styles.monthSummaryValue, { color: recentMonth.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                          {recentMonth.cashflow >= 0 ? '+' : ''}${recentMonth.cashflow.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {recentExpenses.length > 0 && (
+                      <View style={styles.txnGroup}>
+                        <Text style={styles.txnGroupTitle}>💸 Expenses</Text>
+                        {recentExpenses.slice(0, 10).map((t, idx) => {
+                          const budget = budgets.find(b => b.id === t.budgetId);
+                          return (
+                            <TouchableOpacity
+                              key={`re-${t.id}-${idx}`}
+                              style={[styles.transactionCard, { borderLeftColor: Colors.danger }]}
+                              onPress={() => openTransactionModal(t)}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.transactionInfo}>
+                                <Text style={styles.transactionName}>
+                                  💸 {budget?.name || t.description || 'Expense'}
+                                </Text>
+                                {t.description && budget && (
+                                  <Text style={styles.transactionDesc}>{t.description}</Text>
+                                )}
+                                <Text style={styles.transactionDate}>{t.date}</Text>
+                              </View>
+                              <View style={styles.transactionRight}>
+                                <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
+                                  -${t.amount.toFixed(2)}
+                                </Text>
+                                <View style={styles.transactionActions}>
+                                  <TouchableOpacity onPress={() => openTransactionModal(t)} style={styles.iconButton}>
+                                    <Edit2 size={14} color={Colors.primary} />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity onPress={() => handleDeleteTransaction(t.id)} style={styles.iconButton}>
+                                    <Trash2 size={14} color={Colors.danger} />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                        {recentExpenses.length > 10 && (
+                          <Text style={styles.moreText}>{recentExpenses.length - 10} more expenses...</Text>
+                        )}
+                      </View>
+                    )}
+
+                    {recentIncomes.length > 0 && (
+                      <View style={styles.txnGroup}>
+                        <Text style={styles.txnGroupTitle}>💰 Income</Text>
+                        {recentIncomes.map((t, idx) => (
+                          <TouchableOpacity
+                            key={`ri-${t.id}-${idx}`}
+                            style={[styles.transactionCard, { borderLeftColor: Colors.success }]}
+                            onPress={() => openTransactionModal(t)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.transactionInfo}>
+                              <Text style={styles.transactionName}>
+                                💰 {t.description || 'Income'}
+                              </Text>
+                              <Text style={styles.transactionDate}>{t.date}</Text>
+                            </View>
+                            <View style={styles.transactionRight}>
+                              <Text style={[styles.transactionAmount, { color: Colors.success }]}>
+                                +${t.amount.toFixed(2)}
+                              </Text>
+                              <View style={styles.transactionActions}>
+                                <TouchableOpacity onPress={() => openTransactionModal(t)} style={styles.iconButton}>
+                                  <Edit2 size={14} color={Colors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleDeleteTransaction(t.id)} style={styles.iconButton}>
+                                  <Trash2 size={14} color={Colors.danger} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 );
-              })
+              })()}
+
+              {/* Previous months grid */}
+              {monthsWithData.length > 1 && (
+                <View style={{ marginTop: 16 }}>
+                  <Text style={styles.prevMonthsTitle}>Previous Months</Text>
+                  <View style={styles.monthsGrid}>
+                    {monthsWithData.slice(1).map((month, idx) => (
+                      <TouchableOpacity
+                        key={`month-${idx}`}
+                        style={styles.monthCard}
+                        onPress={() => openMonthDetail(month.key)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.monthCardTitle}>{month.key}</Text>
+                        <View style={styles.monthCardRow}>
+                          <Text style={styles.monthCardLabel}>Income:</Text>
+                          <Text style={[styles.monthCardValue, { color: Colors.success }]}>
+                            ${month.income.toFixed(2)}
+                          </Text>
+                        </View>
+                        <View style={styles.monthCardRow}>
+                          <Text style={styles.monthCardLabel}>Expense:</Text>
+                          <Text style={[styles.monthCardValue, { color: Colors.danger }]}>
+                            ${month.expenses.toFixed(2)}
+                          </Text>
+                        </View>
+                        <View style={styles.monthCardRow}>
+                          <Text style={styles.monthCardLabel}>Cashflow:</Text>
+                          <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                            {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
@@ -1307,6 +1470,102 @@ export default function BudgetScreen() {
                 <Text style={styles.modalButtonTextSecondary}>Close</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Month Detail Modal */}
+      <Modal
+        visible={monthDetailVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMonthDetailVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.modalTitle}>{selectedMonthKey}</Text>
+              <TouchableOpacity onPress={() => setMonthDetailVisible(false)}>
+                <ChevronDown size={24} color={Colors.textDim} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedMonthData && (
+              <View style={styles.monthSummaryRow}>
+                <View style={styles.monthSummaryItem}>
+                  <Text style={styles.monthSummaryLabel}>Income</Text>
+                  <Text style={[styles.monthSummaryValue, { color: Colors.success }]}>
+                    +${selectedMonthData.income.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.monthSummaryDivider} />
+                <View style={styles.monthSummaryItem}>
+                  <Text style={styles.monthSummaryLabel}>Expenses</Text>
+                  <Text style={[styles.monthSummaryValue, { color: Colors.danger }]}>
+                    -${selectedMonthData.expenses.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.monthSummaryDivider} />
+                <View style={styles.monthSummaryItem}>
+                  <Text style={styles.monthSummaryLabel}>Cashflow</Text>
+                  <Text style={[styles.monthSummaryValue, { color: selectedMonthData.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                    {selectedMonthData.cashflow >= 0 ? '+' : ''}${selectedMonthData.cashflow.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
+              {selectedMonthExpenses.length > 0 && (
+                <View style={styles.txnGroup}>
+                  <Text style={styles.txnGroupTitle}>💸 Expenses ({selectedMonthExpenses.length})</Text>
+                  {selectedMonthExpenses.map((t, idx) => {
+                    const budget = budgets.find(b => b.id === t.budgetId);
+                    return (
+                      <View
+                        key={`me-${t.id}-${idx}`}
+                        style={[styles.transactionCard, { borderLeftColor: Colors.danger }]}
+                      >
+                        <View style={styles.transactionInfo}>
+                          <Text style={styles.transactionName}>
+                            💸 {budget?.name || t.description || 'Expense'}
+                          </Text>
+                          {t.description && budget && (
+                            <Text style={styles.transactionDesc}>{t.description}</Text>
+                          )}
+                          <Text style={styles.transactionDate}>{t.date}</Text>
+                        </View>
+                        <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
+                          -${t.amount.toFixed(2)}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {selectedMonthIncomes.length > 0 && (
+                <View style={styles.txnGroup}>
+                  <Text style={styles.txnGroupTitle}>💰 Income ({selectedMonthIncomes.length})</Text>
+                  {selectedMonthIncomes.map((t, idx) => (
+                    <View
+                      key={`mi-${t.id}-${idx}`}
+                      style={[styles.transactionCard, { borderLeftColor: Colors.success }]}
+                    >
+                      <View style={styles.transactionInfo}>
+                        <Text style={styles.transactionName}>
+                          💰 {t.description || 'Income'}
+                        </Text>
+                        <Text style={styles.transactionDate}>{t.date}</Text>
+                      </View>
+                      <Text style={[styles.transactionAmount, { color: Colors.success }]}>
+                        +${t.amount.toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
