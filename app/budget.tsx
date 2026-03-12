@@ -157,6 +157,17 @@ export default function BudgetScreen() {
   const thisMonthData = monthsWithData.find(m => m.key === thisMonth);
   const totalIncome = thisMonthData?.income ?? 0;
   const totalExpenses = thisMonthData?.expenses ?? 0;
+
+  // Compute budget spent from current-month transactions only (not the stored cumulative value)
+  const monthlySpentByBudgetId = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const t of (thisMonthData?.transactions ?? [])) {
+      if (t.type === 'expense' && t.budgetId != null) {
+        map[t.budgetId] = (map[t.budgetId] ?? 0) + t.amount;
+      }
+    }
+    return map;
+  }, [thisMonthData]);
   const netCashflow = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
 
@@ -257,7 +268,7 @@ export default function BudgetScreen() {
   };
 
   const budgetDetailTransactions = selectedBudgetForDetail
-    ? transactions
+    ? (thisMonthData?.transactions ?? [])
         .filter(t => t.budgetId === selectedBudgetForDetail.id && t.type === 'expense')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     : [];
@@ -866,8 +877,9 @@ export default function BudgetScreen() {
             <Text style={styles.emptyText}>No budgets set up yet</Text>
           ) : (
             budgets.map((budget, idx) => {
-              const percent = Math.min(100, Math.round((budget.spent / budget.amount) * 100));
-              const isOverBudget = budget.spent > budget.amount;
+              const spentThisMonth = monthlySpentByBudgetId[budget.id] ?? 0;
+              const percent = Math.min(100, Math.round((spentThisMonth / budget.amount) * 100));
+              const isOverBudget = spentThisMonth > budget.amount;
 
               return (
                 <TouchableOpacity
@@ -882,7 +894,7 @@ export default function BudgetScreen() {
                       <View>
                         <Text style={styles.budgetName}>{budget.name}</Text>
                         <Text style={styles.budgetSpent}>
-                          ${budget.spent.toFixed(0)} / ${budget.amount.toFixed(0)}
+                          ${spentThisMonth.toFixed(0)} / ${budget.amount.toFixed(0)}
                         </Text>
                         {budget.recurring && (
                           <Text style={styles.budgetRecurringLabel}>🔄 Recurring</Text>
@@ -1735,12 +1747,14 @@ export default function BudgetScreen() {
               </TouchableOpacity>
             </View>
 
-            {selectedBudgetForDetail && (
+            {selectedBudgetForDetail && (() => {
+              const detailSpent = monthlySpentByBudgetId[selectedBudgetForDetail.id] ?? 0;
+              return (
               <View style={styles.monthSummaryRow}>
                 <View style={styles.monthSummaryItem}>
                   <Text style={styles.monthSummaryLabel}>Spent</Text>
                   <Text style={[styles.monthSummaryValue, { color: Colors.danger }]}>
-                    ${selectedBudgetForDetail.spent.toFixed(2)}
+                    ${detailSpent.toFixed(2)}
                   </Text>
                 </View>
                 <View style={styles.monthSummaryDivider} />
@@ -1754,14 +1768,15 @@ export default function BudgetScreen() {
                 <View style={styles.monthSummaryItem}>
                   <Text style={styles.monthSummaryLabel}>Remaining</Text>
                   <Text style={[styles.monthSummaryValue, {
-                    color: selectedBudgetForDetail.amount - selectedBudgetForDetail.spent >= 0
+                    color: selectedBudgetForDetail.amount - detailSpent >= 0
                       ? Colors.success : Colors.danger
                   }]}>
-                    ${(selectedBudgetForDetail.amount - selectedBudgetForDetail.spent).toFixed(2)}
+                    ${(selectedBudgetForDetail.amount - detailSpent).toFixed(2)}
                   </Text>
                 </View>
               </View>
-            )}
+              );
+            })()}
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
               {budgetDetailTransactions.length === 0 ? (
