@@ -48,11 +48,12 @@ const DEFAULT_TASK_LISTS: TaskList[] = [
 
 const DEFAULT_BUDGETS: Budget[] = [
   { id: 1, name: 'Food & Dining', amount: 500, spent: 0, icon: '🍔' },
-  { id: 2, name: 'Healthcare', amount: 250, spent: 0, icon: '🏥' },
-  { id: 3, name: 'Bills & Utilities', amount: 1200, spent: 0, icon: '🏠' },
-  { id: 4, name: 'Transportation', amount: 150, spent: 0, icon: '🚗' },
-  { id: 5, name: 'Shopping', amount: 400, spent: 0, icon: '🛍️' },
-  { id: 6, name: 'Entertainment', amount: 200, spent: 0, icon: '🎬' },
+  { id: 2, name: 'DoorDash / Delivery', amount: 150, spent: 0, icon: '🛵' },
+  { id: 3, name: 'Healthcare', amount: 250, spent: 0, icon: '🏥' },
+  { id: 4, name: 'Bills & Utilities', amount: 1200, spent: 0, icon: '🏠' },
+  { id: 5, name: 'Transportation', amount: 150, spent: 0, icon: '🚗' },
+  { id: 6, name: 'Shopping', amount: 400, spent: 0, icon: '🛍️' },
+  { id: 7, name: 'Entertainment', amount: 200, spent: 0, icon: '🎬' },
 ];
 
 const DEFAULT_BINGO: BingoItem[] = [
