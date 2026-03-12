@@ -741,7 +741,7 @@ export default function BudgetScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>📊 {thisMonth}</Text>
+          <Text style={styles.summaryTitle}>📊 {thisMonth} ✓</Text>
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
               <View style={styles.summaryIconContainer}>
