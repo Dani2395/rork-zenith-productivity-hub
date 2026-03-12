@@ -99,7 +99,14 @@ export default function BudgetScreen() {
   });
   const [expandedArchiveYears, setExpandedArchiveYears] = useState<Set<number>>(new Set());
 
-  const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const MONTH_NAMES = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December',
+  ];
+  const getMonthKey = (year: number, month0: number) => `${MONTH_NAMES[month0]} ${year}`;
+
+  const now = new Date();
+  const thisMonth = getMonthKey(now.getFullYear(), now.getMonth());
 
   const totalDebt = debts.reduce((sum, d) => sum + d.amount, 0);
   const totalSavingsTarget = savings.reduce((sum, s) => sum + s.target, 0);
@@ -116,8 +123,7 @@ export default function BudgetScreen() {
       if (isNaN(month)) continue;
       // Remap corrupt years (e.g. 1901) to current year — must match yearlyGroupedData logic
       const year = (isNaN(parsedYear) || parsedYear < 2000) ? currentYear : parsedYear;
-      const tempDate = new Date(year, month, 1);
-      const key = tempDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      const key = getMonthKey(year, month); // month is already 0-indexed
       if (!monthMap[key]) {
         monthMap[key] = { income: 0, expenses: 0, transactions: [] };
       }
@@ -165,7 +171,7 @@ export default function BudgetScreen() {
       // Remap corrupt years (e.g. 1901) to current year for display
       const year = (isNaN(parsedYear) || parsedYear < 2000) ? currentYear : parsedYear;
       const quarter = Math.ceil(month / 3);
-      const monthKey = new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      const monthKey = getMonthKey(year, month - 1); // month is 1-indexed here
       if (!yearMap[year]) yearMap[year] = {};
       if (!yearMap[year][quarter]) yearMap[year][quarter] = { income: 0, expenses: 0, monthMap: {} };
       if (!yearMap[year][quarter].monthMap[monthKey]) yearMap[year][quarter].monthMap[monthKey] = { income: 0, expenses: 0, transactions: [] };
