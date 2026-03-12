@@ -46,3 +46,5 @@ core
 node_modules
 .expobun.lock
 bun.lock
+
+.expo
