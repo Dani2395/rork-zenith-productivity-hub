@@ -306,7 +306,27 @@ export const categorizeTransaction = (description: string): string | undefined =
   return undefined;
 };
 
-export const parseDate = (dateStr: string): string => {
+// Scan text for 4-digit years and return the most common one, or null if none found.
+// Used to anchor MM/DD date inference to the statement's actual year.
+export const detectStatementYear = (text: string): number | null => {
+  const currentYear = new Date().getFullYear();
+  const counts: Record<number, number> = {};
+  const yearRe = /\b(20\d{2})\b/g;
+  let m;
+  while ((m = yearRe.exec(text)) !== null) {
+    const y = parseInt(m[1], 10);
+    if (y >= 2010 && y <= currentYear + 1) {
+      counts[y] = (counts[y] ?? 0) + 1;
+    }
+  }
+  const entries = Object.entries(counts);
+  if (entries.length === 0) return null;
+  // Return the year with the most occurrences; break ties by picking the earlier year
+  entries.sort((a, b) => b[1] - a[1] || parseInt(a[0]) - parseInt(b[0]));
+  return parseInt(entries[0][0], 10);
+};
+
+export const parseDate = (dateStr: string, hintYear?: number): string => {
   const trimmed = dateStr.trim().replace(/^"|"$/g, '');
   const currentYear = new Date().getFullYear();
 
@@ -330,21 +350,34 @@ export const parseDate = (dateStr: string): string => {
     const [m, d, y] = trimmed.split('-');
     return `${safeYear(parseInt(y, 10))}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
-  // Handle MM/DD without year (e.g. Navy Federal statements: "12/22", "01/02")
+  // Handle MM/DD without year (e.g. Navy Federal: "12/22", "01/02")
   if (/^\d{1,2}\/\d{1,2}$/.test(trimmed)) {
     const [m, d] = trimmed.split('/');
+    // If caller detected a statement year, trust that over proximity-to-today logic.
+    // This fixes cases like importing a 2025 statement today (2026) where proximity
+    // would incorrectly assign dates to 2026.
+    if (hintYear) {
+      const candidate = new Date(`${hintYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
+      if (!isNaN(candidate.getTime())) {
+        // Allow one year earlier if the date would be in the future relative to today
+        const today = new Date();
+        if (candidate.getTime() > today.getTime() + 60 * 24 * 60 * 60 * 1000) {
+          return `${hintYear - 1}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+        return `${hintYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+    }
+    // Fallback: pick year closest to today that isn't more than 60 days in the future
     const today = new Date();
     const todayMs = today.getTime();
     const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
-    // Try currentYear-1, currentYear, currentYear+1 — pick closest to today
-    // without being more than 60 days in the future (statements are never far-future dated)
     let bestYear = currentYear;
     let bestDiff = Infinity;
     for (const yr of [currentYear - 1, currentYear, currentYear + 1]) {
       const candidate = new Date(`${yr}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
       if (isNaN(candidate.getTime())) continue;
       const diffMs = candidate.getTime() - todayMs;
-      if (diffMs > SIXTY_DAYS) continue; // reject far-future dates
+      if (diffMs > SIXTY_DAYS) continue;
       const absDiff = Math.abs(diffMs);
       if (absDiff < bestDiff) {
         bestDiff = absDiff;
@@ -353,11 +386,12 @@ export const parseDate = (dateStr: string): string => {
     }
     return `${bestYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
-  // Handle "Mon DD" or "Month DD" without year — assume current year
+  // Handle "Mon DD" or "Month DD" without year
   if (/^[A-Za-z]+ \d{1,2}$/.test(trimmed)) {
-    const parsed = new Date(`${trimmed} ${currentYear}`);
+    const yearToUse = hintYear ?? currentYear;
+    const parsed = new Date(`${trimmed} ${yearToUse}`);
     if (!isNaN(parsed.getTime())) {
-      return `${currentYear}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+      return `${yearToUse}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
     }
   }
   const parsed = new Date(trimmed);
@@ -455,6 +489,10 @@ export const processCSVData = (
   const cols = detectColumns(headerFields);
   console.log('Detected columns:', JSON.stringify(cols));
 
+  // Detect the statement year from the full text so MM/DD dates can be anchored correctly
+  const statementYear = detectStatementYear(text) ?? undefined;
+  console.log('Detected statement year:', statementYear);
+
   const imported: ParsedTransaction[] = [];
   let skipped = 0;
   const errors: string[] = [];
@@ -511,7 +549,7 @@ export const processCSVData = (
 
     const isExpense = amountNum < 0;
     const amount = Math.abs(amountNum);
-    const date = parseDate(dateStr);
+    const date = parseDate(dateStr, statementYear);
 
     const cleanedName = cleanDescription(description);
     const category = categorizeTransaction(description) || categorizeTransaction(cleanedName);
