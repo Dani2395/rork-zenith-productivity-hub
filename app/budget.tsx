@@ -93,6 +93,8 @@ export default function BudgetScreen() {
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [monthDetailVisible, setMonthDetailVisible] = useState(false);
+  const [budgetDetailVisible, setBudgetDetailVisible] = useState(false);
+  const [selectedBudgetForDetail, setSelectedBudgetForDetail] = useState<Budget | null>(null);
   const [expandedQuarters, setExpandedQuarters] = useState<Set<string>>(() => {
     const now = new Date();
     return new Set([`${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`]);
@@ -248,6 +250,17 @@ export default function BudgetScreen() {
   const selectedMonthIncomes = (selectedMonthData?.transactions || [])
     .filter(t => t.type === 'income')
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const openBudgetDetail = (budget: Budget) => {
+    setSelectedBudgetForDetail(budget);
+    setBudgetDetailVisible(true);
+  };
+
+  const budgetDetailTransactions = selectedBudgetForDetail
+    ? transactions
+        .filter(t => t.budgetId === selectedBudgetForDetail.id && t.type === 'expense')
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    : [];
 
   const openBudgetModal = (budget?: Budget) => {
     if (budget) {
@@ -860,7 +873,7 @@ export default function BudgetScreen() {
                 <TouchableOpacity
                   key={`budget-${budget.id}-${idx}`}
                   style={styles.budgetCard}
-                  onPress={() => openBudgetModal(budget)}
+                  onPress={() => openBudgetDetail(budget)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.budgetHeader}>
@@ -1696,6 +1709,131 @@ export default function BudgetScreen() {
                   <View style={[styles.actionButtonSecondary, { borderColor: Colors.success }]}>
                     <Plus size={16} color={Colors.success} />
                     <Text style={[styles.actionButtonTextSecondary, { color: Colors.success }]}>Add Income</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Budget Detail Modal */}
+      <Modal
+        visible={budgetDetailVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBudgetDetailVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.modalTitle}>
+                {selectedBudgetForDetail?.icon} {selectedBudgetForDetail?.name}
+              </Text>
+              <TouchableOpacity onPress={() => setBudgetDetailVisible(false)}>
+                <ChevronDown size={24} color={Colors.textDim} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedBudgetForDetail && (
+              <View style={styles.monthSummaryRow}>
+                <View style={styles.monthSummaryItem}>
+                  <Text style={styles.monthSummaryLabel}>Spent</Text>
+                  <Text style={[styles.monthSummaryValue, { color: Colors.danger }]}>
+                    ${selectedBudgetForDetail.spent.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.monthSummaryDivider} />
+                <View style={styles.monthSummaryItem}>
+                  <Text style={styles.monthSummaryLabel}>Budget</Text>
+                  <Text style={styles.monthSummaryValue}>
+                    ${selectedBudgetForDetail.amount.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.monthSummaryDivider} />
+                <View style={styles.monthSummaryItem}>
+                  <Text style={styles.monthSummaryLabel}>Remaining</Text>
+                  <Text style={[styles.monthSummaryValue, {
+                    color: selectedBudgetForDetail.amount - selectedBudgetForDetail.spent >= 0
+                      ? Colors.success : Colors.danger
+                  }]}>
+                    ${(selectedBudgetForDetail.amount - selectedBudgetForDetail.spent).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
+              {budgetDetailTransactions.length === 0 ? (
+                <Text style={{ color: Colors.textDim, textAlign: 'center', marginVertical: 24, fontSize: 14 }}>
+                  No transactions yet for this category.
+                </Text>
+              ) : (
+                <View style={styles.txnGroup}>
+                  <Text style={styles.txnGroupTitle}>💸 Transactions ({budgetDetailTransactions.length})</Text>
+                  {budgetDetailTransactions.map((t, idx) => (
+                    <TouchableOpacity
+                      key={`bd-${t.id}-${idx}`}
+                      style={[styles.transactionCard, { borderLeftColor: Colors.danger }]}
+                      onPress={() => {
+                        setBudgetDetailVisible(false);
+                        openTransactionModal(t);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.transactionInfo}>
+                        <Text style={styles.transactionName}>
+                          {t.description || 'Expense'}
+                        </Text>
+                        <Text style={styles.transactionDate}>{t.date}</Text>
+                      </View>
+                      <View style={styles.transactionRight}>
+                        <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
+                          -${t.amount.toFixed(2)}
+                        </Text>
+                        <View style={styles.transactionActions}>
+                          <TouchableOpacity
+                            onPress={() => { setBudgetDetailVisible(false); openTransactionModal(t); }}
+                            style={styles.iconButton}
+                          >
+                            <Edit2 size={14} color={Colors.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleDeleteTransaction(t.id)}
+                            style={styles.iconButton}
+                          >
+                            <Trash2 size={14} color={Colors.danger} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, marginBottom: 16 }}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { flex: 1 }]}
+                  onPress={() => {
+                    setBudgetDetailVisible(false);
+                    openTransactionModal(undefined, selectedBudgetForDetail?.id, 'expense');
+                  }}
+                >
+                  <View style={[styles.actionButtonSecondary, { borderColor: Colors.danger }]}>
+                    <Plus size={16} color={Colors.danger} />
+                    <Text style={[styles.actionButtonTextSecondary, { color: Colors.danger }]}>Add Expense</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, { flex: 1 }]}
+                  onPress={() => {
+                    setBudgetDetailVisible(false);
+                    openBudgetModal(selectedBudgetForDetail || undefined);
+                  }}
+                >
+                  <View style={styles.actionButtonSecondary}>
+                    <Edit2 size={16} color={Colors.text} />
+                    <Text style={styles.actionButtonTextSecondary}>Edit Budget</Text>
                   </View>
                 </TouchableOpacity>
               </View>
