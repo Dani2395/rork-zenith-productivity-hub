@@ -93,6 +93,11 @@ export default function BudgetScreen() {
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [monthDetailVisible, setMonthDetailVisible] = useState(false);
+  const [expandedQuarters, setExpandedQuarters] = useState<Set<string>>(() => {
+    const now = new Date();
+    return new Set([`${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`]);
+  });
+  const [expandedArchiveYears, setExpandedArchiveYears] = useState<Set<number>>(new Set());
 
   const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -151,6 +156,84 @@ export default function BudgetScreen() {
         return dateB - dateA;
       });
   }, [transactions]);
+
+  const yearlyGroupedData = useMemo(() => {
+    const QUARTER_LABELS = ['Q1 (Jan–Mar)', 'Q2 (Apr–Jun)', 'Q3 (Jul–Sep)', 'Q4 (Oct–Dec)'];
+    const currentYear = new Date().getFullYear();
+    const yearMap: Record<number, Record<number, { income: number; expenses: number; monthMap: Record<string, { income: number; expenses: number; transactions: Transaction[] }> }>> = {};
+    for (const t of transactions) {
+      const rawDate = t.date.split('T')[0];
+      const parts = rawDate.split('-');
+      const parsedYear = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      if (isNaN(month)) continue;
+      // Remap corrupt years (e.g. 1901) to current year for display
+      const year = (isNaN(parsedYear) || parsedYear < 2000) ? currentYear : parsedYear;
+      const quarter = Math.ceil(month / 3);
+      const monthKey = new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      if (!yearMap[year]) yearMap[year] = {};
+      if (!yearMap[year][quarter]) yearMap[year][quarter] = { income: 0, expenses: 0, monthMap: {} };
+      if (!yearMap[year][quarter].monthMap[monthKey]) yearMap[year][quarter].monthMap[monthKey] = { income: 0, expenses: 0, transactions: [] };
+      if (t.type === 'income') {
+        yearMap[year][quarter].income += t.amount;
+        yearMap[year][quarter].monthMap[monthKey].income += t.amount;
+      } else {
+        yearMap[year][quarter].expenses += t.amount;
+        yearMap[year][quarter].monthMap[monthKey].expenses += t.amount;
+      }
+      yearMap[year][quarter].monthMap[monthKey].transactions.push(t);
+    }
+    return Object.entries(yearMap)
+      .sort(([a], [b]) => parseInt(b) - parseInt(a))
+      .map(([yearStr, quarters]) => {
+        const year = parseInt(yearStr);
+        return {
+          year,
+          isCurrent: year === currentYear,
+          quarters: [1, 2, 3, 4].map(q => {
+            const qData = quarters[q] || { income: 0, expenses: 0, monthMap: {} };
+            const months = Object.entries(qData.monthMap)
+              .map(([key, data]) => ({
+                key,
+                income: data.income,
+                expenses: data.expenses,
+                cashflow: data.income - data.expenses,
+                transactions: data.transactions,
+              }))
+              .sort((a, b) => {
+                const [am, ay] = a.key.split(' ');
+                const [bm, by] = b.key.split(' ');
+                return new Date(`${bm} 1, ${by}`).getTime() - new Date(`${am} 1, ${ay}`).getTime();
+              });
+            return {
+              quarter: q,
+              label: QUARTER_LABELS[q - 1],
+              income: qData.income,
+              expenses: qData.expenses,
+              cashflow: qData.income - qData.expenses,
+              months,
+              hasData: months.length > 0,
+            };
+          }),
+        };
+      });
+  }, [transactions]);
+
+  const toggleQuarter = (key: string) => {
+    setExpandedQuarters(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleArchiveYear = (year: number) => {
+    setExpandedArchiveYears(prev => {
+      const next = new Set(prev);
+      if (next.has(year)) next.delete(year); else next.add(year);
+      return next;
+    });
+  };
 
   const openMonthDetail = (monthKey: string) => {
     setSelectedMonthKey(monthKey);
@@ -410,9 +493,21 @@ export default function BudgetScreen() {
         return;
       }
 
-      setUploadStatus(`Imported ${result.imported.length} transactions${result.skipped > 0 ? ` (${result.skipped} skipped)` : ''}`);
+      const skipMsg = result.skipped > 0
+        ? ` (${result.skipped} row${result.skipped > 1 ? 's' : ''} skipped)`
+        : '';
+      setUploadStatus(`Imported ${result.imported.length} transactions${skipMsg}`);
       setIsUploading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (result.skipped > 0 && result.errors.length > 0) {
+        setTimeout(() => {
+          Alert.alert(
+            `${result.skipped} Row${result.skipped > 1 ? 's' : ''} Skipped`,
+            result.errors.join('\n\n'),
+            [{ text: 'OK' }]
+          );
+        }, 500);
+      }
       setTimeout(() => {
         setUploadModalVisible(false);
         setUploadStatus('');
@@ -925,172 +1020,147 @@ export default function BudgetScreen() {
           )}
         </View>
 
-        {/* Monthly Overview */}
+        {/* Yearly / Quarterly Overview */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📅 Monthly Overview</Text>
+            <Text style={styles.sectionTitle}>📅 Bank Statement Overview</Text>
             <Calendar size={18} color={Colors.primary} />
           </View>
           {transactions.length === 0 ? (
-            <Text style={styles.emptyText}>Upload a bank statement to see your monthly breakdown</Text>
+            <Text style={styles.emptyText}>Upload a bank statement to see your breakdown</Text>
           ) : (
             <>
-              {/* Most recent month - expanded detail */}
-              {monthsWithData.length > 0 && (() => {
-                const recentMonth = monthsWithData[0];
-                const recentExpenses = recentMonth.transactions
-                  .filter(t => t.type === 'expense')
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                const recentIncomes = recentMonth.transactions
-                  .filter(t => t.type === 'income')
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                return (
-                  <View style={styles.currentMonthDetail}>
-                    <View style={styles.currentMonthHeader}>
-                      <Text style={styles.currentMonthTitle}>{recentMonth.key}</Text>
-                      <View style={styles.currentMonthBadge}>
-                        <Text style={styles.currentMonthBadgeText}>Most Recent</Text>
-                      </View>
-                    </View>
-                    <View style={styles.monthSummaryRow}>
-                      <View style={styles.monthSummaryItem}>
-                        <Text style={styles.monthSummaryLabel}>Income</Text>
-                        <Text style={[styles.monthSummaryValue, { color: Colors.success }]}>
-                          +${recentMonth.income.toFixed(2)}
-                        </Text>
-                      </View>
-                      <View style={styles.monthSummaryDivider} />
-                      <View style={styles.monthSummaryItem}>
-                        <Text style={styles.monthSummaryLabel}>Expenses</Text>
-                        <Text style={[styles.monthSummaryValue, { color: Colors.danger }]}>
-                          -${recentMonth.expenses.toFixed(2)}
-                        </Text>
-                      </View>
-                      <View style={styles.monthSummaryDivider} />
-                      <View style={styles.monthSummaryItem}>
-                        <Text style={styles.monthSummaryLabel}>Cashflow</Text>
-                        <Text style={[styles.monthSummaryValue, { color: recentMonth.cashflow >= 0 ? Colors.success : Colors.danger }]}>
-                          {recentMonth.cashflow >= 0 ? '+' : ''}${recentMonth.cashflow.toFixed(2)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {recentExpenses.length > 0 && (
-                      <View style={styles.txnGroup}>
-                        <Text style={styles.txnGroupTitle}>💸 Expenses</Text>
-                        {recentExpenses.slice(0, 10).map((t, idx) => {
-                          const budget = budgets.find(b => b.id === t.budgetId);
-                          return (
+              {yearlyGroupedData.map(yearData => {
+                if (yearData.isCurrent) {
+                  return (
+                    <View key={yearData.year}>
+                      <Text style={styles.yearLabel}>{yearData.year} — Current Year</Text>
+                      {yearData.quarters.map(quarter => {
+                        if (!quarter.hasData) return null;
+                        const qKey = `${yearData.year}-Q${quarter.quarter}`;
+                        const isExpanded = expandedQuarters.has(qKey);
+                        return (
+                          <View key={qKey} style={styles.quarterCard}>
                             <TouchableOpacity
-                              key={`re-${t.id}-${idx}`}
-                              style={[styles.transactionCard, { borderLeftColor: Colors.danger }]}
-                              onPress={() => openTransactionModal(t)}
+                              style={styles.quarterHeader}
+                              onPress={() => toggleQuarter(qKey)}
                               activeOpacity={0.7}
                             >
-                              <View style={styles.transactionInfo}>
-                                <Text style={styles.transactionName}>
-                                  💸 {budget?.name || t.description || 'Expense'}
-                                </Text>
-                                {t.description && budget && (
-                                  <Text style={styles.transactionDesc}>{t.description}</Text>
-                                )}
-                                <Text style={styles.transactionDate}>{t.date}</Text>
+                              <Text style={styles.quarterTitle}>{quarter.label}</Text>
+                              <View style={styles.quarterSummary}>
+                                <Text style={{ color: Colors.success, fontSize: 12 }}>+${quarter.income.toFixed(0)}</Text>
+                                <Text style={{ color: Colors.danger, fontSize: 12, marginLeft: 8 }}>-${quarter.expenses.toFixed(0)}</Text>
                               </View>
-                              <View style={styles.transactionRight}>
-                                <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
-                                  -${t.amount.toFixed(2)}
-                                </Text>
-                                <View style={styles.transactionActions}>
-                                  <TouchableOpacity onPress={() => openTransactionModal(t)} style={styles.iconButton}>
-                                    <Edit2 size={14} color={Colors.primary} />
-                                  </TouchableOpacity>
-                                  <TouchableOpacity onPress={() => handleDeleteTransaction(t.id)} style={styles.iconButton}>
-                                    <Trash2 size={14} color={Colors.danger} />
-                                  </TouchableOpacity>
-                                </View>
-                              </View>
+                              {isExpanded ? <ChevronUp size={16} color={Colors.textDim} /> : <ChevronDown size={16} color={Colors.textDim} />}
                             </TouchableOpacity>
-                          );
-                        })}
-                        {recentExpenses.length > 10 && (
-                          <Text style={styles.moreText}>{recentExpenses.length - 10} more expenses...</Text>
-                        )}
-                      </View>
-                    )}
-
-                    {recentIncomes.length > 0 && (
-                      <View style={styles.txnGroup}>
-                        <Text style={styles.txnGroupTitle}>💰 Income</Text>
-                        {recentIncomes.map((t, idx) => (
-                          <TouchableOpacity
-                            key={`ri-${t.id}-${idx}`}
-                            style={[styles.transactionCard, { borderLeftColor: Colors.success }]}
-                            onPress={() => openTransactionModal(t)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.transactionInfo}>
-                              <Text style={styles.transactionName}>
-                                💰 {t.description || 'Income'}
-                              </Text>
-                              <Text style={styles.transactionDate}>{t.date}</Text>
-                            </View>
-                            <View style={styles.transactionRight}>
-                              <Text style={[styles.transactionAmount, { color: Colors.success }]}>
-                                +${t.amount.toFixed(2)}
-                              </Text>
-                              <View style={styles.transactionActions}>
-                                <TouchableOpacity onPress={() => openTransactionModal(t)} style={styles.iconButton}>
-                                  <Edit2 size={14} color={Colors.primary} />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleDeleteTransaction(t.id)} style={styles.iconButton}>
-                                  <Trash2 size={14} color={Colors.danger} />
-                                </TouchableOpacity>
+                            {isExpanded && (
+                              <View style={styles.monthsGrid}>
+                                {quarter.months.map((month, idx) => (
+                                  <TouchableOpacity
+                                    key={`${qKey}-${idx}`}
+                                    style={styles.monthCard}
+                                    onPress={() => openMonthDetail(month.key)}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={styles.monthCardTitle}>{month.key}</Text>
+                                    <View style={styles.monthCardRow}>
+                                      <Text style={styles.monthCardLabel}>Income:</Text>
+                                      <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
+                                    </View>
+                                    <View style={styles.monthCardRow}>
+                                      <Text style={styles.monthCardLabel}>Expense:</Text>
+                                      <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
+                                    </View>
+                                    <View style={styles.monthCardRow}>
+                                      <Text style={styles.monthCardLabel}>Cashflow:</Text>
+                                      <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                                        {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
+                                      </Text>
+                                    </View>
+                                  </TouchableOpacity>
+                                ))}
                               </View>
-                            </View>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
-
-              {/* Previous months grid */}
-              {monthsWithData.length > 1 && (
-                <View style={{ marginTop: 16 }}>
-                  <Text style={styles.prevMonthsTitle}>Previous Months</Text>
-                  <View style={styles.monthsGrid}>
-                    {monthsWithData.slice(1).map((month, idx) => (
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  );
+                } else {
+                  const isYearExpanded = expandedArchiveYears.has(yearData.year);
+                  const yearIncome = yearData.quarters.reduce((s, q) => s + q.income, 0);
+                  const yearExpenses = yearData.quarters.reduce((s, q) => s + q.expenses, 0);
+                  return (
+                    <View key={yearData.year}>
                       <TouchableOpacity
-                        key={`month-${idx}`}
-                        style={styles.monthCard}
-                        onPress={() => openMonthDetail(month.key)}
+                        style={styles.archiveYearCard}
+                        onPress={() => toggleArchiveYear(yearData.year)}
                         activeOpacity={0.7}
                       >
-                        <Text style={styles.monthCardTitle}>{month.key}</Text>
-                        <View style={styles.monthCardRow}>
-                          <Text style={styles.monthCardLabel}>Income:</Text>
-                          <Text style={[styles.monthCardValue, { color: Colors.success }]}>
-                            ${month.income.toFixed(2)}
+                        <View style={styles.archiveYearLeft}>
+                          <Text style={styles.archiveYearTitle}>📦 {yearData.year} Archive</Text>
+                          <Text style={styles.archiveYearSub}>
+                            +${yearIncome.toFixed(0)} income  /  -${yearExpenses.toFixed(0)} expenses
                           </Text>
                         </View>
-                        <View style={styles.monthCardRow}>
-                          <Text style={styles.monthCardLabel}>Expense:</Text>
-                          <Text style={[styles.monthCardValue, { color: Colors.danger }]}>
-                            ${month.expenses.toFixed(2)}
-                          </Text>
-                        </View>
-                        <View style={styles.monthCardRow}>
-                          <Text style={styles.monthCardLabel}>Cashflow:</Text>
-                          <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
-                            {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
-                          </Text>
-                        </View>
+                        {isYearExpanded ? <ChevronUp size={16} color={Colors.textDim} /> : <ChevronDown size={16} color={Colors.textDim} />}
                       </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
+                      {isYearExpanded && (
+                        <View style={{ paddingLeft: 8, marginBottom: 8 }}>
+                          {yearData.quarters.filter(q => q.hasData).map(quarter => {
+                            const qKey = `${yearData.year}-Q${quarter.quarter}`;
+                            const isQExpanded = expandedQuarters.has(qKey);
+                            return (
+                              <View key={qKey} style={[styles.quarterCard, { marginBottom: 8 }]}>
+                                <TouchableOpacity
+                                  style={styles.quarterHeader}
+                                  onPress={() => toggleQuarter(qKey)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={styles.quarterTitle}>{quarter.label}</Text>
+                                  <View style={styles.quarterSummary}>
+                                    <Text style={{ color: Colors.success, fontSize: 12 }}>+${quarter.income.toFixed(0)}</Text>
+                                    <Text style={{ color: Colors.danger, fontSize: 12, marginLeft: 8 }}>-${quarter.expenses.toFixed(0)}</Text>
+                                  </View>
+                                  {isQExpanded ? <ChevronUp size={16} color={Colors.textDim} /> : <ChevronDown size={16} color={Colors.textDim} />}
+                                </TouchableOpacity>
+                                {isQExpanded && (
+                                  <View style={styles.monthsGrid}>
+                                    {quarter.months.map((month, idx) => (
+                                      <TouchableOpacity
+                                        key={`${qKey}-${idx}`}
+                                        style={styles.monthCard}
+                                        onPress={() => openMonthDetail(month.key)}
+                                        activeOpacity={0.7}
+                                      >
+                                        <Text style={styles.monthCardTitle}>{month.key}</Text>
+                                        <View style={styles.monthCardRow}>
+                                          <Text style={styles.monthCardLabel}>Income:</Text>
+                                          <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
+                                        </View>
+                                        <View style={styles.monthCardRow}>
+                                          <Text style={styles.monthCardLabel}>Expense:</Text>
+                                          <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
+                                        </View>
+                                        <View style={styles.monthCardRow}>
+                                          <Text style={styles.monthCardLabel}>Cashflow:</Text>
+                                          <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                                            {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
+                                          </Text>
+                                        </View>
+                                      </TouchableOpacity>
+                                    ))}
+                                  </View>
+                                )}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  );
+                }
+              })}
             </>
           )}
         </View>
