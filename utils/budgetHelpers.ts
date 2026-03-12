@@ -333,11 +333,25 @@ export const parseDate = (dateStr: string): string => {
   // Handle MM/DD without year (e.g. Navy Federal statements: "12/22", "01/02")
   if (/^\d{1,2}\/\d{1,2}$/.test(trimmed)) {
     const [m, d] = trimmed.split('/');
-    const month = parseInt(m, 10);
-    const currentMonth = new Date().getMonth() + 1;
-    // If the month is ahead of the current month, it must belong to the previous year
-    const inferredYear = month > currentMonth ? currentYear - 1 : currentYear;
-    return `${inferredYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    const today = new Date();
+    const todayMs = today.getTime();
+    const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
+    // Try currentYear-1, currentYear, currentYear+1 — pick closest to today
+    // without being more than 60 days in the future (statements are never far-future dated)
+    let bestYear = currentYear;
+    let bestDiff = Infinity;
+    for (const yr of [currentYear - 1, currentYear, currentYear + 1]) {
+      const candidate = new Date(`${yr}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
+      if (isNaN(candidate.getTime())) continue;
+      const diffMs = candidate.getTime() - todayMs;
+      if (diffMs > SIXTY_DAYS) continue; // reject far-future dates
+      const absDiff = Math.abs(diffMs);
+      if (absDiff < bestDiff) {
+        bestDiff = absDiff;
+        bestYear = yr;
+      }
+    }
+    return `${bestYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
   // Handle "Mon DD" or "Month DD" without year — assume current year
   if (/^[A-Za-z]+ \d{1,2}$/.test(trimmed)) {
