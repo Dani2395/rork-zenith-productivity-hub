@@ -101,33 +101,21 @@ export default function BudgetScreen() {
 
   const thisMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  const monthTransactions = transactions.filter(t => {
-    const date = new Date(t.date);
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) === thisMonth;
-  });
-
-  const totalIncome = monthTransactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalExpenses = monthTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const netCashflow = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
-
   const totalDebt = debts.reduce((sum, d) => sum + d.amount, 0);
   const totalSavingsTarget = savings.reduce((sum, s) => sum + s.target, 0);
   const totalSavingsCurrent = savings.reduce((sum, s) => sum + s.current, 0);
 
   const monthsWithData = useMemo(() => {
+    const currentYear = new Date().getFullYear();
     const monthMap: Record<string, { income: number; expenses: number; transactions: Transaction[] }> = {};
     for (const t of transactions) {
       const rawDate = t.date.split('T')[0];
       const parts = rawDate.split('-');
-      const year = parseInt(parts[0], 10);
+      const parsedYear = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10) - 1;
+      if (isNaN(month)) continue;
+      // Remap corrupt years (e.g. 1901) to current year — must match yearlyGroupedData logic
+      const year = (isNaN(parsedYear) || parsedYear < 2000) ? currentYear : parsedYear;
       const tempDate = new Date(year, month, 1);
       const key = tempDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
       if (!monthMap[key]) {
@@ -156,6 +144,13 @@ export default function BudgetScreen() {
         return dateB - dateA;
       });
   }, [transactions]);
+
+  // Derive current-month totals from monthsWithData so corrupt-year remapping is consistent
+  const thisMonthData = monthsWithData.find(m => m.key === thisMonth);
+  const totalIncome = thisMonthData?.income ?? 0;
+  const totalExpenses = thisMonthData?.expenses ?? 0;
+  const netCashflow = totalIncome - totalExpenses;
+  const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
 
   const yearlyGroupedData = useMemo(() => {
     const QUARTER_LABELS = ['Q1 (Jan–Mar)', 'Q2 (Apr–Jun)', 'Q3 (Jul–Sep)', 'Q4 (Oct–Dec)'];
@@ -1586,6 +1581,11 @@ export default function BudgetScreen() {
             )}
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
+              {selectedMonthExpenses.length === 0 && selectedMonthIncomes.length === 0 && (
+                <Text style={{ color: Colors.textDim, textAlign: 'center', marginVertical: 24, fontSize: 14 }}>
+                  No transactions yet for this month.{'\n'}Use the buttons below to add income or expenses.
+                </Text>
+              )}
               {selectedMonthExpenses.length > 0 && (
                 <View style={styles.txnGroup}>
                   <Text style={styles.txnGroupTitle}>💸 Expenses ({selectedMonthExpenses.length})</Text>
