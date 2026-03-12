@@ -153,12 +153,13 @@ export default function BudgetScreen() {
       });
   }, [transactions]);
 
-  // Derive current-month totals from monthsWithData so corrupt-year remapping is consistent
-  const thisMonthData = monthsWithData.find(m => m.key === thisMonth);
+  // Derive current-month totals — prefer current calendar month, fall back to most recent month with data
+  const thisMonthData = monthsWithData.find(m => m.key === thisMonth) ?? monthsWithData[0] ?? null;
+  const activeMonthLabel = thisMonthData?.key ?? thisMonth;
   const totalIncome = thisMonthData?.income ?? 0;
   const totalExpenses = thisMonthData?.expenses ?? 0;
 
-  // Compute budget spent from current-month transactions only (not the stored cumulative value)
+  // Compute budget spent from the active month's transactions only (not the stored cumulative value)
   const monthlySpentByBudgetId = useMemo(() => {
     const map: Record<number, number> = {};
     for (const t of (thisMonthData?.transactions ?? [])) {
@@ -765,7 +766,7 @@ export default function BudgetScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>📊 {thisMonth} ✓</Text>
+          <Text style={styles.summaryTitle}>📊 {activeMonthLabel}</Text>
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
               <View style={styles.summaryIconContainer}>
