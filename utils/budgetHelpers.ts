@@ -1,6 +1,6 @@
 export const MERCHANT_CATEGORIES: Record<string, string> = {
-  'doordash': 'Food & Dining',
-  'door dash': 'Food & Dining',
+  'doordash': 'DoorDash',
+  'door dash': 'DoorDash',
   'uber eats': 'Food & Dining',
   'ubereats': 'Food & Dining',
   'grubhub': 'Food & Dining',
@@ -308,23 +308,39 @@ export const categorizeTransaction = (description: string): string | undefined =
 
 export const parseDate = (dateStr: string): string => {
   const trimmed = dateStr.trim().replace(/^"|"$/g, '');
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const currentYear = new Date().getFullYear();
+
+  const safeYear = (y: number): number =>
+    y >= 2000 && y <= currentYear + 1 ? y : currentYear;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split('-');
+    return `${safeYear(parseInt(y, 10))}-${m}-${d}`;
+  }
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
     const [m, d, y] = trimmed.split('/');
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    return `${safeYear(parseInt(y, 10))}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
   if (/^\d{1,2}\/\d{1,2}\/\d{2}$/.test(trimmed)) {
     const [m, d, y] = trimmed.split('/');
-    const fullYear = parseInt(y) > 50 ? `19${y}` : `20${y}`;
-    return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    const fullYear = parseInt(y) <= 50 ? 2000 + parseInt(y) : 1900 + parseInt(y);
+    return `${safeYear(fullYear)}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
   if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(trimmed)) {
     const [m, d, y] = trimmed.split('-');
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    return `${safeYear(parseInt(y, 10))}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // Handle "Mon DD" or "Month DD" without year — assume current year
+  if (/^[A-Za-z]+ \d{1,2}$/.test(trimmed)) {
+    const parsed = new Date(`${trimmed} ${currentYear}`);
+    if (!isNaN(parsed.getTime())) {
+      return `${currentYear}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+    }
   }
   const parsed = new Date(trimmed);
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split('T')[0];
+    const y = safeYear(parsed.getFullYear());
+    return `${y}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
   }
   return new Date().toISOString().split('T')[0];
 };
@@ -434,6 +450,7 @@ export const processCSVData = (
     const parts = parseCSVLine(line);
     if (parts.length < 2) {
       skipped++;
+      errors.push(`Row ${i} skipped — too few columns: "${line.substring(0, 60)}"`);
       continue;
     }
 
@@ -458,9 +475,14 @@ export const processCSVData = (
       amountNum = parseFloat(amountStr);
     }
 
-    if (!dateStr || isNaN(amountNum) || amountNum === 0) {
+    if (!dateStr) {
       skipped++;
-      if (i <= 3) errors.push(`Row ${i}: date="${dateStr}" amount=${amountNum}`);
+      errors.push(`Row ${i} skipped — no date found: "${line.substring(0, 60)}"`);
+      continue;
+    }
+    if (isNaN(amountNum) || amountNum === 0) {
+      skipped++;
+      errors.push(`Row ${i} skipped — amount is zero or unreadable (desc: "${description || line.substring(0, 40)}")`);
       continue;
     }
 

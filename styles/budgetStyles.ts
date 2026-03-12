@@ -113,4 +113,15 @@ export default StyleSheet.create({
   monthCardRow: { flexDirection: 'row' as const, justifyContent: 'space-between', marginBottom: 4 },
   monthCardLabel: { fontSize: 11, color: Colors.textDim },
   monthCardValue: { fontSize: 11, fontWeight: '600' as const },
+
+  // Quarterly / archive styles
+  yearLabel: { fontSize: 15, fontWeight: '700' as const, color: Colors.text, marginBottom: 10, marginTop: 4 },
+  quarterCard: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 10, overflow: 'hidden' },
+  quarterHeader: { flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'space-between', padding: 12 },
+  quarterTitle: { fontSize: 13, fontWeight: '700' as const, color: Colors.text, flex: 1 },
+  quarterSummary: { flexDirection: 'row' as const, alignItems: 'center', marginRight: 8 },
+  archiveYearCard: { flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, borderWidth: 1, borderColor: Colors.border, padding: 14, marginBottom: 10 },
+  archiveYearLeft: { flex: 1 },
+  archiveYearTitle: { fontSize: 14, fontWeight: '700' as const, color: Colors.text },
+  archiveYearSub: { fontSize: 11, color: Colors.textDim, marginTop: 2 },
 });
