@@ -262,9 +262,13 @@ const findTransactionPatterns = (text: string): string[] => {
 };
 
 const buildCSVFromTransactions = (transactionLines: string[], statementYears?: number[]): string => {
-  const csvRows: string[] = statementYears && statementYears.length > 0
-    ? [`# Statement Years: ${statementYears.join(' ')}`, 'Date,Description,Amount']
-    : ['Date,Description,Amount'];
+  // Header MUST be first so detectColumns correctly identifies date/desc/amount columns.
+  // The year comment goes AFTER the header — it has only 1 CSV field so processCSVData
+  // skips it automatically (parts.length < 2), but detectStatementYears still finds the years.
+  const csvRows: string[] = ['Date,Description,Amount'];
+  if (statementYears && statementYears.length > 0) {
+    csvRows.push(`# Statement Years: ${statementYears.join(' ')}`);
+  }
   const datePatternBroad = /\b(\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?)\b/;
   const amountPattern = /(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
 
