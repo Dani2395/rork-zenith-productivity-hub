@@ -376,6 +376,23 @@ export const parseDate = (dateStr: string, hintYears?: number[]): string => {
       console.log('parseDate: invalid month/day:', monthNum, dayNum, 'from', trimmed);
       return new Date().toISOString().split('T')[0];
     }
+
+    if (hintYears && hintYears.length > 0) {
+      const minYear = Math.min(...hintYears);
+      const maxYear = Math.max(...hintYears);
+
+      if (hintYears.length >= 2 && maxYear - minYear === 1) {
+        const chosenYear = monthNum >= 7 ? minYear : maxYear;
+        console.log('parseDate: MM/DD cross-year', trimmed, '-> year', chosenYear, 'hintYears:', hintYears);
+        return `${chosenYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+
+      if (minYear === maxYear) {
+        console.log('parseDate: MM/DD single-year', trimmed, '-> year', minYear, 'hintYears:', hintYears);
+        return `${minYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+    }
+
     const today = new Date();
     const todayMs = today.getTime();
     const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
@@ -513,7 +530,7 @@ export const processCSVData = (
   const statementYears = detectStatementYears(text);
   console.log('Detected statement years:', statementYears);
 
-  const imported: ParsedTransaction[] = [];
+  let imported: ParsedTransaction[] = [];
   let skipped = 0;
   const errors: string[] = [];
 
@@ -588,5 +605,45 @@ export const processCSVData = (
     });
   }
 
+  if (imported.length > 3 && statementYears.length > 0) {
+    const monthCounts: Record<string, number> = {};
+    for (const t of imported) {
+      const ym = t.date.substring(0, 7);
+      monthCounts[ym] = (monthCounts[ym] ?? 0) + 1;
+    }
+
+    const significantMonths = new Set<string>();
+    for (const [ym, count] of Object.entries(monthCounts)) {
+      if (count >= 2) {
+        significantMonths.add(ym);
+      }
+    }
+
+    if (significantMonths.size > 0 && significantMonths.size < Object.keys(monthCounts).length) {
+      const validMonths = new Set<string>();
+      for (const ym of significantMonths) {
+        validMonths.add(ym);
+        const [y, mo] = ym.split('-').map(Number);
+        const prevM = mo === 1 ? 12 : mo - 1;
+        const prevY = mo === 1 ? y - 1 : y;
+        const nextM = mo === 12 ? 1 : mo + 1;
+        const nextY = mo === 12 ? y + 1 : y;
+        validMonths.add(`${prevY}-${String(prevM).padStart(2, '0')}`);
+        validMonths.add(`${nextY}-${String(nextM).padStart(2, '0')}`);
+      }
+
+      const beforeCount = imported.length;
+      imported = imported.filter(t => validMonths.has(t.date.substring(0, 7)));
+      const outlierCount = beforeCount - imported.length;
+      if (outlierCount > 0) {
+        console.log('processCSVData: filtered', outlierCount, 'outlier transactions outside statement period');
+        console.log('processCSVData: valid months:', [...validMonths].sort());
+        skipped += outlierCount;
+        errors.push(`${outlierCount} transaction(s) with dates outside statement period were skipped`);
+      }
+    }
+  }
+
+  console.log('processCSVData: final import count:', imported.length, 'skipped:', skipped);
   return { imported, skipped, errors };
 };

@@ -132,24 +132,40 @@ const decodeReadableText = (raw: string): string => {
   return result;
 };
 
+const hasValidLeadingDate = (line: string): boolean => {
+  const match = line.match(/^\s{0,5}(\d{1,2})[\/\-](\d{1,2})([\/\-]\d{2,4})?\b/);
+  if (!match) return false;
+  const month = parseInt(match[1], 10);
+  const day = parseInt(match[2], 10);
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+};
+
+const extractLeadingDate = (line: string): string | null => {
+  const match = line.match(/^\s{0,5}((\d{1,2})[\/\-](\d{1,2})([\/\-]\d{2,4})?)\b/);
+  if (!match) return null;
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return match[1];
+};
+
 const mergeFragmentedLines = (lines: string[]): string[] => {
   const merged: string[] = [];
   let currentLine = '';
-  const datePattern = /\b\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?\b/;
   const amountPattern = /\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d{2})\s*$/;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    if (datePattern.test(line) && currentLine) {
+    if (hasValidLeadingDate(line) && currentLine) {
       merged.push(currentLine.trim());
       currentLine = line;
     } else if (currentLine && amountPattern.test(line)) {
       currentLine += ' ' + line;
       merged.push(currentLine.trim());
       currentLine = '';
-    } else if (datePattern.test(line)) {
+    } else if (hasValidLeadingDate(line)) {
       currentLine = line;
     } else if (currentLine) {
       currentLine += ' ' + line;
@@ -170,7 +186,6 @@ const findTransactionPatterns = (text: string): string[] => {
   const lines = mergeFragmentedLines(rawLines);
   const transactionLines: string[] = [];
 
-  const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
   const amountPattern = /\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/;
 
   const skipPatterns = [
@@ -178,6 +193,8 @@ const findTransactionPatterns = (text: string): string[] => {
     /\b(routing|transit|acct|member)\s*(number|no|#|id)?\s*:?\s*\d/i,
     /\b(customer\s*service|phone|address|p\.?o\.?\s*box|www\.|http)/i,
     /\b(continued|page\s+\d|of\s+\d)/i,
+    /^\s*page\s/i,
+    /\bpage\s+\d+\s*(of|\/)/i,
   ];
 
   for (let i = 0; i < lines.length; i++) {
@@ -185,21 +202,21 @@ const findTransactionPatterns = (text: string): string[] => {
 
     if (skipPatterns.some(p => p.test(line))) continue;
 
-    if (datePattern.test(line) && amountPattern.test(line)) {
+    if (hasValidLeadingDate(line) && amountPattern.test(line)) {
       transactionLines.push(line);
       continue;
     }
 
-    if (datePattern.test(line) && i + 1 < lines.length) {
+    if (hasValidLeadingDate(line) && i + 1 < lines.length) {
       const nextLine = lines[i + 1];
-      if (amountPattern.test(nextLine) && !datePattern.test(nextLine)) {
+      if (amountPattern.test(nextLine) && !hasValidLeadingDate(nextLine)) {
         transactionLines.push(line + ' ' + nextLine);
         i++;
         continue;
       }
       if (i + 2 < lines.length) {
         const lineAfter = lines[i + 2];
-        if (amountPattern.test(lineAfter) && !datePattern.test(nextLine)) {
+        if (amountPattern.test(lineAfter) && !hasValidLeadingDate(nextLine)) {
           transactionLines.push(line + ' ' + nextLine + ' ' + lineAfter);
           i += 2;
           continue;
@@ -223,14 +240,15 @@ const buildCSVFromTransactions = (transactionLines: string[], statementYears?: n
   const csvRows: string[] = statementYears && statementYears.length > 0
     ? [`# Statement Years: ${statementYears.join(' ')}`, 'Date,Description,Amount']
     : ['Date,Description,Amount'];
-  const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
+  const datePatternBroad = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
   const amountPattern = /(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
 
   for (const line of transactionLines) {
-    const dateMatch = line.match(datePattern);
+    const leadingDate = extractLeadingDate(line);
+    const dateMatch = leadingDate ? [leadingDate, leadingDate] : line.match(datePatternBroad);
     if (!dateMatch) continue;
 
-    const date = dateMatch[1];
+    const date = leadingDate || dateMatch[1];
     const amounts: string[] = [];
     let amtMatch;
     while ((amtMatch = amountPattern.exec(line)) !== null) {
@@ -241,7 +259,7 @@ const buildCSVFromTransactions = (transactionLines: string[], statementYears?: n
     if (amounts.length === 0) continue;
 
     let desc = line;
-    desc = desc.replace(datePattern, '').trim();
+    desc = desc.replace(datePatternBroad, '').trim();
     desc = desc.replace(/(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})/g, '').trim();
     desc = desc.replace(/\s{2,}/g, ' ').trim();
 
