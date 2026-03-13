@@ -352,9 +352,9 @@ export const parseDate = (dateStr: string, hintYear?: number): string => {
     const [m, d, y] = trimmed.split('-');
     return `${safeYear(parseInt(y, 10))}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
-  // Handle MM/DD without year (e.g. Navy Federal: "12/22", "01/02")
-  if (/^\d{1,2}\/\d{1,2}$/.test(trimmed)) {
-    const [m, d] = trimmed.split('/');
+  // Handle MM/DD or MM-DD without year (e.g. Navy Federal: "12/22", "12-22", "01/02", "01-02")
+  if (/^\d{1,2}[\/\-]\d{1,2}$/.test(trimmed)) {
+    const [m, d] = trimmed.split(/[\/\-]/);
     // If caller detected a statement year, trust that over proximity-to-today logic.
     // This fixes cases like importing a 2025 statement today (2026) where proximity
     // would incorrectly assign dates to 2026.
