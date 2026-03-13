@@ -629,12 +629,32 @@ export const processCSVData = (
   let allowedYearMonths: Set<string> | undefined;
   if (monthRange && monthRange.months.length > 0 && monthRange.years.length > 0) {
     allowedYearMonths = new Set<string>();
-    for (const yr of monthRange.years) {
-      for (const mo of monthRange.months) {
-        allowedYearMonths.add(`${yr}-${String(mo).padStart(2, '0')}`);
+    const sortedYears = [...monthRange.years].sort((a, b) => a - b);
+    const sortedMonths = [...monthRange.months].sort((a, b) => a - b);
+    const isCrossYear = sortedYears.length >= 2 && sortedYears[sortedYears.length - 1] - sortedYears[0] === 1;
+    const hasHighMonths = sortedMonths.some(m => m >= 10);
+    const hasLowMonths = sortedMonths.some(m => m <= 3);
+    const isCrossYearStatement = isCrossYear && hasHighMonths && hasLowMonths;
+
+    if (isCrossYearStatement) {
+      const minYear = sortedYears[0];
+      const maxYear = sortedYears[sortedYears.length - 1];
+      for (const mo of sortedMonths) {
+        if (mo >= 7) {
+          allowedYearMonths.add(`${minYear}-${String(mo).padStart(2, '0')}`);
+        } else {
+          allowedYearMonths.add(`${maxYear}-${String(mo).padStart(2, '0')}`);
+        }
       }
+      console.log('processCSVData: Cross-year statement detected, allowed year-months:', [...allowedYearMonths]);
+    } else {
+      for (const yr of monthRange.years) {
+        for (const mo of monthRange.months) {
+          allowedYearMonths.add(`${yr}-${String(mo).padStart(2, '0')}`);
+        }
+      }
+      console.log('processCSVData: Allowed year-months:', [...allowedYearMonths]);
     }
-    console.log('processCSVData: Allowed year-months:', [...allowedYearMonths]);
   }
 
   let imported: ParsedTransaction[] = [];
