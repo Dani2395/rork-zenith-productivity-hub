@@ -492,18 +492,18 @@ export default function BudgetScreen() {
 
 
 
-  const finishImport = (result: ReturnType<typeof processCSVData>) => {
-    const skipMsg = result.skipped > 0
-      ? ` (${result.skipped} row${result.skipped > 1 ? 's' : ''} skipped)`
-      : '';
-    setUploadStatus(`Imported ${result.imported.length} transactions${skipMsg}`);
+  const finishImport = (imported: number, skipped: number, dupCount: number, errors: string[]) => {
+    const parts: string[] = [`Imported ${imported} transaction${imported !== 1 ? 's' : ''}`];
+    if (dupCount > 0) parts.push(`${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped`);
+    if (skipped > 0) parts.push(`${skipped} row${skipped !== 1 ? 's' : ''} skipped`);
+    setUploadStatus(parts.join(' · '));
     setIsUploading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    if (result.skipped > 0 && result.errors.length > 0) {
+    if (skipped > 0 && errors.length > 0) {
       setTimeout(() => {
         Alert.alert(
-          `${result.skipped} Row${result.skipped > 1 ? 's' : ''} Skipped`,
-          result.errors.join('\n\n'),
+          `${skipped} Row${skipped !== 1 ? 's' : ''} Skipped`,
+          errors.join('\n\n'),
           [{ text: 'OK' }]
         );
       }, 500);
@@ -512,15 +512,6 @@ export default function BudgetScreen() {
       setUploadModalVisible(false);
       setUploadStatus('');
     }, 2500);
-  };
-
-  const doImportTransactions = (result: ReturnType<typeof processCSVData>, clearFirst: boolean) => {
-    if (clearFirst) {
-      clearAllTransactions();
-    }
-    for (const t of result.imported) {
-      addTransaction(t);
-    }
   };
 
   const processCSVText = (text: string) => {
@@ -546,36 +537,23 @@ export default function BudgetScreen() {
         return;
       }
 
-      // If there are already transactions stored, ask whether to replace or append
-      if (transactions.length > 0) {
-        setIsUploading(false);
-        Alert.alert(
-          'Import Transactions',
-          `You already have ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} stored.\n\nReplace them with the ${result.imported.length} new ones, or add to existing?\n\n(Choose "Replace All" to fix duplicate or wrong-month data.)`,
-          [
-            {
-              text: 'Replace All',
-              style: 'destructive',
-              onPress: () => {
-                doImportTransactions(result, true);
-                finishImport(result);
-              },
-            },
-            {
-              text: 'Add to Existing',
-              onPress: () => {
-                doImportTransactions(result, false);
-                finishImport(result);
-              },
-            },
-            { text: 'Cancel', style: 'cancel', onPress: () => setUploadModalVisible(false) },
-          ]
-        );
-        return;
+      // Deduplicate: skip any transaction that matches an existing one by date + amount + type.
+      // This lets you safely import each month's statement without creating duplicates,
+      // even if you re-import the same file again.
+      const existingKeys = new Set(
+        transactions.map(t => `${t.date}|${t.amount}|${t.type}`)
+      );
+      const newTransactions = result.imported.filter(
+        t => !existingKeys.has(`${t.date}|${t.amount}|${t.type}`)
+      );
+      const dupCount = result.imported.length - newTransactions.length;
+      console.log('Import dedup: new =', newTransactions.length, ', duplicates skipped =', dupCount);
+
+      for (const t of newTransactions) {
+        addTransaction(t);
       }
 
-      doImportTransactions(result, false);
-      finishImport(result);
+      finishImport(newTransactions.length, result.skipped, dupCount, result.errors);
     } catch (err) {
       console.log('processCSVText error:', err);
       setUploadStatus(`Error processing CSV: ${err instanceof Error ? err.message : 'Unknown error'}`);
