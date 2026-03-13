@@ -492,6 +492,37 @@ export default function BudgetScreen() {
 
 
 
+  const finishImport = (result: ReturnType<typeof processCSVData>) => {
+    const skipMsg = result.skipped > 0
+      ? ` (${result.skipped} row${result.skipped > 1 ? 's' : ''} skipped)`
+      : '';
+    setUploadStatus(`Imported ${result.imported.length} transactions${skipMsg}`);
+    setIsUploading(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (result.skipped > 0 && result.errors.length > 0) {
+      setTimeout(() => {
+        Alert.alert(
+          `${result.skipped} Row${result.skipped > 1 ? 's' : ''} Skipped`,
+          result.errors.join('\n\n'),
+          [{ text: 'OK' }]
+        );
+      }, 500);
+    }
+    setTimeout(() => {
+      setUploadModalVisible(false);
+      setUploadStatus('');
+    }, 2500);
+  };
+
+  const doImportTransactions = (result: ReturnType<typeof processCSVData>, clearFirst: boolean) => {
+    if (clearFirst) {
+      clearAllTransactions();
+    }
+    for (const t of result.imported) {
+      addTransaction(t);
+    }
+  };
+
   const processCSVText = (text: string) => {
     try {
       setUploadStatus('Processing transactions...');
@@ -506,10 +537,6 @@ export default function BudgetScreen() {
         return;
       }
 
-      for (const t of result.imported) {
-        addTransaction(t);
-      }
-
       if (result.imported.length === 0) {
         const hint = result.errors.length > 0 ? `\nDebug: ${result.errors.join(', ')}` : '';
         setUploadStatus(
@@ -519,25 +546,36 @@ export default function BudgetScreen() {
         return;
       }
 
-      const skipMsg = result.skipped > 0
-        ? ` (${result.skipped} row${result.skipped > 1 ? 's' : ''} skipped)`
-        : '';
-      setUploadStatus(`Imported ${result.imported.length} transactions${skipMsg}`);
-      setIsUploading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (result.skipped > 0 && result.errors.length > 0) {
-        setTimeout(() => {
-          Alert.alert(
-            `${result.skipped} Row${result.skipped > 1 ? 's' : ''} Skipped`,
-            result.errors.join('\n\n'),
-            [{ text: 'OK' }]
-          );
-        }, 500);
+      // If there are already transactions stored, ask whether to replace or append
+      if (transactions.length > 0) {
+        setIsUploading(false);
+        Alert.alert(
+          'Import Transactions',
+          `You already have ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} stored.\n\nReplace them with the ${result.imported.length} new ones, or add to existing?\n\n(Choose "Replace All" to fix duplicate or wrong-month data.)`,
+          [
+            {
+              text: 'Replace All',
+              style: 'destructive',
+              onPress: () => {
+                doImportTransactions(result, true);
+                finishImport(result);
+              },
+            },
+            {
+              text: 'Add to Existing',
+              onPress: () => {
+                doImportTransactions(result, false);
+                finishImport(result);
+              },
+            },
+            { text: 'Cancel', style: 'cancel', onPress: () => setUploadModalVisible(false) },
+          ]
+        );
+        return;
       }
-      setTimeout(() => {
-        setUploadModalVisible(false);
-        setUploadStatus('');
-      }, 2500);
+
+      doImportTransactions(result, false);
+      finishImport(result);
     } catch (err) {
       console.log('processCSVText error:', err);
       setUploadStatus(`Error processing CSV: ${err instanceof Error ? err.message : 'Unknown error'}`);
