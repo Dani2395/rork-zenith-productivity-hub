@@ -261,13 +261,13 @@ export const cleanDescription = (raw: string): string => {
   cleaned = cleaned.replace(/\b[A-Za-z0-9]{2,4}\*[A-Za-z0-9]+/g, ' ');
   cleaned = cleaned.replace(/#\S+/g, ' ');
   cleaned = cleaned.replace(/\b(POS|ACH|DEBIT|CREDIT|PURCHASE|WITHDRAWAL|CHECKCARD|RECURRING|PREAUTHORIZED|PENDING|POSTED|WEB|ONLINE|MOBILE|ELECTRONIC|ORIG CO NAME|CO ENTRY|SEC|CCD|PPD|TEL|WEB ID|TRACE|IND ID|IND NAME|TFR|XFER|PMT|BIL|CHK|DDA|SAV|INT|EXT|VISA|MASTERCARD|MC|CARD|TRANSACTION|ORIG|ENTRY|DESCR|REF|AUTH|MERCH|SQ|TST|BK|BKG|AUTOPAY|AUTO PAY|AUTO-PAY|PAYMENT|PYMT|REC|HOLD|FEE|SVC|MEMO|MISCELLANEOUS|MISC|INST|NBR|NUM|DR|CR|DB|INTERAC|INTERNET|WITHDRAWAL|DEPOSIT|WIRE|TRANSFER|FROM|TO|ACCT|ACCOUNT|CHECK|NO|EXTERNAL|INTERNAL|BRANCH|ATM|TERMINAL|LOCATION|CITY|STATE|COUNTRY|PROVINCE|CA|US|USA|TX|NY|FL|IL|OH|PA|GA|NC|MI|NJ|VA|WA|AZ|MA|TN|IN|MO|MD|WI|MN|CO|AL|SC|LA|KY|OR|OK|CT|UT|IA|NV|AR|MS|KS|NM|NE|WV|ID|HI|NH|ME|MT|RI|DE|SD|ND|AK|VT|WY|DC)\b/gi, ' ');
-  cleaned = cleaned.replace(/\b\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?\b/g, ' ');
+  cleaned = cleaned.replace(/\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b/g, ' ');
   cleaned = cleaned.replace(/\*+/g, ' ');
   cleaned = cleaned.replace(/\bX{2,}\d*\b/gi, ' ');
   cleaned = cleaned.replace(/\b[A-Z]{1,3}\d{5,}\b/g, ' ');
   cleaned = cleaned.replace(/\b\d+[A-Z]+\d+\b/gi, ' ');
   cleaned = cleaned.replace(/\b[a-f0-9]{6,}\b/gi, ' ');
-  cleaned = cleaned.replace(/[_\-]{2,}/g, ' ');
+  cleaned = cleaned.replace(/[_-]{2,}/g, ' ');
   cleaned = cleaned.replace(/\b\d{1,3}\b/g, ' ');
   cleaned = cleaned.replace(/\b[A-Z]{2}\d{2,}\b/g, ' ');
   cleaned = cleaned.replace(/\b\d{2,}[A-Z]{2,}\b/g, ' ');
@@ -306,13 +306,9 @@ export const categorizeTransaction = (description: string): string | undefined =
   return undefined;
 };
 
-// Scan text for 4-digit years and return the most common one, or null if none found.
-// Used to anchor MM/DD date inference to the statement's actual year.
 export const detectStatementYear = (text: string): number | null => {
   const currentYear = new Date().getFullYear();
   const counts: Record<number, number> = {};
-  // Exclude years that are part of decimal dollar amounts like "2027.34" (followed by ".")
-  // or thousands-separated amounts like "$2,027.00" (preceded by ",")
   const yearRe = /(?<![,\d])\b(20\d{2})\b(?![.\d])/g;
   let m;
   while ((m = yearRe.exec(text)) !== null) {
@@ -323,7 +319,6 @@ export const detectStatementYear = (text: string): number | null => {
   }
   const entries = Object.entries(counts);
   if (entries.length === 0) return null;
-  // Return the year with the most occurrences; break ties by picking the earlier year
   entries.sort((a, b) => b[1] - a[1] || parseInt(a[0]) - parseInt(b[0]));
   return parseInt(entries[0][0], 10);
 };
@@ -344,7 +339,34 @@ export const detectStatementYears = (text: string): number[] => {
   return entries.map(([yearStr]) => parseInt(yearStr, 10)).sort((a, b) => a - b);
 };
 
-export const parseDate = (dateStr: string, hintYears?: number[]): string => {
+export const detectStatementMonthRange = (text: string): { months: number[]; years: number[] } | null => {
+  const monthNames = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+  ];
+  const shortMonthNames = [
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+    'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+  ];
+  const lower = text.toLowerCase();
+  const foundMonths = new Set<number>();
+
+  for (let i = 0; i < monthNames.length; i++) {
+    if (lower.includes(monthNames[i]) || lower.includes(shortMonthNames[i])) {
+      foundMonths.add(i + 1);
+    }
+  }
+
+  const years = detectStatementYears(text);
+  if (foundMonths.size === 0 && years.length === 0) return null;
+
+  return {
+    months: [...foundMonths].sort((a, b) => a - b),
+    years,
+  };
+};
+
+export const parseDate = (dateStr: string, hintYears?: number[], allowedYearMonths?: Set<string>): string => {
   const trimmed = dateStr.trim().replace(/^"|"$/g, '');
   const currentYear = new Date().getFullYear();
 
@@ -368,8 +390,8 @@ export const parseDate = (dateStr: string, hintYears?: number[]): string => {
     const [m, d, y] = trimmed.split('-');
     return `${safeYear(parseInt(y, 10))}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
-  if (/^\d{1,2}[\/\-]\d{1,2}$/.test(trimmed)) {
-    const [m, d] = trimmed.split(/[\/\-]/);
+  if (/^\d{1,2}[/-]\d{1,2}$/.test(trimmed)) {
+    const [m, d] = trimmed.split(/[/-]/);
     const monthNum = parseInt(m, 10);
     const dayNum = parseInt(d, 10);
     if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
@@ -377,19 +399,43 @@ export const parseDate = (dateStr: string, hintYears?: number[]): string => {
       return new Date().toISOString().split('T')[0];
     }
 
+    const mm = m.padStart(2, '0');
+    const dd = d.padStart(2, '0');
+
     if (hintYears && hintYears.length > 0) {
       const minYear = Math.min(...hintYears);
       const maxYear = Math.max(...hintYears);
 
+      if (allowedYearMonths && allowedYearMonths.size > 0) {
+        for (const yr of hintYears) {
+          const candidate = `${yr}-${mm}`;
+          if (allowedYearMonths.has(candidate)) {
+            console.log('parseDate: MM/DD matched allowed year-month', trimmed, '->', yr);
+            return `${yr}-${mm}-${dd}`;
+          }
+        }
+        const allYearsSorted = [...hintYears].sort((a, b) => a - b);
+        for (const yr of allYearsSorted) {
+          for (const allowed of allowedYearMonths) {
+            const [aY, aM] = allowed.split('-').map(Number);
+            const diff = Math.abs((yr * 12 + monthNum) - (aY * 12 + aM));
+            if (diff <= 1) {
+              console.log('parseDate: MM/DD near allowed month', trimmed, '->', yr);
+              return `${yr}-${mm}-${dd}`;
+            }
+          }
+        }
+      }
+
       if (hintYears.length >= 2 && maxYear - minYear === 1) {
         const chosenYear = monthNum >= 7 ? minYear : maxYear;
         console.log('parseDate: MM/DD cross-year', trimmed, '-> year', chosenYear, 'hintYears:', hintYears);
-        return `${chosenYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        return `${chosenYear}-${mm}-${dd}`;
       }
 
       if (minYear === maxYear) {
         console.log('parseDate: MM/DD single-year', trimmed, '-> year', minYear, 'hintYears:', hintYears);
-        return `${minYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        return `${minYear}-${mm}-${dd}`;
       }
     }
 
@@ -412,7 +458,7 @@ export const parseDate = (dateStr: string, hintYears?: number[]): string => {
     let bestDiff = Infinity;
     for (const yr of candidateSet) {
       if (yr < 2000 || yr > currentYear + 1) continue;
-      const candidate = new Date(`${yr}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
+      const candidate = new Date(`${yr}-${mm}-${dd}T00:00:00`);
       if (isNaN(candidate.getTime())) continue;
       const diffMs = candidate.getTime() - todayMs;
       if (diffMs > SIXTY_DAYS) continue;
@@ -423,7 +469,7 @@ export const parseDate = (dateStr: string, hintYears?: number[]): string => {
       }
     }
     console.log('parseDate: MM/DD', trimmed, '-> year', bestYear, 'hintYears:', hintYears);
-    return `${bestYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    return `${bestYear}-${mm}-${dd}`;
   }
   if (/^[A-Za-z]+ \d{1,2}$/.test(trimmed)) {
     const yearToUse = (hintYears && hintYears.length > 0) ? hintYears[0] : currentYear;
@@ -511,24 +557,85 @@ export interface ParsedTransaction {
   budgetId?: number;
 }
 
+const ymToNum = (ym: string): number => {
+  const [y, m] = ym.split('-').map(Number);
+  return y * 12 + m;
+};
+
+const findBestMonthCluster = (monthCounts: Record<string, number>): Set<string> => {
+  const months = Object.keys(monthCounts).sort();
+  console.log('findBestMonthCluster: all months with counts:', JSON.stringify(monthCounts));
+
+  if (months.length <= 2) {
+    console.log('findBestMonthCluster: <= 2 months, keeping all');
+    return new Set(months);
+  }
+
+  let bestCluster: string[] = [];
+  let bestCount = 0;
+
+  for (let i = 0; i < months.length; i++) {
+    for (let size = 1; size <= Math.min(3, months.length); size++) {
+      const cluster: string[] = [months[i]];
+
+      let lastAdded = months[i];
+      let j = i + 1;
+      while (cluster.length < size && j < months.length) {
+        const lastNum = ymToNum(lastAdded);
+        const nextNum = ymToNum(months[j]);
+        if (nextNum - lastNum <= 2) {
+          cluster.push(months[j]);
+          lastAdded = months[j];
+        }
+        j++;
+      }
+
+      if (cluster.length < size) continue;
+
+      const count = cluster.reduce((sum, ym) => sum + (monthCounts[ym] || 0), 0);
+      if (count > bestCount) {
+        bestCount = count;
+        bestCluster = [...cluster];
+      }
+    }
+  }
+
+  console.log('findBestMonthCluster: best cluster:', bestCluster, 'with', bestCount, 'transactions');
+  return new Set(bestCluster);
+};
+
 export const processCSVData = (
   text: string,
   budgets: Array<{ id: number; name: string }>,
 ): { imported: ParsedTransaction[]; skipped: number; errors: string[] } => {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  console.log('Total non-empty lines:', lines.length);
+  console.log('processCSVData: Total non-empty lines:', lines.length);
 
   if (lines.length < 2) {
     return { imported: [], skipped: 0, errors: ['File has no data rows.'] };
   }
 
   const headerFields = parseCSVLine(lines[0]);
-  console.log('Header fields:', headerFields);
+  console.log('processCSVData: Header fields:', headerFields);
   const cols = detectColumns(headerFields);
-  console.log('Detected columns:', JSON.stringify(cols));
+  console.log('processCSVData: Detected columns:', JSON.stringify(cols));
 
   const statementYears = detectStatementYears(text);
-  console.log('Detected statement years:', statementYears);
+  console.log('processCSVData: Detected statement years:', statementYears);
+
+  const monthRange = detectStatementMonthRange(text);
+  console.log('processCSVData: Detected month range:', JSON.stringify(monthRange));
+
+  let allowedYearMonths: Set<string> | undefined;
+  if (monthRange && monthRange.months.length > 0 && monthRange.years.length > 0) {
+    allowedYearMonths = new Set<string>();
+    for (const yr of monthRange.years) {
+      for (const mo of monthRange.months) {
+        allowedYearMonths.add(`${yr}-${String(mo).padStart(2, '0')}`);
+      }
+    }
+    console.log('processCSVData: Allowed year-months:', [...allowedYearMonths]);
+  }
 
   let imported: ParsedTransaction[] = [];
   let skipped = 0;
@@ -545,6 +652,8 @@ export const processCSVData = (
     const line = lines[i].trim();
     if (!line) continue;
 
+    if (line.startsWith('#')) continue;
+
     const parts = parseCSVLine(line);
     if (parts.length < 2) {
       skipped++;
@@ -557,8 +666,8 @@ export const processCSVData = (
 
     let amountNum = 0;
     if (cols.debitCol >= 0 || cols.creditCol >= 0) {
-      const debitStr = cols.debitCol >= 0 ? parts[cols.debitCol]?.replace(/[^0-9.\-]/g, '') : '';
-      const creditStr = cols.creditCol >= 0 ? parts[cols.creditCol]?.replace(/[^0-9.\-]/g, '') : '';
+      const debitStr = cols.debitCol >= 0 ? parts[cols.debitCol]?.replace(/[^0-9.\x2D]/g, '') : '';
+      const creditStr = cols.creditCol >= 0 ? parts[cols.creditCol]?.replace(/[^0-9.\x2D]/g, '') : '';
       const debitVal = parseFloat(debitStr || '0') || 0;
       const creditVal = parseFloat(creditStr || '0') || 0;
       if (creditVal > 0) {
@@ -569,7 +678,7 @@ export const processCSVData = (
         amountNum = debitVal;
       }
     } else if (cols.amountCol >= 0) {
-      const amountStr = parts[cols.amountCol]?.replace(/[^0-9.\-]/g, '') || '0';
+      const amountStr = parts[cols.amountCol]?.replace(/[^0-9.\x2D]/g, '') || '0';
       amountNum = parseFloat(amountStr);
     }
 
@@ -586,7 +695,7 @@ export const processCSVData = (
 
     const isExpense = amountNum < 0;
     const amount = Math.abs(amountNum);
-    const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined);
+    const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, allowedYearMonths);
 
     const cleanedName = cleanDescription(description);
     const category = categorizeTransaction(description) || categorizeTransaction(cleanedName);
@@ -605,41 +714,31 @@ export const processCSVData = (
     });
   }
 
-  if (imported.length > 3 && statementYears.length > 0) {
+  console.log('processCSVData: pre-filter import count:', imported.length);
+
+  if (imported.length > 3) {
     const monthCounts: Record<string, number> = {};
     for (const t of imported) {
       const ym = t.date.substring(0, 7);
       monthCounts[ym] = (monthCounts[ym] ?? 0) + 1;
     }
 
-    const significantMonths = new Set<string>();
-    for (const [ym, count] of Object.entries(monthCounts)) {
-      if (count >= 2) {
-        significantMonths.add(ym);
-      }
-    }
+    const uniqueMonths = Object.keys(monthCounts);
+    console.log('processCSVData: unique months:', uniqueMonths.length, uniqueMonths.sort());
 
-    if (significantMonths.size > 0 && significantMonths.size < Object.keys(monthCounts).length) {
-      const validMonths = new Set<string>();
-      for (const ym of significantMonths) {
-        validMonths.add(ym);
-        const [y, mo] = ym.split('-').map(Number);
-        const prevM = mo === 1 ? 12 : mo - 1;
-        const prevY = mo === 1 ? y - 1 : y;
-        const nextM = mo === 12 ? 1 : mo + 1;
-        const nextY = mo === 12 ? y + 1 : y;
-        validMonths.add(`${prevY}-${String(prevM).padStart(2, '0')}`);
-        validMonths.add(`${nextY}-${String(nextM).padStart(2, '0')}`);
-      }
+    if (uniqueMonths.length > 2) {
+      const bestCluster = findBestMonthCluster(monthCounts);
 
-      const beforeCount = imported.length;
-      imported = imported.filter(t => validMonths.has(t.date.substring(0, 7)));
-      const outlierCount = beforeCount - imported.length;
-      if (outlierCount > 0) {
-        console.log('processCSVData: filtered', outlierCount, 'outlier transactions outside statement period');
-        console.log('processCSVData: valid months:', [...validMonths].sort());
-        skipped += outlierCount;
-        errors.push(`${outlierCount} transaction(s) with dates outside statement period were skipped`);
+      if (bestCluster.size > 0 && bestCluster.size < uniqueMonths.length) {
+        const beforeCount = imported.length;
+        imported = imported.filter(t => bestCluster.has(t.date.substring(0, 7)));
+        const outlierCount = beforeCount - imported.length;
+        if (outlierCount > 0) {
+          console.log('processCSVData: REMOVED', outlierCount, 'outlier transactions outside best cluster');
+          console.log('processCSVData: kept months:', [...bestCluster].sort());
+          skipped += outlierCount;
+          errors.push(`${outlierCount} transaction(s) with dates outside statement period were skipped`);
+        }
       }
     }
   }

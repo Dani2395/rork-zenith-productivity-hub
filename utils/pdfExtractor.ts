@@ -133,7 +133,7 @@ const decodeReadableText = (raw: string): string => {
 };
 
 const hasValidLeadingDate = (line: string): boolean => {
-  const match = line.match(/^\s{0,5}(\d{1,2})[\/\-](\d{1,2})([\/\-]\d{2,4})?\b/);
+  const match = line.match(/^\s{0,5}(\d{1,2})[/-](\d{1,2})([/-]\d{2,4})?\b/);
   if (!match) return false;
   const month = parseInt(match[1], 10);
   const day = parseInt(match[2], 10);
@@ -141,7 +141,7 @@ const hasValidLeadingDate = (line: string): boolean => {
 };
 
 const extractLeadingDate = (line: string): string | null => {
-  const match = line.match(/^\s{0,5}((\d{1,2})[\/\-](\d{1,2})([\/\-]\d{2,4})?)\b/);
+  const match = line.match(/^\s{0,5}((\d{1,2})[/-](\d{1,2})([/-]\d{2,4})?)\b/);
   if (!match) return null;
   const month = parseInt(match[2], 10);
   const day = parseInt(match[3], 10);
@@ -181,13 +181,7 @@ const mergeFragmentedLines = (lines: string[]): string[] => {
   return merged;
 };
 
-const findTransactionPatterns = (text: string): string[] => {
-  const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  const lines = mergeFragmentedLines(rawLines);
-  const transactionLines: string[] = [];
-
-  const amountPattern = /\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/;
-
+const isLikelyTransactionLine = (line: string): boolean => {
   const skipPatterns = [
     /\b(balance|opening|closing|beginning|ending|previous|statement|summary|page|total|account\s*(number|no|#)?)\b/i,
     /\b(routing|transit|acct|member)\s*(number|no|#|id)?\s*:?\s*\d/i,
@@ -195,12 +189,36 @@ const findTransactionPatterns = (text: string): string[] => {
     /\b(continued|page\s+\d|of\s+\d)/i,
     /^\s*page\s/i,
     /\bpage\s+\d+\s*(of|\/)/i,
+    /^\s*\d{1,2}[/-]\d{1,2}\s*$/,
+    /^\s*\d{1,2}[/-]\d{1,2}\s+\d{1,2}[/-]\d{1,2}\s*$/,
+    /\b(annual|percentage|yield|rate|apy|apr)\b/i,
+    /\b(fees?|service\s*charge|minimum|daily)\b.*\b(balance|ledger)\b/i,
+    /\b(overdraft|nsf|returned|insufficient)\b/i,
   ];
+
+  for (const pattern of skipPatterns) {
+    if (pattern.test(line)) return false;
+  }
+
+  if (line.length < 10) return false;
+
+  const letterCount = (line.match(/[a-zA-Z]/g) || []).length;
+  if (letterCount < 3) return false;
+
+  return true;
+};
+
+const findTransactionPatterns = (text: string): string[] => {
+  const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const lines = mergeFragmentedLines(rawLines);
+  const transactionLines: string[] = [];
+
+  const amountPattern = /\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (skipPatterns.some(p => p.test(line))) continue;
+    if (!isLikelyTransactionLine(line)) continue;
 
     if (hasValidLeadingDate(line) && amountPattern.test(line)) {
       transactionLines.push(line);
@@ -210,21 +228,27 @@ const findTransactionPatterns = (text: string): string[] => {
     if (hasValidLeadingDate(line) && i + 1 < lines.length) {
       const nextLine = lines[i + 1];
       if (amountPattern.test(nextLine) && !hasValidLeadingDate(nextLine)) {
-        transactionLines.push(line + ' ' + nextLine);
-        i++;
-        continue;
+        const combined = line + ' ' + nextLine;
+        if (isLikelyTransactionLine(combined)) {
+          transactionLines.push(combined);
+          i++;
+          continue;
+        }
       }
       if (i + 2 < lines.length) {
         const lineAfter = lines[i + 2];
         if (amountPattern.test(lineAfter) && !hasValidLeadingDate(nextLine)) {
-          transactionLines.push(line + ' ' + nextLine + ' ' + lineAfter);
-          i += 2;
-          continue;
+          const combined = line + ' ' + nextLine + ' ' + lineAfter;
+          if (isLikelyTransactionLine(combined)) {
+            transactionLines.push(combined);
+            i += 2;
+            continue;
+          }
         }
       }
       if (i + 3 < lines.length) {
         const combined = line + ' ' + nextLine + ' ' + lines[i + 2] + ' ' + lines[i + 3];
-        if (amountPattern.test(combined)) {
+        if (amountPattern.test(combined) && isLikelyTransactionLine(combined)) {
           transactionLines.push(combined);
           i += 3;
           continue;
@@ -233,6 +257,7 @@ const findTransactionPatterns = (text: string): string[] => {
     }
   }
 
+  console.log('findTransactionPatterns: found', transactionLines.length, 'lines from', lines.length, 'total');
   return transactionLines;
 };
 
@@ -240,7 +265,7 @@ const buildCSVFromTransactions = (transactionLines: string[], statementYears?: n
   const csvRows: string[] = statementYears && statementYears.length > 0
     ? [`# Statement Years: ${statementYears.join(' ')}`, 'Date,Description,Amount']
     : ['Date,Description,Amount'];
-  const datePatternBroad = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
+  const datePatternBroad = /\b(\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?)\b/;
   const amountPattern = /(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
 
   for (const line of transactionLines) {
@@ -252,7 +277,7 @@ const buildCSVFromTransactions = (transactionLines: string[], statementYears?: n
     const amounts: string[] = [];
     let amtMatch;
     while ((amtMatch = amountPattern.exec(line)) !== null) {
-      amounts.push(amtMatch[1].replace(/[\$,\s]/g, ''));
+      amounts.push(amtMatch[1].replace(/[$,\s]/g, ''));
     }
     amountPattern.lastIndex = 0;
 
@@ -263,15 +288,20 @@ const buildCSVFromTransactions = (transactionLines: string[], statementYears?: n
     desc = desc.replace(/(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})/g, '').trim();
     desc = desc.replace(/\s{2,}/g, ' ').trim();
 
-    // Use the FIRST amount (the transaction amount), not the last (which is typically the running balance)
     const amount = amounts[0];
 
     if (amount) {
+      const amountNum = parseFloat(amount);
+      if (isNaN(amountNum) || Math.abs(amountNum) > 999999) continue;
+
       const finalDesc = desc || 'Transaction';
+      if (finalDesc.length < 2) continue;
+
       csvRows.push(`${date},"${finalDesc}",${amount}`);
     }
   }
 
+  console.log('buildCSVFromTransactions: built', csvRows.length - 1, 'CSV rows from', transactionLines.length, 'lines');
   return csvRows.join('\n');
 };
 
@@ -321,8 +351,6 @@ export const extractTextFromPDF = (binaryString: string): string => {
     const fullText = uniqueLines.join('\n');
     console.log('PDF extractor: full extracted text preview:', fullText.substring(0, 500));
 
-    // Detect statement year from the full extracted text (before building CSV) so we
-    // don't lose year context when the CSV is later parsed by processCSVData.
     let detectedYears = detectStatementYears(fullText);
     if (detectedYears.length === 0) detectedYears = detectStatementYears(readableText);
     console.log('PDF extractor: detected statement years:', detectedYears);
@@ -350,7 +378,7 @@ export const extractTextFromPDF = (binaryString: string): string => {
   console.log('PDF extractor: no structured text found, returning raw readable lines');
   const readableLines = readableText.split('\n')
     .map(l => l.trim())
-    .filter(l => l.length > 3 && /[a-zA-Z]/.test(l) && !/^[%<\/]/.test(l));
+    .filter(l => l.length > 3 && /[a-zA-Z]/.test(l) && !/^[%</]/.test(l));
 
   return readableLines.join('\n');
 };

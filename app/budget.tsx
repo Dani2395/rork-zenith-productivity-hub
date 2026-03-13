@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
-import { processCSVData, cleanDescription, categorizeTransaction } from '@/utils/budgetHelpers';
+import { processCSVData } from '@/utils/budgetHelpers';
 import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
 
 export default function BudgetScreen() {
@@ -89,7 +89,7 @@ export default function BudgetScreen() {
 
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const [_isUploading, setIsUploading] = useState(false);
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [monthDetailVisible, setMonthDetailVisible] = useState(false);
@@ -101,11 +101,11 @@ export default function BudgetScreen() {
   });
   const [expandedArchiveYears, setExpandedArchiveYears] = useState<Set<number>>(new Set());
 
-  const MONTH_NAMES = [
+  const MONTH_NAMES = useMemo(() => [
     'January','February','March','April','May','June',
     'July','August','September','October','November','December',
-  ];
-  const getMonthKey = (year: number, month0: number) => `${MONTH_NAMES[month0]} ${year}`;
+  ], []);
+  const getMonthKey = useCallback((year: number, month0: number) => `${MONTH_NAMES[month0]} ${year}`, [MONTH_NAMES]);
 
   const now = new Date();
   const thisMonth = getMonthKey(now.getFullYear(), now.getMonth());
@@ -151,7 +151,7 @@ export default function BudgetScreen() {
         const dateB = new Date(`${bMonth} 1, ${bYear}`).getTime();
         return dateB - dateA;
       });
-  }, [transactions]);
+  }, [transactions, getMonthKey]);
 
   const thisMonthData = monthsWithData.find(m => m.key === thisMonth) ?? null;
   const activeMonthLabel = thisMonth;
@@ -245,7 +245,7 @@ export default function BudgetScreen() {
       });
       return { year, isCurrent, quarters };
     });
-  }, [transactions]);
+  }, [transactions, getMonthKey]);
 
   const toggleQuarter = (key: string) => {
     setExpandedQuarters(prev => {
@@ -323,7 +323,7 @@ export default function BudgetScreen() {
       addBudget(budgetData);
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setBudgetModalVisible(false);
   };
 
@@ -335,7 +335,7 @@ export default function BudgetScreen() {
         style: 'destructive',
         onPress: () => {
           deleteBudget(id);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
       },
     ]);
@@ -377,7 +377,7 @@ export default function BudgetScreen() {
       addTransaction(transactionData);
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setTransactionModalVisible(false);
   };
 
@@ -389,7 +389,7 @@ export default function BudgetScreen() {
         style: 'destructive',
         onPress: () => {
           deleteTransaction(id);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
       },
     ]);
@@ -431,7 +431,7 @@ export default function BudgetScreen() {
       addDebt(debtData);
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setDebtModalVisible(false);
   };
 
@@ -443,7 +443,7 @@ export default function BudgetScreen() {
         style: 'destructive',
         onPress: () => {
           deleteDebt(id);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
       },
     ]);
@@ -485,7 +485,7 @@ export default function BudgetScreen() {
       addSavings(savingsData);
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSavingsModalVisible(false);
   };
 
@@ -497,7 +497,7 @@ export default function BudgetScreen() {
         style: 'destructive',
         onPress: () => {
           deleteSavings(id);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
       },
     ]);
@@ -511,7 +511,7 @@ export default function BudgetScreen() {
     if (skipped > 0) parts.push(`${skipped} row${skipped !== 1 ? 's' : ''} skipped`);
     setUploadStatus(parts.join(' · '));
     setIsUploading(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (skipped > 0 && errors.length > 0) {
       setTimeout(() => {
         Alert.alert(
@@ -530,10 +530,20 @@ export default function BudgetScreen() {
   const processCSVText = (text: string) => {
     try {
       setUploadStatus('Processing transactions...');
-      console.log('CSV text length:', text.length);
+      console.log('processCSVText: CSV text length:', text.length);
+      console.log('processCSVText: CSV preview:', text.substring(0, 500));
 
       const result = processCSVData(text, budgets);
-      console.log('Import results:', { imported: result.imported.length, skipped: result.skipped, errors: result.errors });
+      console.log('processCSVText: Import results:', { imported: result.imported.length, skipped: result.skipped, errors: result.errors });
+
+      if (result.imported.length > 0) {
+        const months = new Set(result.imported.map(t => t.date.substring(0, 7)));
+        console.log('processCSVText: Imported months:', [...months].sort());
+        for (const m of [...months].sort()) {
+          const count = result.imported.filter(t => t.date.startsWith(m)).length;
+          console.log(`  ${m}: ${count} transactions`);
+        }
+      }
 
       if (result.errors.length > 0 && result.imported.length === 0) {
         setUploadStatus(result.errors[0]);
@@ -550,9 +560,6 @@ export default function BudgetScreen() {
         return;
       }
 
-      // Deduplicate: skip any transaction that matches an existing one by date + amount + type.
-      // This lets you safely import each month's statement without creating duplicates,
-      // even if you re-import the same file again.
       const existingKeys = new Set(
         transactions.map(t => `${t.date}|${t.amount}|${t.type}`)
       );
@@ -560,7 +567,7 @@ export default function BudgetScreen() {
         t => !existingKeys.has(`${t.date}|${t.amount}|${t.type}`)
       );
       const dupCount = result.imported.length - newTransactions.length;
-      console.log('Import dedup: new =', newTransactions.length, ', duplicates skipped =', dupCount);
+      console.log('processCSVText: dedup: new =', newTransactions.length, ', duplicates skipped =', dupCount);
 
       for (const t of newTransactions) {
         addTransaction(t);
@@ -889,7 +896,7 @@ export default function BudgetScreen() {
                     style: 'destructive',
                     onPress: () => {
                       clearAllTransactions();
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     },
                   },
                 ]
