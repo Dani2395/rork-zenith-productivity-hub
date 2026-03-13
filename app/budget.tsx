@@ -153,16 +153,16 @@ export default function BudgetScreen() {
       });
   }, [transactions]);
 
-  // Derive current-month totals — prefer current calendar month, fall back to most recent month with data
-  const thisMonthData = monthsWithData.find(m => m.key === thisMonth) ?? monthsWithData[0] ?? null;
-  const activeMonthLabel = thisMonthData?.key ?? thisMonth;
+  const thisMonthData = monthsWithData.find(m => m.key === thisMonth) ?? null;
+  const activeMonthLabel = thisMonth;
   const totalIncome = thisMonthData?.income ?? 0;
   const totalExpenses = thisMonthData?.expenses ?? 0;
 
   // Compute budget spent from the active month's transactions only (not the stored cumulative value)
   const monthlySpentByBudgetId = useMemo(() => {
     const map: Record<number, number> = {};
-    for (const t of (thisMonthData?.transactions ?? [])) {
+    const currentMonthTransactions = thisMonthData?.transactions ?? [];
+    for (const t of currentMonthTransactions) {
       if (t.type === 'expense' && t.budgetId != null) {
         map[t.budgetId] = (map[t.budgetId] ?? 0) + t.amount;
       }
