@@ -222,9 +222,11 @@ const findTransactionPatterns = (text: string): string[] => {
 const buildCSVFromTransactions = (transactionLines: string[], statementYear?: number): string => {
   // If we detected a year from the PDF, embed it as a comment so detectStatementYear
   // in processCSVData can find the correct year (instead of guessing from balance amounts).
-  const csvRows: string[] = statementYear
-    ? [`# Statement Year: ${statementYear}`, 'Date,Description,Amount']
-    : ['Date,Description,Amount'];
+  // Header MUST be first so detectColumns correctly identifies date/desc/amount columns.
+  // The year comment goes AFTER the header; it has only 1 field so processCSVData skips it
+  // automatically (parts.length < 2), but detectStatementYear still finds the year in it.
+  const csvRows: string[] = ['Date,Description,Amount'];
+  if (statementYear) csvRows.push(`# Statement Year: ${statementYear}`);
   const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
   const amountPattern = /(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
 
