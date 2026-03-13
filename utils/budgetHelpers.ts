@@ -397,10 +397,25 @@ export const inferYearMonthMap = (rawMonthNums: number[], hintYears: number[]): 
 
   if (hintYears.length === 1) {
     const yr = hintYears[0];
-    for (const m of sortedMonths) {
-      map.set(m, yr);
+    if (isCrossYear) {
+      const currentYear = new Date().getFullYear();
+      if (yr + 1 <= currentYear + 1) {
+        for (const m of sortedMonths) {
+          map.set(m, m >= 7 ? yr : yr + 1);
+        }
+        console.log('inferYearMonthMap: single hintYear cross-year, high months ->', yr, 'low months ->', yr + 1, Object.fromEntries(map));
+      } else {
+        for (const m of sortedMonths) {
+          map.set(m, m >= 7 ? yr - 1 : yr);
+        }
+        console.log('inferYearMonthMap: single hintYear cross-year (yr is later), high months ->', yr - 1, 'low months ->', yr, Object.fromEntries(map));
+      }
+    } else {
+      for (const m of sortedMonths) {
+        map.set(m, yr);
+      }
+      console.log('inferYearMonthMap: single hintYear', yr, '->', Object.fromEntries(map));
     }
-    console.log('inferYearMonthMap: single hintYear', yr, '->', Object.fromEntries(map));
     return map;
   }
 
