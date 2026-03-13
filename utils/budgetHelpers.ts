@@ -366,7 +366,63 @@ export const detectStatementMonthRange = (text: string): { months: number[]; yea
   };
 };
 
-export const parseDate = (dateStr: string, hintYears?: number[], allowedYearMonths?: Set<string>): string => {
+export const inferYearMonthMap = (rawMonthNums: number[], hintYears: number[]): Map<number, number> => {
+  const map = new Map<number, number>();
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const sortedMonths = [...new Set(rawMonthNums)].sort((a, b) => a - b);
+
+  if (sortedMonths.length === 0) return map;
+
+  const hasHighMonths = sortedMonths.some(m => m >= 10);
+  const hasLowMonths = sortedMonths.some(m => m <= 3);
+  const isCrossYear = hasHighMonths && hasLowMonths;
+
+  if (hintYears.length >= 2) {
+    const minYear = Math.min(...hintYears);
+    const maxYear = Math.max(...hintYears);
+    if (maxYear - minYear === 1 && isCrossYear) {
+      for (const m of sortedMonths) {
+        map.set(m, m >= 7 ? minYear : maxYear);
+      }
+      console.log('inferYearMonthMap: cross-year with hintYears', minYear, maxYear, '->', Object.fromEntries(map));
+      return map;
+    }
+    for (const m of sortedMonths) {
+      map.set(m, m >= 7 ? minYear : maxYear);
+    }
+    console.log('inferYearMonthMap: multi-year hintYears', hintYears, '->', Object.fromEntries(map));
+    return map;
+  }
+
+  if (hintYears.length === 1) {
+    const yr = hintYears[0];
+    for (const m of sortedMonths) {
+      map.set(m, yr);
+    }
+    console.log('inferYearMonthMap: single hintYear', yr, '->', Object.fromEntries(map));
+    return map;
+  }
+
+  if (isCrossYear) {
+    const lateYear = currentMonth <= 6 ? currentYear - 1 : currentYear;
+    const earlyYear = lateYear + 1;
+    for (const m of sortedMonths) {
+      map.set(m, m >= 7 ? lateYear : earlyYear);
+    }
+    console.log('inferYearMonthMap: cross-year inferred', lateYear, earlyYear, '->', Object.fromEntries(map));
+    return map;
+  }
+
+  const bestYear = sortedMonths.every(m => m > currentMonth) ? currentYear - 1 : currentYear;
+  for (const m of sortedMonths) {
+    map.set(m, bestYear);
+  }
+  console.log('inferYearMonthMap: same-year inferred', bestYear, '->', Object.fromEntries(map));
+  return map;
+};
+
+export const parseDate = (dateStr: string, hintYears?: number[], yearMonthMap?: Map<number, number>): string => {
   const trimmed = dateStr.trim().replace(/^"|"$/g, '');
   const currentYear = new Date().getFullYear();
 
@@ -402,74 +458,28 @@ export const parseDate = (dateStr: string, hintYears?: number[], allowedYearMont
     const mm = m.padStart(2, '0');
     const dd = d.padStart(2, '0');
 
+    if (yearMonthMap && yearMonthMap.has(monthNum)) {
+      const yr = yearMonthMap.get(monthNum)!;
+      console.log('parseDate: MM/DD mapped', trimmed, '-> year', yr);
+      return `${yr}-${mm}-${dd}`;
+    }
+
     if (hintYears && hintYears.length > 0) {
       const minYear = Math.min(...hintYears);
       const maxYear = Math.max(...hintYears);
 
-      if (allowedYearMonths && allowedYearMonths.size > 0) {
-        for (const yr of hintYears) {
-          const candidate = `${yr}-${mm}`;
-          if (allowedYearMonths.has(candidate)) {
-            console.log('parseDate: MM/DD matched allowed year-month', trimmed, '->', yr);
-            return `${yr}-${mm}-${dd}`;
-          }
-        }
-        const allYearsSorted = [...hintYears].sort((a, b) => a - b);
-        for (const yr of allYearsSorted) {
-          for (const allowed of allowedYearMonths) {
-            const [aY, aM] = allowed.split('-').map(Number);
-            const diff = Math.abs((yr * 12 + monthNum) - (aY * 12 + aM));
-            if (diff <= 1) {
-              console.log('parseDate: MM/DD near allowed month', trimmed, '->', yr);
-              return `${yr}-${mm}-${dd}`;
-            }
-          }
-        }
-      }
-
       if (hintYears.length >= 2 && maxYear - minYear === 1) {
         const chosenYear = monthNum >= 7 ? minYear : maxYear;
-        console.log('parseDate: MM/DD cross-year', trimmed, '-> year', chosenYear, 'hintYears:', hintYears);
+        console.log('parseDate: MM/DD cross-year fallback', trimmed, '-> year', chosenYear);
         return `${chosenYear}-${mm}-${dd}`;
       }
 
-      if (minYear === maxYear) {
-        console.log('parseDate: MM/DD single-year', trimmed, '-> year', minYear, 'hintYears:', hintYears);
-        return `${minYear}-${mm}-${dd}`;
-      }
+      console.log('parseDate: MM/DD hintYear fallback', trimmed, '-> year', minYear);
+      return `${minYear}-${mm}-${dd}`;
     }
 
-    const today = new Date();
-    const todayMs = today.getTime();
-    const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
-    const candidateSet = new Set<number>();
-    if (hintYears && hintYears.length > 0) {
-      for (const y of hintYears) {
-        candidateSet.add(y - 1);
-        candidateSet.add(y);
-        candidateSet.add(y + 1);
-      }
-    } else {
-      candidateSet.add(currentYear - 1);
-      candidateSet.add(currentYear);
-      candidateSet.add(currentYear + 1);
-    }
-    let bestYear = currentYear;
-    let bestDiff = Infinity;
-    for (const yr of candidateSet) {
-      if (yr < 2000 || yr > currentYear + 1) continue;
-      const candidate = new Date(`${yr}-${mm}-${dd}T00:00:00`);
-      if (isNaN(candidate.getTime())) continue;
-      const diffMs = candidate.getTime() - todayMs;
-      if (diffMs > SIXTY_DAYS) continue;
-      const absDiff = Math.abs(diffMs);
-      if (absDiff < bestDiff) {
-        bestDiff = absDiff;
-        bestYear = yr;
-      }
-    }
-    console.log('parseDate: MM/DD', trimmed, '-> year', bestYear, 'hintYears:', hintYears);
-    return `${bestYear}-${mm}-${dd}`;
+    console.log('parseDate: MM/DD no hints, using currentYear', trimmed, '->', currentYear);
+    return `${currentYear}-${mm}-${dd}`;
   }
   if (/^[A-Za-z]+ \d{1,2}$/.test(trimmed)) {
     const yearToUse = (hintYears && hintYears.length > 0) ? hintYears[0] : currentYear;
@@ -626,36 +636,25 @@ export const processCSVData = (
   const monthRange = detectStatementMonthRange(text);
   console.log('processCSVData: Detected month range:', JSON.stringify(monthRange));
 
-  let allowedYearMonths: Set<string> | undefined;
-  if (monthRange && monthRange.months.length > 0 && monthRange.years.length > 0) {
-    allowedYearMonths = new Set<string>();
-    const sortedYears = [...monthRange.years].sort((a, b) => a - b);
-    const sortedMonths = [...monthRange.months].sort((a, b) => a - b);
-    const isCrossYear = sortedYears.length >= 2 && sortedYears[sortedYears.length - 1] - sortedYears[0] === 1;
-    const hasHighMonths = sortedMonths.some(m => m >= 10);
-    const hasLowMonths = sortedMonths.some(m => m <= 3);
-    const isCrossYearStatement = isCrossYear && hasHighMonths && hasLowMonths;
 
-    if (isCrossYearStatement) {
-      const minYear = sortedYears[0];
-      const maxYear = sortedYears[sortedYears.length - 1];
-      for (const mo of sortedMonths) {
-        if (mo >= 7) {
-          allowedYearMonths.add(`${minYear}-${String(mo).padStart(2, '0')}`);
-        } else {
-          allowedYearMonths.add(`${maxYear}-${String(mo).padStart(2, '0')}`);
-        }
-      }
-      console.log('processCSVData: Cross-year statement detected, allowed year-months:', [...allowedYearMonths]);
-    } else {
-      for (const yr of monthRange.years) {
-        for (const mo of monthRange.months) {
-          allowedYearMonths.add(`${yr}-${String(mo).padStart(2, '0')}`);
-        }
-      }
-      console.log('processCSVData: Allowed year-months:', [...allowedYearMonths]);
+
+  const rawMonthNums: number[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('#')) continue;
+    const parts = parseCSVLine(line);
+    const dateStr = parts[cols.dateCol]?.replace(/^"|"$/g, '').trim();
+    if (!dateStr) continue;
+    const dateMatch = dateStr.match(/^(\d{1,2})[/-]/);
+    if (dateMatch) {
+      const m = parseInt(dateMatch[1], 10);
+      if (m >= 1 && m <= 12) rawMonthNums.push(m);
     }
   }
+  console.log('processCSVData: raw month numbers from dates:', [...new Set(rawMonthNums)].sort((a, b) => a - b));
+
+  const yearMonthMap = inferYearMonthMap(rawMonthNums, statementYears);
+  console.log('processCSVData: yearMonthMap:', Object.fromEntries(yearMonthMap));
 
   let imported: ParsedTransaction[] = [];
   let skipped = 0;
@@ -715,7 +714,7 @@ export const processCSVData = (
 
     const isExpense = amountNum < 0;
     const amount = Math.abs(amountNum);
-    const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, allowedYearMonths);
+    const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
 
     const cleanedName = cleanDescription(description);
     const category = categorizeTransaction(description) || categorizeTransaction(cleanedName);
