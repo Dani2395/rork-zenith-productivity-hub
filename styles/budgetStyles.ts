@@ -113,6 +113,7 @@ export default StyleSheet.create({
   monthCardRow: { flexDirection: 'row' as const, justifyContent: 'space-between', marginBottom: 4 },
   monthCardLabel: { fontSize: 11, color: Colors.textDim },
   monthCardValue: { fontSize: 11, fontWeight: '600' as const },
+  monthCardEmpty: { opacity: 0.4, borderStyle: 'dashed' as const },
 
   // Quarterly / archive styles
   yearLabel: { fontSize: 15, fontWeight: '700' as const, color: Colors.text, marginBottom: 10, marginTop: 4 },
