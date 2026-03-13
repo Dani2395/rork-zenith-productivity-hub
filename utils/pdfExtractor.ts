@@ -1,4 +1,5 @@
 import pako from 'pako';
+import { detectStatementYear } from './budgetHelpers';
 
 const binaryStringToUint8Array = (binaryStr: string): Uint8Array => {
   const bytes = new Uint8Array(binaryStr.length);
@@ -218,8 +219,12 @@ const findTransactionPatterns = (text: string): string[] => {
   return transactionLines;
 };
 
-const buildCSVFromTransactions = (transactionLines: string[]): string => {
-  const csvRows: string[] = ['Date,Description,Amount'];
+const buildCSVFromTransactions = (transactionLines: string[], statementYear?: number): string => {
+  // If we detected a year from the PDF, embed it as a comment so detectStatementYear
+  // in processCSVData can find the correct year (instead of guessing from balance amounts).
+  const csvRows: string[] = statementYear
+    ? [`# Statement Year: ${statementYear}`, 'Date,Description,Amount']
+    : ['Date,Description,Amount'];
   const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?)\b/;
   const amountPattern = /(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
 
@@ -242,7 +247,8 @@ const buildCSVFromTransactions = (transactionLines: string[]): string => {
     desc = desc.replace(/(-?\$?\s*-?\d{1,3}(?:,\d{3})*\.\d{2})/g, '').trim();
     desc = desc.replace(/\s{2,}/g, ' ').trim();
 
-    const amount = amounts[amounts.length - 1];
+    // Use the FIRST amount (the transaction amount), not the last (which is typically the running balance)
+    const amount = amounts[0];
 
     if (amount) {
       const finalDesc = desc || 'Transaction';
@@ -299,11 +305,16 @@ export const extractTextFromPDF = (binaryString: string): string => {
     const fullText = uniqueLines.join('\n');
     console.log('PDF extractor: full extracted text preview:', fullText.substring(0, 500));
 
+    // Detect statement year from the full extracted text (before building CSV) so we
+    // don't lose year context when the CSV is later parsed by processCSVData.
+    const detectedYear = detectStatementYear(fullText) ?? detectStatementYear(readableText) ?? undefined;
+    console.log('PDF extractor: detected statement year:', detectedYear);
+
     const transactionLines = findTransactionPatterns(fullText);
     console.log('PDF extractor: found', transactionLines.length, 'transaction-like lines');
 
     if (transactionLines.length > 0) {
-      const csv = buildCSVFromTransactions(transactionLines);
+      const csv = buildCSVFromTransactions(transactionLines, detectedYear);
       const rowCount = csv.split('\n').length - 1;
       console.log('PDF extractor: built CSV with', rowCount, 'rows');
       return csv;
@@ -314,8 +325,9 @@ export const extractTextFromPDF = (binaryString: string): string => {
 
   const directLines = findTransactionPatterns(readableText);
   if (directLines.length > 0) {
+    const detectedYear = detectStatementYear(readableText) ?? undefined;
     console.log('PDF extractor: found', directLines.length, 'transactions from raw text');
-    return buildCSVFromTransactions(directLines);
+    return buildCSVFromTransactions(directLines, detectedYear);
   }
 
   console.log('PDF extractor: no structured text found, returning raw readable lines');

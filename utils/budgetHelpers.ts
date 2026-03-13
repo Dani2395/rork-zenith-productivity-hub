@@ -311,7 +311,9 @@ export const categorizeTransaction = (description: string): string | undefined =
 export const detectStatementYear = (text: string): number | null => {
   const currentYear = new Date().getFullYear();
   const counts: Record<number, number> = {};
-  const yearRe = /\b(20\d{2})\b/g;
+  // Exclude years that are part of decimal dollar amounts like "2027.34" (followed by ".")
+  // or thousands-separated amounts like "$2,027.00" (preceded by ",")
+  const yearRe = /(?<![,\d])\b(20\d{2})\b(?![.\d])/g;
   let m;
   while ((m = yearRe.exec(text)) !== null) {
     const y = parseInt(m[1], 10);
