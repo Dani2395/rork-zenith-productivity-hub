@@ -153,12 +153,13 @@ export default function BudgetScreen() {
       });
   }, [transactions]);
 
-  // Derive current-month totals from monthsWithData so corrupt-year remapping is consistent
-  const thisMonthData = monthsWithData.find(m => m.key === thisMonth);
+  // Derive current-month totals — prefer current calendar month, fall back to most recent month with data
+  const thisMonthData = monthsWithData.find(m => m.key === thisMonth) ?? monthsWithData[0] ?? null;
+  const activeMonthLabel = thisMonthData?.key ?? thisMonth;
   const totalIncome = thisMonthData?.income ?? 0;
   const totalExpenses = thisMonthData?.expenses ?? 0;
 
-  // Compute budget spent from current-month transactions only (not the stored cumulative value)
+  // Compute budget spent from the active month's transactions only (not the stored cumulative value)
   const monthlySpentByBudgetId = useMemo(() => {
     const map: Record<number, number> = {};
     for (const t of (thisMonthData?.transactions ?? [])) {
@@ -491,6 +492,28 @@ export default function BudgetScreen() {
 
 
 
+  const finishImport = (imported: number, skipped: number, dupCount: number, errors: string[]) => {
+    const parts: string[] = [`Imported ${imported} transaction${imported !== 1 ? 's' : ''}`];
+    if (dupCount > 0) parts.push(`${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped`);
+    if (skipped > 0) parts.push(`${skipped} row${skipped !== 1 ? 's' : ''} skipped`);
+    setUploadStatus(parts.join(' · '));
+    setIsUploading(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (skipped > 0 && errors.length > 0) {
+      setTimeout(() => {
+        Alert.alert(
+          `${skipped} Row${skipped !== 1 ? 's' : ''} Skipped`,
+          errors.join('\n\n'),
+          [{ text: 'OK' }]
+        );
+      }, 500);
+    }
+    setTimeout(() => {
+      setUploadModalVisible(false);
+      setUploadStatus('');
+    }, 2500);
+  };
+
   const processCSVText = (text: string) => {
     try {
       setUploadStatus('Processing transactions...');
@@ -505,10 +528,6 @@ export default function BudgetScreen() {
         return;
       }
 
-      for (const t of result.imported) {
-        addTransaction(t);
-      }
-
       if (result.imported.length === 0) {
         const hint = result.errors.length > 0 ? `\nDebug: ${result.errors.join(', ')}` : '';
         setUploadStatus(
@@ -518,25 +537,23 @@ export default function BudgetScreen() {
         return;
       }
 
-      const skipMsg = result.skipped > 0
-        ? ` (${result.skipped} row${result.skipped > 1 ? 's' : ''} skipped)`
-        : '';
-      setUploadStatus(`Imported ${result.imported.length} transactions${skipMsg}`);
-      setIsUploading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (result.skipped > 0 && result.errors.length > 0) {
-        setTimeout(() => {
-          Alert.alert(
-            `${result.skipped} Row${result.skipped > 1 ? 's' : ''} Skipped`,
-            result.errors.join('\n\n'),
-            [{ text: 'OK' }]
-          );
-        }, 500);
+      // Deduplicate: skip any transaction that matches an existing one by date + amount + type.
+      // This lets you safely import each month's statement without creating duplicates,
+      // even if you re-import the same file again.
+      const existingKeys = new Set(
+        transactions.map(t => `${t.date}|${t.amount}|${t.type}`)
+      );
+      const newTransactions = result.imported.filter(
+        t => !existingKeys.has(`${t.date}|${t.amount}|${t.type}`)
+      );
+      const dupCount = result.imported.length - newTransactions.length;
+      console.log('Import dedup: new =', newTransactions.length, ', duplicates skipped =', dupCount);
+
+      for (const t of newTransactions) {
+        addTransaction(t);
       }
-      setTimeout(() => {
-        setUploadModalVisible(false);
-        setUploadStatus('');
-      }, 2500);
+
+      finishImport(newTransactions.length, result.skipped, dupCount, result.errors);
     } catch (err) {
       console.log('processCSVText error:', err);
       setUploadStatus(`Error processing CSV: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -765,7 +782,7 @@ export default function BudgetScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>📊 {thisMonth} ✓</Text>
+          <Text style={styles.summaryTitle}>📊 {activeMonthLabel}</Text>
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
               <View style={styles.summaryIconContainer}>
