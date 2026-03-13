@@ -153,6 +153,7 @@ export default function BudgetScreen() {
       });
   }, [transactions]);
 
+  // Always show current calendar month — never auto-jump to an imported statement's month
   const thisMonthData = monthsWithData.find(m => m.key === thisMonth) ?? null;
   const activeMonthLabel = thisMonth;
   const totalIncome = thisMonthData?.income ?? 0;
@@ -1079,7 +1080,6 @@ export default function BudgetScreen() {
                     <View key={yearData.year}>
                       <Text style={styles.yearLabel}>{yearData.year} — Current Year</Text>
                       {yearData.quarters.map(quarter => {
-                        if (!quarter.hasData) return null;
                         const qKey = `${yearData.year}-Q${quarter.quarter}`;
                         const isExpanded = expandedQuarters.has(qKey);
                         return (
@@ -1098,6 +1098,9 @@ export default function BudgetScreen() {
                             </TouchableOpacity>
                             {isExpanded && (
                               <View style={styles.monthsGrid}>
+                                {quarter.months.length === 0 && (
+                                  <Text style={[styles.emptyText, { fontSize: 12, paddingVertical: 8 }]}>No statement data for this quarter</Text>
+                                )}
                                 {quarter.months.map((month, idx) => (
                                   <TouchableOpacity
                                     key={`${qKey}-${idx}`}
@@ -1150,7 +1153,7 @@ export default function BudgetScreen() {
                       </TouchableOpacity>
                       {isYearExpanded && (
                         <View style={{ paddingLeft: 8, marginBottom: 8 }}>
-                          {yearData.quarters.filter(q => q.hasData).map(quarter => {
+                          {yearData.quarters.map(quarter => {
                             const qKey = `${yearData.year}-Q${quarter.quarter}`;
                             const isQExpanded = expandedQuarters.has(qKey);
                             return (
@@ -1169,6 +1172,9 @@ export default function BudgetScreen() {
                                 </TouchableOpacity>
                                 {isQExpanded && (
                                   <View style={styles.monthsGrid}>
+                                    {quarter.months.length === 0 && (
+                                      <Text style={[styles.emptyText, { fontSize: 12, paddingVertical: 8 }]}>No statement data for this quarter</Text>
+                                    )}
                                     {quarter.months.map((month, idx) => (
                                       <TouchableOpacity
                                         key={`${qKey}-${idx}`}
