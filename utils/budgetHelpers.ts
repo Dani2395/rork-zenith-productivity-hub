@@ -319,7 +319,8 @@ export const detectStatementYear = (text: string): number | null => {
   }
   const entries = Object.entries(counts);
   if (entries.length === 0) return null;
-  entries.sort((a, b) => b[1] - a[1] || parseInt(a[0]) - parseInt(b[0]));
+  // Return the year with the most occurrences; break ties by picking the LATER year
+  entries.sort((a, b) => b[1] - a[1] || parseInt(b[0]) - parseInt(a[0]));
   return parseInt(entries[0][0], 10);
 };
 
