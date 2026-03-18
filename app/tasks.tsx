@@ -10,15 +10,16 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Edit3, Settings, Edit2 } from 'lucide-react-native';
+import { Plus, Trash2, Edit3, Settings, Edit2, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveTasksWidgetData } from '@/widgets/widgetTaskHandler';
-import { scheduleTasksDailySummary, scheduleTasksWeeklyDigest } from '@/utils/tasksNotifications';
+import { scheduleTasksDailySummary, scheduleTasksWeeklyDigest, cancelTasksDailySummary, cancelTasksWeeklyDigest } from '@/utils/tasksNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
 type FilterType = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
@@ -45,6 +46,9 @@ export default function TasksScreen() {
   const [newCategoryValue, setNewCategoryValue] = useState('');
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
+  const [dailySummaryEnabled, setDailySummaryEnabled] = useState(false);
+  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -242,6 +246,12 @@ export default function TasksScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>✅ Tasks</Text>
         <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setWidgetModalVisible(true)}
+          >
+            <Bell size={20} color={Colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.settingsButton}
             onPress={() => {
@@ -647,6 +657,72 @@ export default function TasksScreen() {
           </View>
         </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Widget & Notification Settings Modal */}
+      <Modal
+        visible={widgetModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setWidgetModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <Text style={styles.modalTitle}>📱 Widgets & Notifications</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20 }}>
+                  Add a "Tasks Today" widget: Long-press your Android home screen → Widgets → Zenith → Tasks Today. Shows today's task count, done count, overdue, and your next task.
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Task Summary</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>8 AM notification with today's tasks & overdue count</Text>
+                </View>
+                <Switch
+                  value={dailySummaryEnabled}
+                  onValueChange={async (v) => {
+                    setDailySummaryEnabled(v);
+                    const todayTasks = tasks.filter(t => !t.completed && t.date === today);
+                    const overdueTasks = tasks.filter(t => !t.completed && t.date && t.date < today);
+                    if (v) { await scheduleTasksDailySummary(todayTasks.length, overdueTasks.length); }
+                    else { await cancelTasksDailySummary(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={dailySummaryEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday recap of tasks completed vs total this week</Text>
+                </View>
+                <Switch
+                  value={weeklyDigestEnabled}
+                  onValueChange={async (v) => {
+                    setWeeklyDigestEnabled(v);
+                    const weekStart = new Date();
+                    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                    const weekStartStr = weekStart.toISOString().split('T')[0];
+                    const weekCompleted = tasks.filter(t => t.completed && t.completedDate && t.completedDate >= weekStartStr).length;
+                    const weekTotal = tasks.filter(t => t.date && t.date >= weekStartStr).length;
+                    if (v) { await scheduleTasksWeeklyDigest(weekCompleted, weekTotal); }
+                    else { await cancelTasksWeeklyDigest(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+            </ScrollView>
+            <TouchableOpacity
+              style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
+              onPress={() => setWidgetModalVisible(false)}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

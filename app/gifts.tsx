@@ -11,17 +11,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Plus, Trash2, ChevronRight, Check, ExternalLink, Lock, Unlock, Image as ImageIcon } from 'lucide-react-native';
+import { Plus, Trash2, ChevronRight, Check, ExternalLink, Lock, Unlock, Image as ImageIcon, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveGiftsWidgetData } from '@/widgets/widgetTaskHandler';
-import { fireUpcomingGiftAlert, scheduleGiftsMonthlyReminder, scheduleGiftsWeeklyDigest } from '@/utils/giftsNotifications';
+import { fireUpcomingGiftAlert, scheduleGiftsMonthlyReminder, cancelGiftsMonthlyReminder, scheduleGiftsWeeklyDigest, cancelAllGiftsNotifications } from '@/utils/giftsNotifications';
 
 const TAG_EMOJIS: Record<string, string> = {
   family: '👨‍👩‍👧',
@@ -113,6 +114,9 @@ export default function GiftsScreen() {
     }
   };
   const [personModalVisible, setPersonModalVisible] = useState(false);
+  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
+  const [monthlyReminderEnabled, setMonthlyReminderEnabled] = useState(false);
+  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [expandedPersons, setExpandedPersons] = useState<Set<number>>(new Set());
@@ -267,6 +271,12 @@ export default function GiftsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>🎁 Gift Ideas</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.lockButton}
+            onPress={() => setWidgetModalVisible(true)}
+          >
+            <Bell size={22} color={Colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.lockButton}
             onPress={toggleLock}
@@ -660,6 +670,66 @@ export default function GiftsScreen() {
                 <Text style={styles.setPinButtonText}>Change PIN</Text>
               </TouchableOpacity>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Widget & Notification Settings Modal */}
+      <Modal
+        visible={widgetModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setWidgetModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 16 }}>📱 Widgets & Notifications</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+                Add a "Gift Tracker" widget: Long-press your Android home screen → Widgets → Zenith → Gift Tracker. Shows people count, total gifts, purchased count, and next upcoming event.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Monthly Gift Reminder</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>1st of each month: reminder of unpurchased gifts</Text>
+                </View>
+                <Switch
+                  value={monthlyReminderEnabled}
+                  onValueChange={async (v) => {
+                    setMonthlyReminderEnabled(v);
+                    const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
+                    const unpurchasedTotal = allGifts.filter((g: any) => !g.purchased).length;
+                    if (v) { await scheduleGiftsMonthlyReminder(unpurchasedTotal); }
+                    else { await cancelGiftsMonthlyReminder(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={monthlyReminderEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Gift Digest</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday summary of upcoming events and gift status</Text>
+                </View>
+                <Switch
+                  value={weeklyDigestEnabled}
+                  onValueChange={async (v) => {
+                    setWeeklyDigestEnabled(v);
+                    const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
+                    if (v) { await scheduleGiftsWeeklyDigest(allGifts.length, allGifts.filter((g: any) => g.purchased).length); }
+                    else { await cancelAllGiftsNotifications(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+            </ScrollView>
+            <TouchableOpacity
+              style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
+              onPress={() => setWidgetModalVisible(false)}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

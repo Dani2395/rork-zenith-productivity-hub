@@ -8,16 +8,17 @@ import {
   Modal,
   TextInput,
   Image,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { Image as ImageIcon } from 'lucide-react-native';
+import { Image as ImageIcon, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveBingoWidgetData } from '@/widgets/widgetTaskHandler';
-import { fireBingoMilestone, fireBingoComplete, scheduleBingoWeeklyCheckIn, scheduleBingoMonthlyMotivation } from '@/utils/bingoNotifications';
+import { fireBingoMilestone, fireBingoComplete, scheduleBingoWeeklyCheckIn, scheduleBingoMonthlyMotivation, cancelAllBingoNotifications } from '@/utils/bingoNotifications';
 
 const BACKGROUND_COLORS = [
   '#2a2a2a', '#8b5cf6', '#6366f1', '#ec4899', '#f59e0b',
@@ -37,6 +38,9 @@ export default function BingoScreen() {
   const [prizeTitle, setPrizeTitle] = useState('');
   const [prizeDescription, setPrizeDescription] = useState('');
   const [prizeEmoji, setPrizeEmoji] = useState('');
+  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
+  const [weeklyCheckInEnabled, setWeeklyCheckInEnabled] = useState(false);
+  const [monthlyMotivationEnabled, setMonthlyMotivationEnabled] = useState(false);
 
   const completedCount = bingoData.filter(item => item.d).length;
 
@@ -182,6 +186,9 @@ export default function BingoScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>🎯 2026 BINGO</Text>
+        <TouchableOpacity style={{ padding: 8 }} onPress={() => setWidgetModalVisible(true)}>
+          <Bell size={22} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.statusContainer}>
@@ -452,6 +459,63 @@ export default function BingoScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Widget & Notification Settings Modal */}
+      <Modal
+        visible={widgetModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setWidgetModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 16 }}>📱 Widgets & Notifications</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+                Add a "2026 Bingo Goals" widget: Long-press your Android home screen → Widgets → Zenith → 2026 Bingo Goals. Shows completed goals, bingo status, and most recent goal.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Check-In</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday reminder of your bingo progress this week</Text>
+                </View>
+                <Switch
+                  value={weeklyCheckInEnabled}
+                  onValueChange={async (v) => {
+                    setWeeklyCheckInEnabled(v);
+                    if (v) { await scheduleBingoWeeklyCheckIn(completedCount); }
+                    else { await cancelAllBingoNotifications(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={weeklyCheckInEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Monthly Motivation</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>1st of each month with your bingo progress update</Text>
+                </View>
+                <Switch
+                  value={monthlyMotivationEnabled}
+                  onValueChange={async (v) => {
+                    setMonthlyMotivationEnabled(v);
+                    if (v) { await scheduleBingoMonthlyMotivation(completedCount); }
+                    else { await cancelAllBingoNotifications(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={monthlyMotivationEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+            </ScrollView>
+            <TouchableOpacity
+              style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
+              onPress={() => setWidgetModalVisible(false)}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -462,8 +526,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 12,
   },
   title: {
     fontSize: 28,

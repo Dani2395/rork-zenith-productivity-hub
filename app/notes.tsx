@@ -11,15 +11,16 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2 } from 'lucide-react-native';
+import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveNotesWidgetData } from '@/widgets/widgetTaskHandler';
-import { schedulePinnedNotesReminder, scheduleNotesWeeklyDigest } from '@/utils/notesNotifications';
+import { schedulePinnedNotesReminder, cancelPinnedNotesReminder, scheduleNotesWeeklyDigest, cancelAllNotesNotifications } from '@/utils/notesNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
 
@@ -73,6 +74,9 @@ export default function NotesScreen() {
   const [newCategoryValue, setNewCategoryValue] = useState('');
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
+  const [pinnedReminderEnabled, setPinnedReminderEnabled] = useState(false);
+  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
 
   const CATEGORIES = [
     { id: 0, value: '', label: 'All', type: 'note' as const },
@@ -295,6 +299,12 @@ export default function NotesScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>📝 {viewMode === 'journal' ? 'Journal' : 'Notes'}</Text>
         <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setWidgetModalVisible(true)}
+          >
+            <Bell size={20} color={Colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.settingsButton}
             onPress={() => {
@@ -921,6 +931,68 @@ export default function NotesScreen() {
                 </TouchableOpacity>
               )}
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Widget & Notification Settings Modal */}
+      <Modal
+        visible={widgetModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setWidgetModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 16 }}>📱 Widgets & Notifications</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+                Add a "Notes Overview" widget: Long-press your Android home screen → Widgets → Zenith → Notes Overview. Shows total notes, pinned count, and your latest note.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Pinned Notes Reminder</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Daily 9 AM reminder to review your pinned notes</Text>
+                </View>
+                <Switch
+                  value={pinnedReminderEnabled}
+                  onValueChange={async (v) => {
+                    setPinnedReminderEnabled(v);
+                    const pinnedCount = notes.filter(n => n.pinned).length;
+                    if (v) { await schedulePinnedNotesReminder(pinnedCount); }
+                    else { await cancelPinnedNotesReminder(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={pinnedReminderEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday summary of total notes and new this week</Text>
+                </View>
+                <Switch
+                  value={weeklyDigestEnabled}
+                  onValueChange={async (v) => {
+                    setWeeklyDigestEnabled(v);
+                    const weekStart = new Date();
+                    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                    const weekStartStr = weekStart.toISOString().split('T')[0];
+                    const newThisWeek = notes.filter(n => n.createdDate && n.createdDate >= weekStartStr).length;
+                    if (v) { await scheduleNotesWeeklyDigest(notes.length, newThisWeek); }
+                    else { await cancelAllNotesNotifications(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+            </ScrollView>
+            <TouchableOpacity
+              style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
+              onPress={() => setWidgetModalVisible(false)}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
