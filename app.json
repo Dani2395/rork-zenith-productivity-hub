@@ -126,6 +126,97 @@
               "updatePeriodMillis": 1800000,
               "resizeMode": "horizontal|vertical",
               "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "TasksWidget",
+              "label": "Tasks Today",
+              "description": "Shows today's tasks, overdue count, and next task",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "HabitsWidget",
+              "label": "Habits Today",
+              "description": "Shows today's habit completion and best streak",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "CalendarWidget",
+              "label": "Calendar Agenda",
+              "description": "Shows today's event count and next upcoming event",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "NotesWidget",
+              "label": "Notes Overview",
+              "description": "Shows total notes, pinned count, and latest note",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "PrioritiesWidget",
+              "label": "Top Priorities",
+              "description": "Shows today's priority completion progress and next priority",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "GiftsWidget",
+              "label": "Gift Tracker",
+              "description": "Shows gift progress and next upcoming event",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "BingoWidget",
+              "label": "2026 Bingo Goals",
+              "description": "Shows bingo goal completion progress",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
             }
           ]
         }
