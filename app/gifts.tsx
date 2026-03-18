@@ -20,6 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Plus, Trash2, ChevronRight, Check, ExternalLink, Lock, Unlock, Image as ImageIcon } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import { saveGiftsWidgetData } from '@/widgets/widgetTaskHandler';
+import { fireUpcomingGiftAlert, scheduleGiftsMonthlyReminder, scheduleGiftsWeeklyDigest } from '@/utils/giftsNotifications';
 
 const TAG_EMOJIS: Record<string, string> = {
   family: '👨‍👩‍👧',
@@ -45,6 +47,36 @@ export default function GiftsScreen() {
   useEffect(() => {
     loadLockState();
   }, []);
+
+  // Widget data + smart notifications
+  useEffect(() => {
+    const allGifts = giftPeople.flatMap(p => p.gifts);
+    const purchasedCount = allGifts.filter(g => g.purchased).length;
+
+    saveGiftsWidgetData({
+      peopleCount: giftPeople.length,
+      totalGifts: allGifts.length,
+      purchasedCount,
+      nextEventLabel: '', // events are per-gift item without dates in this model
+    });
+
+    scheduleGiftsMonthlyReminder(allGifts.length - purchasedCount);
+    scheduleGiftsWeeklyDigest(allGifts.length, purchasedCount);
+
+    // Fire upcoming-event alerts for gift items with recognized event types
+    const today = new Date();
+    for (const person of giftPeople) {
+      const unpurchasedForPerson = person.gifts.filter(g => !g.purchased).length;
+      const events = person.gifts.map(g => g.event).filter(Boolean);
+      for (const eventType of [...new Set(events)]) {
+        // Without actual event dates in the data model, alert when person has unpurchased gifts
+        if (unpurchasedForPerson > 0) {
+          fireUpcomingGiftAlert(person.name, eventType, 7, unpurchasedForPerson);
+          break; // one alert per person
+        }
+      }
+    }
+  }, [giftPeople]);
 
   const loadLockState = async () => {
     try {

@@ -43,6 +43,8 @@ import {
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
 import { useData } from '@/contexts/DataContext';
+import { savePrioritiesWidgetData } from '@/widgets/widgetTaskHandler';
+import { schedulePrioritiesMorningBrief, schedulePrioritiesEveningCheck, schedulePrioritiesWeeklyDigest } from '@/utils/prioritiesNotifications';
 import { SubTask, Holiday, Task, Event, Workout, Note, MoodEntry } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -244,6 +246,39 @@ export default function HomeScreen() {
     rolloverPriorities();
     fetchWeather();
   }, [rolloverPriorities, fetchWeather]);
+
+  // Priorities widget data + smart notifications
+  useEffect(() => {
+    const completedCount = todayPriorities.filter(p => p.completed).length;
+    const nextPriority = todayPriorities.find(p => !p.completed)?.task ?? '';
+    const dateObj = new Date();
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const todayLabel = `${dayNames[dateObj.getDay()]}, ${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+
+    savePrioritiesWidgetData({
+      todayLabel,
+      completedCount,
+      totalCount: todayPriorities.length,
+      nextPriority,
+    });
+
+    // Weekly digest: count across last 7 days
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    let weekTotal = 0, weekCompleted = 0;
+    for (const [date, prioList] of Object.entries(priorities)) {
+      if (date >= weekStartStr) {
+        weekTotal += prioList.length;
+        weekCompleted += prioList.filter(p => p.completed).length;
+      }
+    }
+
+    schedulePrioritiesMorningBrief(todayPriorities.length, todayPriorities[0]?.task ?? '');
+    schedulePrioritiesEveningCheck(completedCount, todayPriorities.length);
+    schedulePrioritiesWeeklyDigest(weekCompleted, weekTotal);
+  }, [todayPriorities, priorities]);
 
   useEffect(() => {
     Animated.loop(

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import { saveHabitsWidgetData } from '@/widgets/widgetTaskHandler';
+import { scheduleHabitsMorningReminder, scheduleHabitsEveningCheckIn, scheduleHabitsWeeklyDigest } from '@/utils/habitsNotifications';
 
 export default function HabitsScreen() {
   const { habits, habitCompletions, addHabit, deleteHabit, toggleHabitCompletion } = useData();
@@ -21,6 +23,31 @@ export default function HabitsScreen() {
   const [habitName, setHabitName] = useState('');
 
   const today = new Date().toISOString().split('T')[0];
+
+  // Widget data + smart notifications
+  useEffect(() => {
+    const doneTodayCount = habits.filter(h => habitCompletions[`${h.id}-${today}`]).length;
+
+    // Find best streak
+    let bestStreakName = '';
+    let bestStreakDays = 0;
+    for (const habit of habits) {
+      let streak = 0;
+      const base = new Date();
+      for (let i = 0; i < 365; i++) {
+        const d = new Date(base);
+        d.setDate(d.getDate() - i);
+        const key = `${habit.id}-${d.toISOString().split('T')[0]}`;
+        if (habitCompletions[key]) { streak++; } else if (i > 0) { break; }
+      }
+      if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
+    }
+
+    saveHabitsWidgetData({ doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
+    scheduleHabitsMorningReminder(habits.length);
+    scheduleHabitsEveningCheckIn(doneTodayCount, habits.length);
+    scheduleHabitsWeeklyDigest(bestStreakDays, bestStreakName);
+  }, [habits, habitCompletions, today]);
 
   const handleSaveHabit = () => {
     if (habitName.trim()) {
