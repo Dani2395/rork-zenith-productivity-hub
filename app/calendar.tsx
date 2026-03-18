@@ -11,15 +11,16 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveCalendarWidgetData } from '@/widgets/widgetTaskHandler';
-import { scheduleCalendarDailyAgenda, scheduleCalendarWeeklyPreview } from '@/utils/calendarNotifications';
+import { scheduleCalendarDailyAgenda, cancelCalendarDailyAgenda, scheduleCalendarWeeklyPreview, cancelAllCalendarNotifications } from '@/utils/calendarNotifications';
 import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -36,6 +37,9 @@ export default function CalendarScreen() {
   const [eventDesc, setEventDesc] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [holidayModalVisible, setHolidayModalVisible] = useState(false);
+  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
+  const [dailyAgendaEnabled, setDailyAgendaEnabled] = useState(false);
+  const [weeklyPreviewEnabled, setWeeklyPreviewEnabled] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<Holiday | null>(null);
   const [holidayName, setHolidayName] = useState('');
   const [holidayEmoji, setHolidayEmoji] = useState('');
@@ -383,9 +387,14 @@ export default function CalendarScreen() {
             <ChevronRight size={24} color={Colors.text} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
-          <Text style={styles.todayButtonText}>Today</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity style={{ padding: 6 }} onPress={() => setWidgetModalVisible(true)}>
+            <Bell size={20} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
+            <Text style={styles.todayButtonText}>Today</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.calendarContainer}>
@@ -747,6 +756,71 @@ export default function CalendarScreen() {
           <Sparkles size={24} color="white" />
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* Widget & Notification Settings Modal */}
+      <Modal
+        visible={widgetModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setWidgetModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 16 }}>📱 Widgets & Notifications</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+                Add a "Calendar Agenda" widget: Long-press your Android home screen → Widgets → Zenith → Calendar Agenda. Shows today's event count and your next upcoming event.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Agenda</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>8 AM summary of today's events</Text>
+                </View>
+                <Switch
+                  value={dailyAgendaEnabled}
+                  onValueChange={async (v) => {
+                    setDailyAgendaEnabled(v);
+                    const todayEvents = events.filter(e => e.date === todayString);
+                    const nextEvent = todayEvents[0];
+                    if (v) { await scheduleCalendarDailyAgenda(todayEvents.length, nextEvent?.name ?? ''); }
+                    else { await cancelCalendarDailyAgenda(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={dailyAgendaEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Preview</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday evening preview of next week's events</Text>
+                </View>
+                <Switch
+                  value={weeklyPreviewEnabled}
+                  onValueChange={async (v) => {
+                    setWeeklyPreviewEnabled(v);
+                    if (v) {
+                      const nextWeekStart = new Date();
+                      nextWeekStart.setDate(nextWeekStart.getDate() + (7 - nextWeekStart.getDay()));
+                      const nextWeekEnd = new Date(nextWeekStart);
+                      nextWeekEnd.setDate(nextWeekEnd.getDate() + 6);
+                      const nextWeekCount = events.filter(e => e.date >= nextWeekStart.toISOString().split('T')[0] && e.date <= nextWeekEnd.toISOString().split('T')[0]).length;
+                      await scheduleCalendarWeeklyPreview(nextWeekCount);
+                    } else { await cancelAllCalendarNotifications(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={weeklyPreviewEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+            </ScrollView>
+            <TouchableOpacity
+              style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
+              onPress={() => setWidgetModalVisible(false)}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

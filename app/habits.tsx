@@ -7,20 +7,24 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Check } from 'lucide-react-native';
+import { Plus, Trash2, Check, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveHabitsWidgetData } from '@/widgets/widgetTaskHandler';
-import { scheduleHabitsMorningReminder, scheduleHabitsEveningCheckIn, scheduleHabitsWeeklyDigest } from '@/utils/habitsNotifications';
+import { scheduleHabitsMorningReminder, cancelHabitsMorningReminder, scheduleHabitsEveningCheckIn, cancelHabitsEveningCheckIn, scheduleHabitsWeeklyDigest, cancelAllHabitsNotifications } from '@/utils/habitsNotifications';
 
 export default function HabitsScreen() {
   const { habits, habitCompletions, addHabit, deleteHabit, toggleHabitCompletion } = useData();
   const [modalVisible, setModalVisible] = useState(false);
   const [habitName, setHabitName] = useState('');
+  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
+  const [morningReminderEnabled, setMorningReminderEnabled] = useState(false);
+  const [eveningCheckInEnabled, setEveningCheckInEnabled] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -101,6 +105,13 @@ export default function HabitsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>⭐ Habits</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity
+          style={{ padding: 8 }}
+          onPress={() => setWidgetModalVisible(true)}
+        >
+          <Bell size={22} color={Colors.primary} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setModalVisible(true)}
@@ -113,6 +124,7 @@ export default function HabitsScreen() {
             <Text style={styles.addButtonText}>Add Habit</Text>
           </LinearGradient>
         </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.habitList} showsVerticalScrollIndicator={false}>
@@ -259,6 +271,64 @@ export default function HabitsScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Widget & Notification Settings Modal */}
+      <Modal
+        visible={widgetModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setWidgetModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <Text style={styles.modalTitle}>📱 Widgets & Notifications</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+                Add a "Habits Today" widget: Long-press your Android home screen → Widgets → Zenith → Habits Today. Shows completion count, best streak, and today's progress.
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Morning Reminder</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>8 AM prompt to complete your habits today</Text>
+                </View>
+                <Switch
+                  value={morningReminderEnabled}
+                  onValueChange={async (v) => {
+                    setMorningReminderEnabled(v);
+                    if (v) { await scheduleHabitsMorningReminder(habits.length); }
+                    else { await cancelHabitsMorningReminder(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={morningReminderEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Evening Check-In</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>9 PM reminder to log any remaining habits</Text>
+                </View>
+                <Switch
+                  value={eveningCheckInEnabled}
+                  onValueChange={async (v) => {
+                    setEveningCheckInEnabled(v);
+                    const doneTodayCount = habits.filter(h => habitCompletions[`${h.id}-${today}`]).length;
+                    if (v) { await scheduleHabitsEveningCheckIn(doneTodayCount, habits.length); }
+                    else { await cancelHabitsEveningCheckIn(); }
+                  }}
+                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
+                  thumbColor={eveningCheckInEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+            </ScrollView>
+            <TouchableOpacity
+              style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
+              onPress={() => setWidgetModalVisible(false)}
+            >
+              <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

@@ -1994,59 +1994,84 @@ export default function BudgetScreen() {
         onRequestClose={() => setWidgetModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '70%' }]}>
-            <Text style={styles.modalTitle}>🔔 Widgets & Notifications</Text>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <Text style={styles.modalTitle}>📱 Widgets & Notifications</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 1 }}>
 
-            {/* Home screen widget info */}
-            <View style={{ marginBottom: 20 }}>
-              <Text style={[styles.sectionTitle, { fontSize: 14, marginBottom: 6 }]}>📱 Home Screen Widget</Text>
-              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20 }}>
-                A "Budget Overview" widget is available on Android. Long-press your home screen → Widgets → Zenith → Budget Overview to add it. It shows your current month's income, expenses, and net cashflow and updates automatically.
-              </Text>
-            </View>
-
-            {/* Daily summary toggle */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Morning Summary</Text>
-                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
-                  Notification at 8 AM with this month's cashflow
+              {/* Home screen widget info */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={[styles.sectionTitle, { fontSize: 14, marginBottom: 6 }]}>Budget Overview Widget</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20 }}>
+                  Long-press your Android home screen → Widgets → Zenith → Budget Overview. Shows this month's income, expenses, and net cashflow.
                 </Text>
               </View>
-              <Switch
-                value={dailyNotifEnabled}
-                onValueChange={handleDailyNotifToggle}
-                trackColor={{ false: Colors.card, true: Colors.primary }}
-                thumbColor={dailyNotifEnabled ? '#ffffff' : Colors.textDim}
-              />
-            </View>
 
-            {/* Weekly digest toggle */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
-                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
-                  Sunday evening summary of the week's income & expenses
+              {/* Daily summary toggle */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Morning Summary</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
+                    Notification at 8 AM with this month's cashflow
+                  </Text>
+                </View>
+                <Switch
+                  value={dailyNotifEnabled}
+                  onValueChange={handleDailyNotifToggle}
+                  trackColor={{ false: Colors.card, true: Colors.primary }}
+                  thumbColor={dailyNotifEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+
+              {/* Weekly digest toggle */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
+                    Sunday evening summary of the week's income & expenses
+                  </Text>
+                </View>
+                <Switch
+                  value={weeklyNotifEnabled}
+                  onValueChange={handleWeeklyNotifToggle}
+                  trackColor={{ false: Colors.card, true: Colors.primary }}
+                  thumbColor={weeklyNotifEnabled ? '#ffffff' : Colors.textDim}
+                />
+              </View>
+
+              {/* Budget alerts note */}
+              <View style={{ backgroundColor: Colors.background, borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>⚠️ Budget Threshold Alerts</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 12, lineHeight: 18 }}>
+                  Automatic — you'll get a notification whenever a budget category reaches 80% or 100% of its limit. No toggle needed.
                 </Text>
               </View>
-              <Switch
-                value={weeklyNotifEnabled}
-                onValueChange={handleWeeklyNotifToggle}
-                trackColor={{ false: Colors.card, true: Colors.primary }}
-                thumbColor={weeklyNotifEnabled ? '#ffffff' : Colors.textDim}
-              />
-            </View>
 
-            {/* Budget alerts note */}
-            <View style={{ backgroundColor: Colors.card, borderRadius: 10, padding: 12, marginBottom: 16 }}>
-              <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>⚠️ Budget Threshold Alerts</Text>
-              <Text style={{ color: Colors.textDim, fontSize: 12, lineHeight: 18 }}>
-                Automatic — you'll get a notification whenever a budget category reaches 80% or 100% of its limit. No toggle needed.
-              </Text>
-            </View>
+              {/* Other available widgets */}
+              <View style={{ backgroundColor: Colors.background, borderRadius: 10, padding: 12, marginBottom: 20 }}>
+                <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>🧩 Other Available Widgets</Text>
+                {[
+                  { name: 'Tasks Today', screen: 'Tasks screen' },
+                  { name: 'Habits Today', screen: 'Habits screen' },
+                  { name: 'Calendar Agenda', screen: 'Calendar screen' },
+                  { name: 'Notes Overview', screen: 'Notes screen' },
+                  { name: 'Top 5 Priorities', screen: 'Home screen' },
+                  { name: 'Gift Tracker', screen: 'Gifts screen' },
+                  { name: '2026 Bingo Goals', screen: 'Bingo screen' },
+                ].map((w, i) => (
+                  <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ color: Colors.textDim, fontSize: 12 }}>{w.name}</Text>
+                    <Text style={{ color: Colors.primary, fontSize: 12 }}>{w.screen}</Text>
+                  </View>
+                ))}
+                <Text style={{ color: Colors.textDim, fontSize: 11, marginTop: 8, lineHeight: 16 }}>
+                  Each screen has its own Widget settings button with notification toggles.
+                </Text>
+              </View>
+
+            </ScrollView>
 
             <TouchableOpacity
-              style={[styles.actionButton, { marginTop: 4 }]}
+              style={[styles.actionButton, { marginTop: 8 }]}
               onPress={() => setWidgetModalVisible(false)}
             >
               <Text style={styles.actionButtonText}>Done</Text>
