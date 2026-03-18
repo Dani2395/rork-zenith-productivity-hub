@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Edit3, Settings, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import { saveTasksWidgetData } from '@/widgets/widgetTaskHandler';
+import { scheduleTasksDailySummary, scheduleTasksWeeklyDigest } from '@/utils/tasksNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
 type FilterType = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
@@ -45,6 +47,31 @@ export default function TasksScreen() {
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
+
+  // Widget data + smart notifications
+  useEffect(() => {
+    const todayTasks = tasks.filter(t => !t.completed && t.date === today);
+    const overdueTasks = tasks.filter(t => !t.completed && t.date && t.date < today);
+    const completedToday = tasks.filter(t => t.completed && t.completedDate === today);
+    const nextTask = todayTasks[0]?.name ?? '';
+
+    saveTasksWidgetData({
+      todayTotal: todayTasks.length,
+      todayDone: completedToday.length,
+      overdueCount: overdueTasks.length,
+      nextTask,
+    });
+
+    // Week stats for digest
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weekCompleted = tasks.filter(t => t.completed && t.completedDate && t.completedDate >= weekStartStr).length;
+    const weekTotal = tasks.filter(t => t.date && t.date >= weekStartStr).length;
+
+    scheduleTasksDailySummary(todayTasks.length, overdueTasks.length);
+    scheduleTasksWeeklyDigest(weekCompleted, weekTotal);
+  }, [tasks, today]);
 
   const isPast = (dateStr: string) => {
     return new Date(dateStr) < new Date(today);

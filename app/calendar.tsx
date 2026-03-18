@@ -18,6 +18,8 @@ import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import { saveCalendarWidgetData } from '@/widgets/widgetTaskHandler';
+import { scheduleCalendarDailyAgenda, scheduleCalendarWeeklyPreview } from '@/utils/calendarNotifications';
 import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -193,6 +195,37 @@ export default function CalendarScreen() {
       }
     };
   }, []);
+
+  // Widget data + smart notifications
+  useEffect(() => {
+    const todayEvents = events.filter(e => e.date === todayString);
+    const sortedToday = [...todayEvents].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    const nextEvent = sortedToday[0];
+
+    const todayDate = new Date();
+    const dayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][todayDate.getDay()];
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const todayLabel = `${dayOfWeek}, ${monthNames[todayDate.getMonth()]} ${todayDate.getDate()}`;
+
+    saveCalendarWidgetData({
+      todayLabel,
+      eventCount: todayEvents.length,
+      nextEventName: nextEvent?.name ?? '',
+      nextEventTime: nextEvent?.time ?? '',
+    });
+
+    // Next week event count for weekly preview
+    const nextWeekStart = new Date(todayDate);
+    nextWeekStart.setDate(nextWeekStart.getDate() + 1);
+    const nextWeekEnd = new Date(nextWeekStart);
+    nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+    const nextWeekStartStr = nextWeekStart.toISOString().split('T')[0];
+    const nextWeekEndStr = nextWeekEnd.toISOString().split('T')[0];
+    const nextWeekCount = events.filter(e => e.date > nextWeekStartStr && e.date <= nextWeekEndStr).length;
+
+    scheduleCalendarDailyAgenda(todayEvents.length, nextEvent?.name ?? '');
+    scheduleCalendarWeeklyPreview(nextWeekCount);
+  }, [events, todayString]);
 
   const handleAddEvent = () => {
     if (!eventName.trim() || !selectedDate) return;

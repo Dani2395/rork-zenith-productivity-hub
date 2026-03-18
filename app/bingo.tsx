@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image as ImageIcon } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import { saveBingoWidgetData } from '@/widgets/widgetTaskHandler';
+import { fireBingoMilestone, fireBingoComplete, scheduleBingoWeeklyCheckIn, scheduleBingoMonthlyMotivation } from '@/utils/bingoNotifications';
 
 const BACKGROUND_COLORS = [
   '#2a2a2a', '#8b5cf6', '#6366f1', '#ec4899', '#f59e0b',
@@ -87,6 +89,33 @@ export default function BingoScreen() {
 
   const isBlackout = bingoData.every(item => item.d);
   const hasBingo = checkBingo();
+
+  // Widget data + smart notifications
+  useEffect(() => {
+    const recentGoal = [...bingoData].reverse().find(item => item.d && item.t !== 'FREE SPACE')?.t ?? '';
+    saveBingoWidgetData({ completedCount, hasBingo, recentGoal });
+
+    scheduleBingoWeeklyCheckIn(completedCount);
+    scheduleBingoMonthlyMotivation(completedCount);
+
+    if (completedCount === 25) {
+      fireBingoComplete();
+    }
+
+    // Check each row, column, diagonal for new completions
+    for (let r = 0; r < 5; r++) {
+      const rowComplete = [0,1,2,3,4].every(c => bingoData[r * 5 + c].d);
+      if (rowComplete) fireBingoMilestone(`row_${r}`, completedCount);
+    }
+    for (let c = 0; c < 5; c++) {
+      const colComplete = [0,1,2,3,4].every(r => bingoData[r * 5 + c].d);
+      if (colComplete) fireBingoMilestone(`col_${c}`, completedCount);
+    }
+    const diagMain = [0,6,12,18,24].every(i => bingoData[i].d);
+    if (diagMain) fireBingoMilestone('diag_main', completedCount);
+    const diagAnti = [4,8,12,16,20].every(i => bingoData[i].d);
+    if (diagAnti) fireBingoMilestone('diag_anti', completedCount);
+  }, [bingoData, completedCount, hasBingo]);
 
   const handleCellPress = (index: number) => {
     if (bingoData[index].t === 'FREE SPACE') return;

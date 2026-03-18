@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import { saveNotesWidgetData } from '@/widgets/widgetTaskHandler';
+import { schedulePinnedNotesReminder, scheduleNotesWeeklyDigest } from '@/utils/notesNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
 
@@ -76,6 +78,27 @@ export default function NotesScreen() {
     { id: 0, value: '', label: 'All', type: 'note' as const },
     ...noteCategories,
   ];
+
+  // Widget data + smart notifications
+  useEffect(() => {
+    const pinnedNotes = notes.filter(n => n.pinned);
+    const sorted = [...notes].sort((a, b) => (b.lastModified ?? b.date ?? '').localeCompare(a.lastModified ?? a.date ?? ''));
+    const latest = sorted[0];
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const newThisWeek = notes.filter(n => (n.createdDate ?? n.date ?? '') >= weekStartStr).length;
+
+    saveNotesWidgetData({
+      totalNotes: notes.length,
+      pinnedCount: pinnedNotes.length,
+      latestNoteTitle: latest?.name ?? '',
+      latestNoteDate: latest?.date ?? '',
+    });
+
+    schedulePinnedNotesReminder(pinnedNotes.length);
+    scheduleNotesWeeklyDigest(notes.length, newThisWeek);
+  }, [notes]);
 
   const filteredNotes = notes.filter(note => {
     if (searchQuery && !note.name.toLowerCase().includes(searchQuery.toLowerCase())) {
