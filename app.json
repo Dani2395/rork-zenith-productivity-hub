@@ -109,6 +109,26 @@
         {
           "iCloudContainerEnvironment": "Production"
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "BudgetWidget",
+              "label": "Budget Overview",
+              "description": "Shows your current month income, expenses, and net cashflow",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            }
+          ]
+        }
       ]
     ],
     "experiments": {

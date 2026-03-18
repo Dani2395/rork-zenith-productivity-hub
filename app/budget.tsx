@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
   Calendar,
+  Bell,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/budgetStyles';
@@ -34,6 +35,15 @@ import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
 import { processCSVData } from '@/utils/budgetHelpers';
 import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
+import {
+  scheduleDailySummary,
+  cancelDailySummary,
+  scheduleWeeklyDigest,
+  cancelWeeklyDigest,
+  fireBudgetAlert,
+  cancelAllBudgetNotifications,
+} from '@/utils/budgetNotifications';
+import { saveWidgetData } from '@/widgets/widgetTaskHandler';
 
 export default function BudgetScreen() {
   const {
@@ -90,6 +100,11 @@ export default function BudgetScreen() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [_isUploading, setIsUploading] = useState(false);
+
+  // Widget / notification settings
+  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
+  const [dailyNotifEnabled, setDailyNotifEnabled] = useState(false);
+  const [weeklyNotifEnabled, setWeeklyNotifEnabled] = useState(false);
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [monthDetailVisible, setMonthDetailVisible] = useState(false);
@@ -247,6 +262,57 @@ export default function BudgetScreen() {
       return { year, isCurrent, quarters };
     });
   }, [transactions, getMonthKey]);
+
+  // ── Widget & notification sync ──────────────────────────────────────────────
+  // Runs whenever transactions or budgets change.
+  useEffect(() => {
+    // 1. Push latest figures to the home-screen widget
+    saveWidgetData({
+      monthLabel: thisMonth,
+      income: totalIncome,
+      expenses: totalExpenses,
+      cashflow: totalIncome - totalExpenses,
+    });
+
+    // 2. Fire budget-threshold alerts for any category that has crossed 80 % or 100 %
+    for (const budget of budgets) {
+      const spent = monthlySpentByBudgetId[budget.id] ?? 0;
+      if (budget.amount > 0) {
+        fireBudgetAlert(budget.name, spent, budget.amount);
+      }
+    }
+  }, [transactions, budgets]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDailyNotifToggle = async (value: boolean) => {
+    setDailyNotifEnabled(value);
+    if (value) {
+      await scheduleDailySummary(thisMonth, totalIncome, totalExpenses);
+    } else {
+      await cancelDailySummary();
+    }
+  };
+
+  const handleWeeklyNotifToggle = async (value: boolean) => {
+    setWeeklyNotifEnabled(value);
+    if (value) {
+      // Compute this week's totals from thisMonthData transactions
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+      let weekIncome = 0;
+      let weekExpenses = 0;
+      for (const t of (thisMonthData?.transactions ?? [])) {
+        const d = new Date(t.date);
+        if (d >= weekStart) {
+          if (t.type === 'income') weekIncome += t.amount;
+          else weekExpenses += t.amount;
+        }
+      }
+      await scheduleWeeklyDigest(weekIncome, weekExpenses);
+    } else {
+      await cancelWeeklyDigest();
+    }
+  };
 
   const toggleQuarter = (key: string) => {
     setExpandedQuarters(prev => {
@@ -883,6 +949,13 @@ export default function BudgetScreen() {
           >
             <Upload size={18} color={Colors.primary} />
             <Text style={styles.uploadButtonText}>Upload Statement</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.clearButton, { borderColor: Colors.primary, marginRight: 6 }]}
+            onPress={() => setWidgetModalVisible(true)}
+          >
+            <Bell size={16} color={Colors.primary} />
+            <Text style={[styles.clearButtonText, { color: Colors.primary }]}>Widgets</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.clearButton}
@@ -1909,6 +1982,75 @@ export default function BudgetScreen() {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Widget & Notification Settings Modal ──────────────────────── */}
+      <Modal
+        visible={widgetModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setWidgetModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '70%' }]}>
+            <Text style={styles.modalTitle}>🔔 Widgets & Notifications</Text>
+
+            {/* Home screen widget info */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={[styles.sectionTitle, { fontSize: 14, marginBottom: 6 }]}>📱 Home Screen Widget</Text>
+              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20 }}>
+                A "Budget Overview" widget is available on Android. Long-press your home screen → Widgets → Zenith → Budget Overview to add it. It shows your current month's income, expenses, and net cashflow and updates automatically.
+              </Text>
+            </View>
+
+            {/* Daily summary toggle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Morning Summary</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
+                  Notification at 8 AM with this month's cashflow
+                </Text>
+              </View>
+              <Switch
+                value={dailyNotifEnabled}
+                onValueChange={handleDailyNotifToggle}
+                trackColor={{ false: Colors.card, true: Colors.primary }}
+                thumbColor={dailyNotifEnabled ? '#ffffff' : Colors.textDim}
+              />
+            </View>
+
+            {/* Weekly digest toggle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
+                  Sunday evening summary of the week's income & expenses
+                </Text>
+              </View>
+              <Switch
+                value={weeklyNotifEnabled}
+                onValueChange={handleWeeklyNotifToggle}
+                trackColor={{ false: Colors.card, true: Colors.primary }}
+                thumbColor={weeklyNotifEnabled ? '#ffffff' : Colors.textDim}
+              />
+            </View>
+
+            {/* Budget alerts note */}
+            <View style={{ backgroundColor: Colors.card, borderRadius: 10, padding: 12, marginBottom: 16 }}>
+              <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>⚠️ Budget Threshold Alerts</Text>
+              <Text style={{ color: Colors.textDim, fontSize: 12, lineHeight: 18 }}>
+                Automatic — you'll get a notification whenever a budget category reaches 80% or 100% of its limit. No toggle needed.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.actionButton, { marginTop: 4 }]}
+              onPress={() => setWidgetModalVisible(false)}
+            >
+              <Text style={styles.actionButtonText}>Done</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
