@@ -152,50 +152,49 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_ADDED':
     case 'WIDGET_UPDATE':
     case 'WIDGET_RESIZED': {
-      if (widgetName === 'tasks') {
+      if (widgetName === 'TasksWidget') {
         const data = await load<TasksWidgetData>(TASKS_WIDGET_DATA_KEY, {
           todayTotal: 0, todayDone: 0, overdueCount: 0, nextTask: '',
         });
         renderWidget(React.createElement(TasksWidget, data));
 
-      } else if (widgetName === 'habits') {
+      } else if (widgetName === 'HabitsWidget') {
         const data = await load<HabitsWidgetData>(HABITS_WIDGET_DATA_KEY, {
           doneTodayCount: 0, totalHabits: 0, bestStreakName: '', bestStreakDays: 0,
         });
         renderWidget(React.createElement(HabitsWidget, data));
 
-      } else if (widgetName === 'calendar') {
+      } else if (widgetName === 'CalendarWidget') {
         const data = await load<CalendarWidgetData>(CALENDAR_WIDGET_DATA_KEY, {
           todayLabel: 'Today', eventCount: 0, nextEventName: '', nextEventTime: '',
         });
         renderWidget(React.createElement(CalendarWidget, data));
 
-      } else if (widgetName === 'notes') {
+      } else if (widgetName === 'NotesWidget') {
         const data = await load<NotesWidgetData>(NOTES_WIDGET_DATA_KEY, {
           totalNotes: 0, pinnedCount: 0, latestNoteTitle: '', latestNoteDate: '',
         });
         renderWidget(React.createElement(NotesWidget, data));
 
-      } else if (widgetName === 'priorities') {
+      } else if (widgetName === 'PrioritiesWidget') {
         const data = await load<PrioritiesWidgetData>(PRIORITIES_WIDGET_DATA_KEY, {
           todayLabel: 'Today', completedCount: 0, totalCount: 0, nextPriority: '',
         });
         renderWidget(React.createElement(PrioritiesWidget, data));
 
-      } else if (widgetName === 'gifts') {
+      } else if (widgetName === 'GiftsWidget') {
         const data = await load<GiftsWidgetData>(GIFTS_WIDGET_DATA_KEY, {
           peopleCount: 0, totalGifts: 0, purchasedCount: 0, nextEventLabel: '',
         });
         renderWidget(React.createElement(GiftsWidget, data));
 
-      } else if (widgetName === 'bingo') {
+      } else if (widgetName === 'BingoWidget') {
         const data = await load<BingoWidgetData>(BINGO_WIDGET_DATA_KEY, {
           completedCount: 0, hasBingo: false, recentGoal: '',
         });
         renderWidget(React.createElement(BingoWidget, data));
 
-      } else {
-        // Default: budget widget
+      } else if (widgetName === 'BudgetWidget') {
         const data = await load<WidgetData>(WIDGET_DATA_KEY, {
           monthLabel: 'This Month', income: 0, expenses: 0, cashflow: 0,
         });
