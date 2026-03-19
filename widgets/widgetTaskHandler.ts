@@ -184,6 +184,89 @@ async function load<T>(key: string, fallback: T): Promise<T> {
   return fallback;
 }
 
+// ─── Compute widget data directly from app storage ────────────────────────────
+
+async function computeTasksData(): Promise<TasksWidgetData> {
+  const tasks: any[] = await load('tasks', []);
+  const today = new Date().toISOString().split('T')[0];
+  const todayTasks = tasks.filter(t => !t.completed && t.date === today);
+  const completedToday = tasks.filter(t => t.completed && t.completedDate === today);
+  const overdueTasks = tasks.filter(t => !t.completed && t.date && t.date < today);
+  return { todayTotal: todayTasks.length, todayDone: completedToday.length, overdueCount: overdueTasks.length, nextTask: todayTasks[0]?.name ?? '' };
+}
+
+async function computeHabitsData(): Promise<HabitsWidgetData> {
+  const habits: any[] = await load('habits', []);
+  const completions: any = await load('habitCompletions', {});
+  const today = new Date().toISOString().split('T')[0];
+  const doneTodayCount = habits.filter(h => completions[`${h.id}-${today}`]).length;
+  let bestStreakName = '', bestStreakDays = 0;
+  for (const habit of habits) {
+    let streak = 0;
+    const base = new Date();
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(base); d.setDate(d.getDate() - i);
+      const key = `${habit.id}-${d.toISOString().split('T')[0]}`;
+      if (completions[key]) { streak++; } else if (i > 0) { break; }
+    }
+    if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
+  }
+  return { doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays };
+}
+
+async function computeCalendarData(): Promise<CalendarWidgetData> {
+  const events: any[] = await load('events', []);
+  const today = new Date().toISOString().split('T')[0];
+  const d = new Date();
+  const todayLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
+  const todayEvents = events.filter((e: any) => e.date === today).sort((a: any, b: any) => (a.time ?? '').localeCompare(b.time ?? ''));
+  const next = todayEvents[0];
+  return { todayLabel, eventCount: todayEvents.length, nextEventName: next?.name ?? '', nextEventTime: next?.time ?? '' };
+}
+
+async function computeNotesData(): Promise<NotesWidgetData> {
+  const notes: any[] = await load('notes', []);
+  const pinned = notes.filter(n => n.pinned);
+  const latest = [...notes].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
+  return { totalNotes: notes.length, pinnedCount: pinned.length, latestNoteTitle: latest?.name ?? '', latestNoteDate: latest?.date ?? '' };
+}
+
+async function computePrioritiesData(): Promise<PrioritiesWidgetData> {
+  const priorities: any = await load('priorities', {});
+  const today = new Date().toISOString().split('T')[0];
+  const d = new Date();
+  const todayLabel = `${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
+  const todayList: any[] = priorities[today] ?? [];
+  const completedCount = todayList.filter(p => p.completed).length;
+  const nextPriority = todayList.find(p => !p.completed)?.task ?? '';
+  return { todayLabel, completedCount, totalCount: todayList.length, nextPriority };
+}
+
+async function computeGiftsData(): Promise<GiftsWidgetData> {
+  const giftPeople: any[] = await load('giftPeople', []);
+  const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
+  const purchasedCount = allGifts.filter((g: any) => g.purchased).length;
+  return { peopleCount: giftPeople.length, totalGifts: allGifts.length, purchasedCount, nextEventLabel: '' };
+}
+
+async function computeBingoData(): Promise<BingoWidgetData> {
+  const bingoData: any[] = await load('bingoData', []);
+  const completedCount = bingoData.filter(item => item.d).length;
+  const recentGoal = [...bingoData].reverse().find(item => item.d && item.t !== 'FREE SPACE')?.t ?? '';
+  return { completedCount, hasBingo: false, recentGoal };
+}
+
+async function computeBudgetData(): Promise<WidgetData> {
+  const transactions: any[] = await load('transactions', []);
+  const now = new Date();
+  const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthLabel = `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]} ${now.getFullYear()}`;
+  const monthTx = transactions.filter(t => (t.date ?? '').startsWith(monthStr));
+  const income = monthTx.filter(t => t.type === 'income').reduce((s: number, t: any) => s + (t.amount ?? 0), 0);
+  const expenses = monthTx.filter(t => t.type === 'expense').reduce((s: number, t: any) => s + (t.amount ?? 0), 0);
+  return { monthLabel, income, expenses, cashflow: income - expenses };
+}
+
 // ─── Widget task handler ──────────────────────────────────────────────────────
 
 async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
@@ -195,52 +278,28 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_UPDATE':
     case 'WIDGET_RESIZED': {
       if (widgetName === 'TasksWidget') {
-        const data = await load<TasksWidgetData>(TASKS_WIDGET_DATA_KEY, {
-          todayTotal: 0, todayDone: 0, overdueCount: 0, nextTask: '',
-        });
-        renderWidget(React.createElement(TasksWidget, data));
+        renderWidget(React.createElement(TasksWidget, await computeTasksData()));
 
       } else if (widgetName === 'HabitsWidget') {
-        const data = await load<HabitsWidgetData>(HABITS_WIDGET_DATA_KEY, {
-          doneTodayCount: 0, totalHabits: 0, bestStreakName: '', bestStreakDays: 0,
-        });
-        renderWidget(React.createElement(HabitsWidget, data));
+        renderWidget(React.createElement(HabitsWidget, await computeHabitsData()));
 
       } else if (widgetName === 'CalendarWidget') {
-        const data = await load<CalendarWidgetData>(CALENDAR_WIDGET_DATA_KEY, {
-          todayLabel: 'Today', eventCount: 0, nextEventName: '', nextEventTime: '',
-        });
-        renderWidget(React.createElement(CalendarWidget, data));
+        renderWidget(React.createElement(CalendarWidget, await computeCalendarData()));
 
       } else if (widgetName === 'NotesWidget') {
-        const data = await load<NotesWidgetData>(NOTES_WIDGET_DATA_KEY, {
-          totalNotes: 0, pinnedCount: 0, latestNoteTitle: '', latestNoteDate: '',
-        });
-        renderWidget(React.createElement(NotesWidget, data));
+        renderWidget(React.createElement(NotesWidget, await computeNotesData()));
 
       } else if (widgetName === 'PrioritiesWidget') {
-        const data = await load<PrioritiesWidgetData>(PRIORITIES_WIDGET_DATA_KEY, {
-          todayLabel: 'Today', completedCount: 0, totalCount: 0, nextPriority: '',
-        });
-        renderWidget(React.createElement(PrioritiesWidget, data));
+        renderWidget(React.createElement(PrioritiesWidget, await computePrioritiesData()));
 
       } else if (widgetName === 'GiftsWidget') {
-        const data = await load<GiftsWidgetData>(GIFTS_WIDGET_DATA_KEY, {
-          peopleCount: 0, totalGifts: 0, purchasedCount: 0, nextEventLabel: '',
-        });
-        renderWidget(React.createElement(GiftsWidget, data));
+        renderWidget(React.createElement(GiftsWidget, await computeGiftsData()));
 
       } else if (widgetName === 'BingoWidget') {
-        const data = await load<BingoWidgetData>(BINGO_WIDGET_DATA_KEY, {
-          completedCount: 0, hasBingo: false, recentGoal: '',
-        });
-        renderWidget(React.createElement(BingoWidget, data));
+        renderWidget(React.createElement(BingoWidget, await computeBingoData()));
 
       } else if (widgetName === 'BudgetWidget') {
-        const data = await load<WidgetData>(WIDGET_DATA_KEY, {
-          monthLabel: 'This Month', income: 0, expenses: 0, cashflow: 0,
-        });
-        renderWidget(React.createElement(BudgetWidget, data));
+        renderWidget(React.createElement(BudgetWidget, await computeBudgetData()));
       }
       break;
     }
