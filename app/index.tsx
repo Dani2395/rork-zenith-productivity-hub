@@ -44,6 +44,7 @@ import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
 import { useData } from '@/contexts/DataContext';
 import { savePrioritiesWidgetData } from '@/widgets/widgetTaskHandler';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { schedulePrioritiesMorningBrief, schedulePrioritiesEveningCheck, schedulePrioritiesWeeklyDigest } from '@/utils/prioritiesNotifications';
 import { SubTask, Holiday, Task, Event, Workout, Note, MoodEntry } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
@@ -262,6 +263,7 @@ export default function HomeScreen() {
       totalCount: todayPriorities.length,
       nextPriority,
     });
+    requestWidgetUpdate({ widgetName: 'PrioritiesWidget' });
 
     // Weekly digest: count across last 7 days
     const weekStart = new Date();

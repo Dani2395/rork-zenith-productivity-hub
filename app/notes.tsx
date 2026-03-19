@@ -20,6 +20,7 @@ import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smi
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveNotesWidgetData } from '@/widgets/widgetTaskHandler';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { schedulePinnedNotesReminder, cancelPinnedNotesReminder, scheduleNotesWeeklyDigest, cancelAllNotesNotifications } from '@/utils/notesNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -99,6 +100,7 @@ export default function NotesScreen() {
       latestNoteTitle: latest?.name ?? '',
       latestNoteDate: latest?.date ?? '',
     });
+    requestWidgetUpdate({ widgetName: 'NotesWidget' });
 
     schedulePinnedNotesReminder(pinnedNotes.length);
     scheduleNotesWeeklyDigest(notes.length, newThisWeek);

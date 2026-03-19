@@ -19,6 +19,7 @@ import { Plus, Trash2, Edit3, Settings, Edit2, Bell } from 'lucide-react-native'
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveTasksWidgetData } from '@/widgets/widgetTaskHandler';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { scheduleTasksDailySummary, scheduleTasksWeeklyDigest, cancelTasksDailySummary, cancelTasksWeeklyDigest } from '@/utils/tasksNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -65,6 +66,7 @@ export default function TasksScreen() {
       overdueCount: overdueTasks.length,
       nextTask,
     });
+    requestWidgetUpdate({ widgetName: 'TasksWidget' });
 
     // Week stats for digest
     const weekStart = new Date();

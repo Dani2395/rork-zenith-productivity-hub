@@ -22,6 +22,7 @@ import { Plus, Trash2, ChevronRight, Check, ExternalLink, Lock, Unlock, Image as
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveGiftsWidgetData } from '@/widgets/widgetTaskHandler';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { fireUpcomingGiftAlert, scheduleGiftsMonthlyReminder, cancelGiftsMonthlyReminder, scheduleGiftsWeeklyDigest, cancelAllGiftsNotifications } from '@/utils/giftsNotifications';
 
 const TAG_EMOJIS: Record<string, string> = {
@@ -60,6 +61,7 @@ export default function GiftsScreen() {
       purchasedCount,
       nextEventLabel: '', // events are per-gift item without dates in this model
     });
+    requestWidgetUpdate({ widgetName: 'GiftsWidget' });
 
     scheduleGiftsMonthlyReminder(allGifts.length - purchasedCount);
     scheduleGiftsWeeklyDigest(allGifts.length, purchasedCount);
