@@ -21,8 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Plus, Trash2, ChevronRight, Check, ExternalLink, Lock, Unlock, Image as ImageIcon, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { saveGiftsWidgetData } from '@/widgets/widgetTaskHandler';
-import { requestWidgetUpdate } from 'react-native-android-widget';
+import { updateGiftsWidget } from '@/widgets/widgetTaskHandler';
 import { fireUpcomingGiftAlert, scheduleGiftsMonthlyReminder, cancelGiftsMonthlyReminder, scheduleGiftsWeeklyDigest, cancelAllGiftsNotifications } from '@/utils/giftsNotifications';
 
 const TAG_EMOJIS: Record<string, string> = {
@@ -55,13 +54,12 @@ export default function GiftsScreen() {
     const allGifts = giftPeople.flatMap(p => p.gifts);
     const purchasedCount = allGifts.filter(g => g.purchased).length;
 
-    saveGiftsWidgetData({
+    updateGiftsWidget({
       peopleCount: giftPeople.length,
       totalGifts: allGifts.length,
       purchasedCount,
       nextEventLabel: '', // events are per-gift item without dates in this model
     });
-    requestWidgetUpdate({ widgetName: 'GiftsWidget' });
 
     scheduleGiftsMonthlyReminder(allGifts.length - purchasedCount);
     scheduleGiftsWeeklyDigest(allGifts.length, purchasedCount);

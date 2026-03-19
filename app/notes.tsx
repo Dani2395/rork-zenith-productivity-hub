@@ -19,8 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { saveNotesWidgetData } from '@/widgets/widgetTaskHandler';
-import { requestWidgetUpdate } from 'react-native-android-widget';
+import { updateNotesWidget } from '@/widgets/widgetTaskHandler';
 import { schedulePinnedNotesReminder, cancelPinnedNotesReminder, scheduleNotesWeeklyDigest, cancelAllNotesNotifications } from '@/utils/notesNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -94,13 +93,12 @@ export default function NotesScreen() {
     const weekStartStr = weekStart.toISOString().split('T')[0];
     const newThisWeek = notes.filter(n => (n.createdDate ?? n.date ?? '') >= weekStartStr).length;
 
-    saveNotesWidgetData({
+    updateNotesWidget({
       totalNotes: notes.length,
       pinnedCount: pinnedNotes.length,
       latestNoteTitle: latest?.name ?? '',
       latestNoteDate: latest?.date ?? '',
     });
-    requestWidgetUpdate({ widgetName: 'NotesWidget' });
 
     schedulePinnedNotesReminder(pinnedNotes.length);
     scheduleNotesWeeklyDigest(notes.length, newThisWeek);

@@ -17,8 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image as ImageIcon, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { saveBingoWidgetData } from '@/widgets/widgetTaskHandler';
-import { requestWidgetUpdate } from 'react-native-android-widget';
+import { updateBingoWidget } from '@/widgets/widgetTaskHandler';
 import { fireBingoMilestone, fireBingoComplete, scheduleBingoWeeklyCheckIn, scheduleBingoMonthlyMotivation, cancelAllBingoNotifications } from '@/utils/bingoNotifications';
 
 const BACKGROUND_COLORS = [
@@ -98,8 +97,7 @@ export default function BingoScreen() {
   // Widget data + smart notifications
   useEffect(() => {
     const recentGoal = [...bingoData].reverse().find(item => item.d && item.t !== 'FREE SPACE')?.t ?? '';
-    saveBingoWidgetData({ completedCount, hasBingo, recentGoal });
-    requestWidgetUpdate({ widgetName: 'BingoWidget' });
+    updateBingoWidget({ completedCount, hasBingo, recentGoal });
 
     scheduleBingoWeeklyCheckIn(completedCount);
     scheduleBingoMonthlyMotivation(completedCount);
