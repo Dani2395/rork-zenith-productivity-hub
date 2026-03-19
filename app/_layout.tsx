@@ -7,8 +7,6 @@ import { StatusBar } from "expo-status-bar";
 import { DataProvider } from "@/contexts/DataContext";
 import Colors from "@/constants/colors";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
-// Register the Android home-screen widget task handler at app startup
-import "@/widgets/widgetTaskHandler";
 
 SplashScreen.preventAutoHideAsync();
 
