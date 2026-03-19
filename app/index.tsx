@@ -43,7 +43,7 @@ import {
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
 import { useData } from '@/contexts/DataContext';
-import { savePrioritiesWidgetData } from '@/widgets/widgetTaskHandler';
+import { savePrioritiesWidgetData, saveTasksWidgetData, saveHabitsWidgetData, saveCalendarWidgetData, saveNotesWidgetData, saveGiftsWidgetData, saveBingoWidgetData } from '@/widgets/widgetTaskHandler';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { schedulePrioritiesMorningBrief, schedulePrioritiesEveningCheck, schedulePrioritiesWeeklyDigest } from '@/utils/prioritiesNotifications';
 import { SubTask, Holiday, Task, Event, Workout, Note, MoodEntry } from '@/types';
@@ -96,6 +96,8 @@ export default function HomeScreen() {
     addNote,
     deleteNote,
     deleteWorkout,
+    giftPeople,
+    bingoData,
   } = useData();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -281,6 +283,69 @@ export default function HomeScreen() {
     schedulePrioritiesEveningCheck(completedCount, todayPriorities.length);
     schedulePrioritiesWeeklyDigest(weekCompleted, weekTotal);
   }, [todayPriorities, priorities]);
+
+  // Save all other widget data on startup so widgets populate without needing to visit each screen
+  useEffect(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Tasks widget
+    const todayTasks = tasks.filter((t: any) => !t.completed && t.date === todayStr);
+    const completedToday = tasks.filter((t: any) => t.completed && t.completedDate === todayStr);
+    const overdueTasks = tasks.filter((t: any) => !t.completed && t.date && t.date < todayStr);
+    saveTasksWidgetData({
+      todayTotal: todayTasks.length,
+      todayDone: completedToday.length,
+      overdueCount: overdueTasks.length,
+      nextTask: todayTasks[0]?.name ?? '',
+    });
+    requestWidgetUpdate({ widgetName: 'TasksWidget' });
+
+    // Habits widget
+    const todayCompletions: string[] = habitCompletions[todayStr] ?? [];
+    const doneTodayCount = todayCompletions.length;
+    let bestStreakName = '';
+    let bestStreakDays = 0;
+    for (const habit of habits) {
+      let streak = 0;
+      const check = new Date();
+      for (let i = 0; i < 365; i++) {
+        const d = check.toISOString().split('T')[0];
+        if ((habitCompletions[d] ?? []).includes(String(habit.id))) { streak++; check.setDate(check.getDate() - 1); }
+        else break;
+      }
+      if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
+    }
+    saveHabitsWidgetData({ doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
+    requestWidgetUpdate({ widgetName: 'HabitsWidget' });
+
+    // Calendar widget
+    const dateObj = new Date();
+    const dayNames2 = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const monthNames2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const todayLabel2 = `${dayNames2[dateObj.getDay()]}, ${monthNames2[dateObj.getMonth()]} ${dateObj.getDate()}`;
+    const todayEvents = events.filter((e: any) => e.date === todayStr).sort((a: any, b: any) => (a.time ?? '').localeCompare(b.time ?? ''));
+    const nextEvent = todayEvents[0];
+    saveCalendarWidgetData({ todayLabel: todayLabel2, eventCount: todayEvents.length, nextEventName: nextEvent?.name ?? '', nextEventTime: nextEvent?.time ?? '' });
+    requestWidgetUpdate({ widgetName: 'CalendarWidget' });
+
+    // Notes widget
+    const pinnedNotes = notes.filter((n: any) => n.pinned);
+    const latestNote = [...notes].sort((a: any, b: any) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
+    saveNotesWidgetData({ totalNotes: notes.length, pinnedCount: pinnedNotes.length, latestNoteTitle: latestNote?.name ?? '', latestNoteDate: latestNote?.date ?? '' });
+    requestWidgetUpdate({ widgetName: 'NotesWidget' });
+
+    // Gifts widget
+    const allGifts = giftPeople.flatMap((p: any) => p.gifts);
+    const purchasedCount = allGifts.filter((g: any) => g.purchased).length;
+    saveGiftsWidgetData({ peopleCount: giftPeople.length, totalGifts: allGifts.length, purchasedCount, nextEventLabel: '' });
+    requestWidgetUpdate({ widgetName: 'GiftsWidget' });
+
+    // Bingo widget
+    const completedBingo = bingoData.filter((item: any) => item.d).length;
+    const recentGoal = [...bingoData].reverse().find((item: any) => item.d && item.t !== 'FREE SPACE')?.t ?? '';
+    saveBingoWidgetData({ completedCount: completedBingo, hasBingo: false, recentGoal });
+    requestWidgetUpdate({ widgetName: 'BingoWidget' });
+  }, [tasks, habits, habitCompletions, events, notes, giftPeople, bingoData]);
 
   useEffect(() => {
     Animated.loop(
