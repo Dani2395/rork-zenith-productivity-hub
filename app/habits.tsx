@@ -16,6 +16,7 @@ import { Plus, Trash2, Check, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveHabitsWidgetData } from '@/widgets/widgetTaskHandler';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { scheduleHabitsMorningReminder, cancelHabitsMorningReminder, scheduleHabitsEveningCheckIn, cancelHabitsEveningCheckIn, scheduleHabitsWeeklyDigest, cancelAllHabitsNotifications } from '@/utils/habitsNotifications';
 
 export default function HabitsScreen() {
@@ -48,6 +49,7 @@ export default function HabitsScreen() {
     }
 
     saveHabitsWidgetData({ doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
+    requestWidgetUpdate({ widgetName: 'HabitsWidget' });
     scheduleHabitsMorningReminder(habits.length);
     scheduleHabitsEveningCheckIn(doneTodayCount, habits.length);
     scheduleHabitsWeeklyDigest(bestStreakDays, bestStreakName);

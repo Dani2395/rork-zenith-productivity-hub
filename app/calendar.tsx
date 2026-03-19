@@ -20,6 +20,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles, Bell } from '
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { saveCalendarWidgetData } from '@/widgets/widgetTaskHandler';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { scheduleCalendarDailyAgenda, cancelCalendarDailyAgenda, scheduleCalendarWeeklyPreview, cancelAllCalendarNotifications } from '@/utils/calendarNotifications';
 import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
@@ -217,6 +218,7 @@ export default function CalendarScreen() {
       nextEventName: nextEvent?.name ?? '',
       nextEventTime: nextEvent?.time ?? '',
     });
+    requestWidgetUpdate({ widgetName: 'CalendarWidget' });
 
     // Next week event count for weekly preview
     const nextWeekStart = new Date(todayDate);

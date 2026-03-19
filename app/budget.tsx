@@ -44,6 +44,7 @@ import {
   cancelAllBudgetNotifications,
 } from '@/utils/budgetNotifications';
 import { saveWidgetData } from '@/widgets/widgetTaskHandler';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 
 export default function BudgetScreen() {
   const {
@@ -273,6 +274,7 @@ export default function BudgetScreen() {
       expenses: totalExpenses,
       cashflow: totalIncome - totalExpenses,
     });
+    requestWidgetUpdate({ widgetName: 'BudgetWidget' });
 
     // 2. Fire budget-threshold alerts for any category that has crossed 80 % or 100 %
     for (const budget of budgets) {
