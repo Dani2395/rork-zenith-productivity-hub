@@ -18,8 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Edit3, Settings, Edit2, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { saveTasksWidgetData } from '@/widgets/widgetTaskHandler';
-import { requestWidgetUpdate } from 'react-native-android-widget';
+import { updateTasksWidget } from '@/widgets/widgetTaskHandler';
 import { scheduleTasksDailySummary, scheduleTasksWeeklyDigest, cancelTasksDailySummary, cancelTasksWeeklyDigest } from '@/utils/tasksNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -60,13 +59,12 @@ export default function TasksScreen() {
     const completedToday = tasks.filter(t => t.completed && t.completedDate === today);
     const nextTask = todayTasks[0]?.name ?? '';
 
-    saveTasksWidgetData({
+    updateTasksWidget({
       todayTotal: todayTasks.length,
       todayDone: completedToday.length,
       overdueCount: overdueTasks.length,
       nextTask,
     });
-    requestWidgetUpdate({ widgetName: 'TasksWidget' });
 
     // Week stats for digest
     const weekStart = new Date();

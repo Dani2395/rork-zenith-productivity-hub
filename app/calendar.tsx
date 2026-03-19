@@ -19,8 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { saveCalendarWidgetData } from '@/widgets/widgetTaskHandler';
-import { requestWidgetUpdate } from 'react-native-android-widget';
+import { updateCalendarWidget } from '@/widgets/widgetTaskHandler';
 import { scheduleCalendarDailyAgenda, cancelCalendarDailyAgenda, scheduleCalendarWeeklyPreview, cancelAllCalendarNotifications } from '@/utils/calendarNotifications';
 import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
@@ -212,13 +211,12 @@ export default function CalendarScreen() {
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const todayLabel = `${dayOfWeek}, ${monthNames[todayDate.getMonth()]} ${todayDate.getDate()}`;
 
-    saveCalendarWidgetData({
+    updateCalendarWidget({
       todayLabel,
       eventCount: todayEvents.length,
       nextEventName: nextEvent?.name ?? '',
       nextEventTime: nextEvent?.time ?? '',
     });
-    requestWidgetUpdate({ widgetName: 'CalendarWidget' });
 
     // Next week event count for weekly preview
     const nextWeekStart = new Date(todayDate);

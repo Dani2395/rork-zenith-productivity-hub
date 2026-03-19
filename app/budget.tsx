@@ -43,8 +43,7 @@ import {
   fireBudgetAlert,
   cancelAllBudgetNotifications,
 } from '@/utils/budgetNotifications';
-import { saveWidgetData } from '@/widgets/widgetTaskHandler';
-import { requestWidgetUpdate } from 'react-native-android-widget';
+import { updateBudgetWidget } from '@/widgets/widgetTaskHandler';
 
 export default function BudgetScreen() {
   const {
@@ -268,13 +267,12 @@ export default function BudgetScreen() {
   // Runs whenever transactions or budgets change.
   useEffect(() => {
     // 1. Push latest figures to the home-screen widget
-    saveWidgetData({
+    updateBudgetWidget({
       monthLabel: thisMonth,
       income: totalIncome,
       expenses: totalExpenses,
       cashflow: totalIncome - totalExpenses,
     });
-    requestWidgetUpdate({ widgetName: 'BudgetWidget' });
 
     // 2. Fire budget-threshold alerts for any category that has crossed 80 % or 100 %
     for (const budget of budgets) {

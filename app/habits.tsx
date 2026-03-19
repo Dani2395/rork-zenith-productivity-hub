@@ -15,8 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Check, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
-import { saveHabitsWidgetData } from '@/widgets/widgetTaskHandler';
-import { requestWidgetUpdate } from 'react-native-android-widget';
+import { updateHabitsWidget } from '@/widgets/widgetTaskHandler';
 import { scheduleHabitsMorningReminder, cancelHabitsMorningReminder, scheduleHabitsEveningCheckIn, cancelHabitsEveningCheckIn, scheduleHabitsWeeklyDigest, cancelAllHabitsNotifications } from '@/utils/habitsNotifications';
 
 export default function HabitsScreen() {
@@ -48,8 +47,7 @@ export default function HabitsScreen() {
       if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
     }
 
-    saveHabitsWidgetData({ doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
-    requestWidgetUpdate({ widgetName: 'HabitsWidget' });
+    updateHabitsWidget({ doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
     scheduleHabitsMorningReminder(habits.length);
     scheduleHabitsEveningCheckIn(doneTodayCount, habits.length);
     scheduleHabitsWeeklyDigest(bestStreakDays, bestStreakName);
