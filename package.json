@@ -67,6 +67,9 @@
   "overrides": {
     "@teovilla/react-native-web-maps": {
       "expo-location": "19.0.8"
+    },
+    "lucide-react-native": {
+      "react": "19.1.0"
     }
   },
   "packageManager": "npm@10.8.2"

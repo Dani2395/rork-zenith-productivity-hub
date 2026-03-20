@@ -1,3 +1,4 @@
+"use no memo";
 /**
  * Android home-screen widget — Top 5 Priorities
  *
