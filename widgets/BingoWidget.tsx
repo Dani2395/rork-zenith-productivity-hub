@@ -1,3 +1,4 @@
+"use no memo";
 /**
  * Android home-screen widget — 2026 Bingo Goals
  *
