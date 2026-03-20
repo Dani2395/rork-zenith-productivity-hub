@@ -263,6 +263,14 @@ export default function HomeScreen() {
       completedCount,
       totalCount: todayPriorities.length,
       nextPriority,
+      priorities: todayPriorities.map((p: any) => ({
+        id: p.id,
+        task: p.task,
+        completed: p.completed,
+        overdue: p.overdue ?? false,
+        subtaskTotal: p.subtasks?.length ?? 0,
+        subtaskDone: p.subtasks?.filter((s: any) => s.completed).length ?? 0,
+      })),
     });
 
     // Weekly digest: count across last 7 days
@@ -291,6 +299,11 @@ export default function HomeScreen() {
     const completedToday = tasks.filter((t: any) => t.completed && t.completedDate === todayStr);
     const overdueTasks = tasks.filter((t: any) => !t.completed && t.date && t.date < todayStr);
     updateTasksWidget({
+      tasks: [
+        ...overdueTasks.slice(0, 2).map((t: any) => ({ id: t.id, name: t.name, completed: false, overdue: true, priority: t.priority ?? 'medium', time: t.time || '' })),
+        ...todayTasks.slice(0, 4).map((t: any) => ({ id: t.id, name: t.name, completed: false, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+        ...completedToday.slice(0, 2).map((t: any) => ({ id: t.id, name: t.name, completed: true, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+      ].slice(0, 5) as any,
       todayTotal: todayTasks.length,
       todayDone: completedToday.length,
       overdueCount: overdueTasks.length,
@@ -312,7 +325,20 @@ export default function HomeScreen() {
       }
       if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
     }
-    updateHabitsWidget({ doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
+    const habitItems = habits.slice(0, 7).map((h: any) => ({
+      id: h.id, name: h.name,
+      doneToday: !!habitCompletions[`${h.id}-${todayStr}`],
+      streakDays: (() => {
+        let streak = 0;
+        const base = new Date();
+        for (let i = 0; i < 365; i++) {
+          const d = new Date(base); d.setDate(d.getDate() - i);
+          if (habitCompletions[`${h.id}-${d.toISOString().split('T')[0]}`]) { streak++; } else if (i > 0) { break; }
+        }
+        return streak;
+      })(),
+    }));
+    updateHabitsWidget({ habits: habitItems as any, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
 
     // Calendar widget
     const dateObj = new Date();
@@ -336,7 +362,8 @@ export default function HomeScreen() {
     // Bingo widget
     const completedBingo = bingoData.filter((item: any) => item.d).length;
     const recentGoal = [...bingoData].reverse().find((item: any) => item.d && item.t !== 'FREE SPACE')?.t ?? '';
-    updateBingoWidget({ completedCount: completedBingo, hasBingo: false, recentGoal });
+    const bingoCells = bingoData.map((item: any) => ({ emoji: item.e ?? '', text: item.t ?? '', done: item.d ?? false, isFreeSpace: item.t === 'FREE SPACE' }));
+    updateBingoWidget({ cells: bingoCells as any, completedCount: completedBingo, hasBingo: false, recentGoal });
   }, [tasks, habits, habitCompletions, events, notes, giftPeople, bingoData]);
 
   useEffect(() => {

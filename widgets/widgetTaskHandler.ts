@@ -50,14 +50,32 @@ export interface WidgetData {
   cashflow: number;
 }
 
+export interface TaskItemData {
+  id: number;
+  name: string;
+  completed: boolean;
+  overdue: boolean;
+  priority: 'low' | 'medium' | 'high';
+  time?: string;
+}
+
 export interface TasksWidgetData {
+  tasks: TaskItemData[];
   todayTotal: number;
   todayDone: number;
   overdueCount: number;
   nextTask: string;
 }
 
+export interface HabitItemData {
+  id: number;
+  name: string;
+  doneToday: boolean;
+  streakDays: number;
+}
+
 export interface HabitsWidgetData {
+  habits: HabitItemData[];
   doneTodayCount: number;
   totalHabits: number;
   bestStreakName: string;
@@ -78,11 +96,21 @@ export interface NotesWidgetData {
   latestNoteDate: string;
 }
 
+export interface PriorityItemData {
+  id: number;
+  task: string;
+  completed: boolean;
+  overdue: boolean;
+  subtaskTotal: number;
+  subtaskDone: number;
+}
+
 export interface PrioritiesWidgetData {
   todayLabel: string;
   completedCount: number;
   totalCount: number;
   nextPriority: string;
+  priorities: PriorityItemData[];
 }
 
 export interface GiftsWidgetData {
@@ -92,7 +120,15 @@ export interface GiftsWidgetData {
   nextEventLabel: string;
 }
 
+export interface BingoCellData {
+  emoji: string;
+  text: string;
+  done: boolean;
+  isFreeSpace: boolean;
+}
+
 export interface BingoWidgetData {
+  cells: BingoCellData[];
   completedCount: number;
   hasBingo: boolean;
   recentGoal: string;
@@ -192,26 +228,33 @@ async function computeTasksData(): Promise<TasksWidgetData> {
   const todayTasks = tasks.filter(t => !t.completed && t.date === today);
   const completedToday = tasks.filter(t => t.completed && t.completedDate === today);
   const overdueTasks = tasks.filter(t => !t.completed && t.date && t.date < today);
-  return { todayTotal: todayTasks.length, todayDone: completedToday.length, overdueCount: overdueTasks.length, nextTask: todayTasks[0]?.name ?? '' };
+  const displayTasks: TaskItemData[] = [
+    ...overdueTasks.slice(0, 2).map(t => ({ id: t.id, name: t.name, completed: false, overdue: true, priority: t.priority ?? 'medium', time: t.time || '' })),
+    ...todayTasks.slice(0, 4).map(t => ({ id: t.id, name: t.name, completed: false, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+    ...completedToday.slice(0, 2).map(t => ({ id: t.id, name: t.name, completed: true, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+  ].slice(0, 5);
+  return { tasks: displayTasks, todayTotal: todayTasks.length, todayDone: completedToday.length, overdueCount: overdueTasks.length, nextTask: todayTasks[0]?.name ?? '' };
 }
 
 async function computeHabitsData(): Promise<HabitsWidgetData> {
   const habits: any[] = await load('habits', []);
   const completions: any = await load('habitCompletions', {});
   const today = new Date().toISOString().split('T')[0];
-  const doneTodayCount = habits.filter(h => completions[`${h.id}-${today}`]).length;
   let bestStreakName = '', bestStreakDays = 0;
-  for (const habit of habits) {
+  const habitItems: HabitItemData[] = habits.slice(0, 7).map(h => {
+    const doneToday = !!completions[`${h.id}-${today}`];
     let streak = 0;
     const base = new Date();
     for (let i = 0; i < 365; i++) {
       const d = new Date(base); d.setDate(d.getDate() - i);
-      const key = `${habit.id}-${d.toISOString().split('T')[0]}`;
+      const key = `${h.id}-${d.toISOString().split('T')[0]}`;
       if (completions[key]) { streak++; } else if (i > 0) { break; }
     }
-    if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
-  }
-  return { doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays };
+    if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = h.name; }
+    return { id: h.id, name: h.name, doneToday, streakDays: streak };
+  });
+  const doneTodayCount = habitItems.filter(h => h.doneToday).length;
+  return { habits: habitItems, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays };
 }
 
 async function computeCalendarData(): Promise<CalendarWidgetData> {
@@ -235,11 +278,19 @@ async function computePrioritiesData(): Promise<PrioritiesWidgetData> {
   const priorities: any = await load('priorities', {});
   const today = new Date().toISOString().split('T')[0];
   const d = new Date();
-  const todayLabel = `${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
+  const todayLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
   const todayList: any[] = priorities[today] ?? [];
   const completedCount = todayList.filter(p => p.completed).length;
   const nextPriority = todayList.find(p => !p.completed)?.task ?? '';
-  return { todayLabel, completedCount, totalCount: todayList.length, nextPriority };
+  const priorityItems: PriorityItemData[] = todayList.map(p => ({
+    id: p.id,
+    task: p.task,
+    completed: p.completed,
+    overdue: p.overdue ?? false,
+    subtaskTotal: p.subtasks?.length ?? 0,
+    subtaskDone: p.subtasks?.filter((s: any) => s.completed).length ?? 0,
+  }));
+  return { todayLabel, completedCount, totalCount: todayList.length, nextPriority, priorities: priorityItems };
 }
 
 async function computeGiftsData(): Promise<GiftsWidgetData> {
@@ -251,9 +302,15 @@ async function computeGiftsData(): Promise<GiftsWidgetData> {
 
 async function computeBingoData(): Promise<BingoWidgetData> {
   const bingoData: any[] = await load('bingoData', []);
+  const cells: BingoCellData[] = bingoData.map(item => ({
+    emoji: item.e ?? '',
+    text: item.t ?? '',
+    done: item.d ?? false,
+    isFreeSpace: item.t === 'FREE SPACE',
+  }));
   const completedCount = bingoData.filter(item => item.d).length;
   const recentGoal = [...bingoData].reverse().find(item => item.d && item.t !== 'FREE SPACE')?.t ?? '';
-  return { completedCount, hasBingo: false, recentGoal };
+  return { cells, completedCount, hasBingo: false, recentGoal };
 }
 
 async function computeBudgetData(): Promise<WidgetData> {

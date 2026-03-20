@@ -47,7 +47,21 @@ export default function HabitsScreen() {
       if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
     }
 
-    updateHabitsWidget({ doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
+    const habitItems = habits.slice(0, 7).map(h => ({
+      id: h.id,
+      name: h.name,
+      doneToday: !!habitCompletions[`${h.id}-${today}`],
+      streakDays: (() => {
+        let streak = 0;
+        const base = new Date();
+        for (let i = 0; i < 365; i++) {
+          const d = new Date(base); d.setDate(d.getDate() - i);
+          if (habitCompletions[`${h.id}-${d.toISOString().split('T')[0]}`]) { streak++; } else if (i > 0) { break; }
+        }
+        return streak;
+      })(),
+    }));
+    updateHabitsWidget({ habits: habitItems as any, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
     scheduleHabitsMorningReminder(habits.length);
     scheduleHabitsEveningCheckIn(doneTodayCount, habits.length);
     scheduleHabitsWeeklyDigest(bestStreakDays, bestStreakName);

@@ -97,7 +97,13 @@ export default function BingoScreen() {
   // Widget data + smart notifications
   useEffect(() => {
     const recentGoal = [...bingoData].reverse().find(item => item.d && item.t !== 'FREE SPACE')?.t ?? '';
-    updateBingoWidget({ completedCount, hasBingo, recentGoal });
+    const cells = bingoData.map(item => ({
+      emoji: item.e ?? '',
+      text: item.t ?? '',
+      done: item.d ?? false,
+      isFreeSpace: item.t === 'FREE SPACE',
+    }));
+    updateBingoWidget({ cells: cells as any, completedCount, hasBingo, recentGoal });
 
     scheduleBingoWeeklyCheckIn(completedCount);
     scheduleBingoMonthlyMotivation(completedCount);
