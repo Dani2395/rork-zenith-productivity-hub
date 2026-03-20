@@ -263,6 +263,14 @@ export default function HomeScreen() {
       completedCount,
       totalCount: todayPriorities.length,
       nextPriority,
+      priorities: todayPriorities.map((p: any) => ({
+        id: p.id,
+        task: p.task,
+        completed: p.completed,
+        overdue: p.overdue ?? false,
+        subtaskTotal: p.subtasks?.length ?? 0,
+        subtaskDone: p.subtasks?.filter((s: any) => s.completed).length ?? 0,
+      })),
     });
 
     // Weekly digest: count across last 7 days
@@ -291,6 +299,11 @@ export default function HomeScreen() {
     const completedToday = tasks.filter((t: any) => t.completed && t.completedDate === todayStr);
     const overdueTasks = tasks.filter((t: any) => !t.completed && t.date && t.date < todayStr);
     updateTasksWidget({
+      tasks: [
+        ...overdueTasks.slice(0, 2).map((t: any) => ({ id: t.id, name: t.name, completed: false, overdue: true, priority: t.priority ?? 'medium', time: t.time || '' })),
+        ...todayTasks.slice(0, 4).map((t: any) => ({ id: t.id, name: t.name, completed: false, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+        ...completedToday.slice(0, 2).map((t: any) => ({ id: t.id, name: t.name, completed: true, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+      ].slice(0, 5) as any,
       todayTotal: todayTasks.length,
       todayDone: completedToday.length,
       overdueCount: overdueTasks.length,

@@ -60,6 +60,11 @@ export default function TasksScreen() {
     const nextTask = todayTasks[0]?.name ?? '';
 
     updateTasksWidget({
+      tasks: [
+        ...overdueTasks.slice(0, 2).map((t: any) => ({ id: t.id, name: t.name, completed: false, overdue: true, priority: t.priority ?? 'medium', time: t.time || '' })),
+        ...todayTasks.slice(0, 4).map((t: any) => ({ id: t.id, name: t.name, completed: false, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+        ...completedToday.slice(0, 2).map((t: any) => ({ id: t.id, name: t.name, completed: true, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+      ].slice(0, 5) as any,
       todayTotal: todayTasks.length,
       todayDone: completedToday.length,
       overdueCount: overdueTasks.length,

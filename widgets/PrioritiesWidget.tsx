@@ -1,29 +1,106 @@
 "use no memo";
 /**
- * Android home-screen widget — Top 5 Priorities
+ * Android home-screen widget — Top Priorities (Google Tasks-style)
  *
- * Shows today's priority completion status and the first pending priority.
- * Tapping the widget opens the app's Home screen.
+ * Shows today's up-to-5 priorities as individual rows with subtask
+ * progress and overdue indicators. Tapping opens the Home screen.
  */
 
 import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
+
+export interface PriorityItemData {
+  id: number;
+  task: string;
+  completed: boolean;
+  overdue: boolean;
+  subtaskTotal: number;
+  subtaskDone: number;
+}
 
 export interface PrioritiesWidgetProps {
   todayLabel: string;
   completedCount: number;
   totalCount: number;
   nextPriority: string;
+  priorities: PriorityItemData[];
 }
 
-export function PrioritiesWidget({
-  todayLabel,
-  completedCount,
-  totalCount,
-  nextPriority,
-}: PrioritiesWidgetProps) {
+function PriorityRow({ item, num }: { item: PriorityItemData; num: number }) {
+  "use no memo";
+  const hasSubtasks = item.subtaskTotal > 0;
+  const subtaskLabel = hasSubtasks ? `${item.subtaskDone}/${item.subtaskTotal} subtasks` : '';
+
+  return (
+    <FlexWidget
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingTop: 7,
+        paddingBottom: 7,
+        paddingLeft: 4,
+        paddingRight: 4,
+      }}
+      clickAction="OPEN_APP"
+    >
+      {/* Number badge */}
+      <FlexWidget
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: item.completed ? '#14532d' : (item.overdue ? '#7f1d1d' : '#1e3a5f'),
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginRight: 10,
+        }}
+      >
+        <TextWidget
+          text={item.completed ? '✓' : String(num)}
+          style={{
+            fontSize: 11,
+            color: item.completed ? '#4ade80' : (item.overdue ? '#f87171' : '#93c5fd'),
+            fontWeight: 'bold',
+          }}
+        />
+      </FlexWidget>
+
+      {/* Task + subtask info */}
+      <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
+        <TextWidget
+          text={item.task}
+          style={{
+            fontSize: 13,
+            color: item.completed ? '#475569' : (item.overdue ? '#fca5a5' : '#f1f5f9'),
+            fontWeight: item.completed ? 'normal' : 'bold',
+          }}
+        />
+        {hasSubtasks ? (
+          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+            <TextWidget
+              text="↳ "
+              style={{ fontSize: 10, color: '#475569' }}
+            />
+            <TextWidget
+              text={subtaskLabel}
+              style={{
+                fontSize: 10,
+                color: item.subtaskDone === item.subtaskTotal ? '#4ade80' : '#64748b',
+              }}
+            />
+          </FlexWidget>
+        ) : null}
+      </FlexWidget>
+
+      {item.overdue && !item.completed ? (
+        <TextWidget text="!" style={{ fontSize: 12, color: '#f87171', fontWeight: 'bold', marginLeft: 4 }} />
+      ) : null}
+    </FlexWidget>
+  );
+}
+
+export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextPriority, priorities = [] }: PrioritiesWidgetProps) {
   const allDone = totalCount > 0 && completedCount >= totalCount;
-  const pctColor = allDone ? '#4ade80' : completedCount > 0 ? '#facc15' : '#94a3b8';
 
   return (
     <FlexWidget
@@ -31,63 +108,131 @@ export function PrioritiesWidget({
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: '#0f172a',
-        borderRadius: 16,
-        padding: 12,
-        justifyContent: 'space-between',
+        backgroundColor: '#111827',
+        borderRadius: 20,
       }}
       clickAction="OPEN_APP"
     >
-      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <TextWidget text="⭐" style={{ fontSize: 14 }} />
-        <TextWidget
-          text=" Top Priorities"
-          style={{ fontSize: 13, fontWeight: 'bold', color: '#e2e8f0' }}
-        />
-      </FlexWidget>
-
-      <TextWidget
-        text={todayLabel}
-        style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}
-      />
-
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-        <TextWidget text="Done" style={{ fontSize: 11, color: '#94a3b8' }} />
-        <TextWidget
-          text={`${completedCount} / ${totalCount}`}
-          style={{ fontSize: 11, color: pctColor, fontWeight: 'bold' }}
-        />
-      </FlexWidget>
-
-      <FlexWidget style={{ height: 1, backgroundColor: '#1e293b', marginTop: 6, marginBottom: 6 }} />
-
-      {allDone ? (
-        <TextWidget
-          text="All priorities done! 🎉"
-          style={{ fontSize: 11, color: '#4ade80', fontWeight: 'bold' }}
-        />
-      ) : nextPriority ? (
+      {/* ── Header ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#1a2a1a',
+          borderRadius: 20,
+          paddingTop: 12,
+          paddingBottom: 12,
+          paddingLeft: 14,
+          paddingRight: 14,
+        }}
+      >
         <FlexWidget style={{ flexDirection: 'column' }}>
+          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TextWidget text="⭐" style={{ fontSize: 14 }} />
+            <TextWidget
+              text="  Top Priorities"
+              style={{ fontSize: 15, fontWeight: 'bold', color: '#f1f5f9' }}
+            />
+          </FlexWidget>
           <TextWidget
-            text="Next up"
-            style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}
-          />
-          <TextWidget
-            text={nextPriority}
-            style={{ fontSize: 11, color: '#cbd5e1' }}
+            text={todayLabel}
+            style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}
           />
         </FlexWidget>
-      ) : (
-        <TextWidget
-          text="Add your priorities for today"
-          style={{ fontSize: 10, color: '#475569', fontStyle: 'italic' }}
-        />
-      )}
+        <FlexWidget
+          style={{
+            backgroundColor: allDone ? '#166534' : '#365314',
+            borderRadius: 10,
+            paddingTop: 3,
+            paddingBottom: 3,
+            paddingLeft: 8,
+            paddingRight: 8,
+          }}
+        >
+          <TextWidget
+            text={`${completedCount} / ${totalCount}`}
+            style={{ fontSize: 11, color: '#ffffff', fontWeight: 'bold' }}
+          />
+        </FlexWidget>
+      </FlexWidget>
 
-      <TextWidget
-        text="Tap to open Zenith"
-        style={{ fontSize: 9, color: '#475569', marginTop: 6, textAlign: 'right' }}
+      {/* ── Priority rows ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'column',
+          paddingLeft: 10,
+          paddingRight: 10,
+          paddingTop: 4,
+          paddingBottom: 4,
+        }}
+      >
+        {priorities.length === 0 ? (
+          <FlexWidget
+            style={{
+              paddingTop: 20,
+              paddingBottom: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <TextWidget
+              text="✨  Add your priorities for today"
+              style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}
+            />
+          </FlexWidget>
+        ) : null}
+
+        {priorities[0] ? (
+          <PriorityRow item={priorities[0]} num={1} />
+        ) : null}
+        {priorities[1] ? (
+          <PriorityRow item={priorities[1]} num={2} />
+        ) : null}
+        {priorities[2] ? (
+          <PriorityRow item={priorities[2]} num={3} />
+        ) : null}
+        {priorities[3] ? (
+          <PriorityRow item={priorities[3]} num={4} />
+        ) : null}
+        {priorities[4] ? (
+          <PriorityRow item={priorities[4]} num={5} />
+        ) : null}
+      </FlexWidget>
+
+      {/* ── Divider ── */}
+      <FlexWidget
+        style={{ height: 1, backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
       />
+
+      {/* ── Footer ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingTop: 8,
+          paddingBottom: 10,
+          paddingLeft: 14,
+          paddingRight: 14,
+        }}
+      >
+        {allDone ? (
+          <TextWidget
+            text="🎉  All priorities done!"
+            style={{ fontSize: 10, color: '#4ade80', fontWeight: 'bold' }}
+          />
+        ) : (
+          <TextWidget
+            text={nextPriority ? `Next: ${nextPriority}` : ''}
+            style={{ fontSize: 10, color: '#94a3b8' }}
+          />
+        )}
+        <TextWidget
+          text="Tap to open →"
+          style={{ fontSize: 9, color: '#334155' }}
+        />
+      </FlexWidget>
     </FlexWidget>
   );
 }

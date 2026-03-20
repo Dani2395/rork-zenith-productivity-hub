@@ -50,7 +50,17 @@ export interface WidgetData {
   cashflow: number;
 }
 
+export interface TaskItemData {
+  id: number;
+  name: string;
+  completed: boolean;
+  overdue: boolean;
+  priority: 'low' | 'medium' | 'high';
+  time?: string;
+}
+
 export interface TasksWidgetData {
+  tasks: TaskItemData[];
   todayTotal: number;
   todayDone: number;
   overdueCount: number;
@@ -78,11 +88,21 @@ export interface NotesWidgetData {
   latestNoteDate: string;
 }
 
+export interface PriorityItemData {
+  id: number;
+  task: string;
+  completed: boolean;
+  overdue: boolean;
+  subtaskTotal: number;
+  subtaskDone: number;
+}
+
 export interface PrioritiesWidgetData {
   todayLabel: string;
   completedCount: number;
   totalCount: number;
   nextPriority: string;
+  priorities: PriorityItemData[];
 }
 
 export interface GiftsWidgetData {
@@ -192,7 +212,12 @@ async function computeTasksData(): Promise<TasksWidgetData> {
   const todayTasks = tasks.filter(t => !t.completed && t.date === today);
   const completedToday = tasks.filter(t => t.completed && t.completedDate === today);
   const overdueTasks = tasks.filter(t => !t.completed && t.date && t.date < today);
-  return { todayTotal: todayTasks.length, todayDone: completedToday.length, overdueCount: overdueTasks.length, nextTask: todayTasks[0]?.name ?? '' };
+  const displayTasks: TaskItemData[] = [
+    ...overdueTasks.slice(0, 2).map(t => ({ id: t.id, name: t.name, completed: false, overdue: true, priority: t.priority ?? 'medium', time: t.time || '' })),
+    ...todayTasks.slice(0, 4).map(t => ({ id: t.id, name: t.name, completed: false, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+    ...completedToday.slice(0, 2).map(t => ({ id: t.id, name: t.name, completed: true, overdue: false, priority: t.priority ?? 'medium', time: t.time || '' })),
+  ].slice(0, 5);
+  return { tasks: displayTasks, todayTotal: todayTasks.length, todayDone: completedToday.length, overdueCount: overdueTasks.length, nextTask: todayTasks[0]?.name ?? '' };
 }
 
 async function computeHabitsData(): Promise<HabitsWidgetData> {
@@ -235,11 +260,19 @@ async function computePrioritiesData(): Promise<PrioritiesWidgetData> {
   const priorities: any = await load('priorities', {});
   const today = new Date().toISOString().split('T')[0];
   const d = new Date();
-  const todayLabel = `${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
+  const todayLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
   const todayList: any[] = priorities[today] ?? [];
   const completedCount = todayList.filter(p => p.completed).length;
   const nextPriority = todayList.find(p => !p.completed)?.task ?? '';
-  return { todayLabel, completedCount, totalCount: todayList.length, nextPriority };
+  const priorityItems: PriorityItemData[] = todayList.map(p => ({
+    id: p.id,
+    task: p.task,
+    completed: p.completed,
+    overdue: p.overdue ?? false,
+    subtaskTotal: p.subtasks?.length ?? 0,
+    subtaskDone: p.subtasks?.filter((s: any) => s.completed).length ?? 0,
+  }));
+  return { todayLabel, completedCount, totalCount: todayList.length, nextPriority, priorities: priorityItems };
 }
 
 async function computeGiftsData(): Promise<GiftsWidgetData> {

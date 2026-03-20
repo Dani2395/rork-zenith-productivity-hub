@@ -130,12 +130,12 @@
             {
               "name": "TasksWidget",
               "label": "Tasks Today",
-              "description": "Shows today's tasks, overdue count, and next task",
+              "description": "Shows today's tasks with priority, time, and overdue indicators",
               "previewImage": "./assets/images/adaptive-icon.png",
               "minWidth": "180dp",
-              "minHeight": "110dp",
+              "minHeight": "200dp",
               "targetCellWidth": 3,
-              "targetCellHeight": 2,
+              "targetCellHeight": 4,
               "updatePeriodMillis": 1800000,
               "resizeMode": "horizontal|vertical",
               "widgetFeatures": "reconfigurable|configuration_optional"
@@ -182,12 +182,12 @@
             {
               "name": "PrioritiesWidget",
               "label": "Top Priorities",
-              "description": "Shows today's priority completion progress and next priority",
+              "description": "Shows today's priorities with subtask progress and overdue indicators",
               "previewImage": "./assets/images/adaptive-icon.png",
               "minWidth": "180dp",
-              "minHeight": "110dp",
+              "minHeight": "200dp",
               "targetCellWidth": 3,
-              "targetCellHeight": 2,
+              "targetCellHeight": 4,
               "updatePeriodMillis": 1800000,
               "resizeMode": "horizontal|vertical",
               "widgetFeatures": "reconfigurable|configuration_optional"
