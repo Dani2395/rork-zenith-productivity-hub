@@ -66,13 +66,13 @@ export function BingoWidget({ completedCount, hasBingo, recentGoal }: BingoWidge
       )}
 
       {recentGoal ? (
-        <>
+        <FlexWidget style={{ flexDirection: 'column' }}>
           <TextWidget text="Latest" style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }} />
           <TextWidget
             text={recentGoal}
             style={{ fontSize: 10, color: '#cbd5e1' }}
           />
-        </>
+        </FlexWidget>
       ) : (
         <TextWidget
           text="Start checking off goals!"
