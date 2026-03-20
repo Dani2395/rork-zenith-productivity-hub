@@ -67,7 +67,15 @@ export interface TasksWidgetData {
   nextTask: string;
 }
 
+export interface HabitItemData {
+  id: number;
+  name: string;
+  doneToday: boolean;
+  streakDays: number;
+}
+
 export interface HabitsWidgetData {
+  habits: HabitItemData[];
   doneTodayCount: number;
   totalHabits: number;
   bestStreakName: string;
@@ -112,7 +120,15 @@ export interface GiftsWidgetData {
   nextEventLabel: string;
 }
 
+export interface BingoCellData {
+  emoji: string;
+  text: string;
+  done: boolean;
+  isFreeSpace: boolean;
+}
+
 export interface BingoWidgetData {
+  cells: BingoCellData[];
   completedCount: number;
   hasBingo: boolean;
   recentGoal: string;
@@ -224,19 +240,21 @@ async function computeHabitsData(): Promise<HabitsWidgetData> {
   const habits: any[] = await load('habits', []);
   const completions: any = await load('habitCompletions', {});
   const today = new Date().toISOString().split('T')[0];
-  const doneTodayCount = habits.filter(h => completions[`${h.id}-${today}`]).length;
   let bestStreakName = '', bestStreakDays = 0;
-  for (const habit of habits) {
+  const habitItems: HabitItemData[] = habits.slice(0, 7).map(h => {
+    const doneToday = !!completions[`${h.id}-${today}`];
     let streak = 0;
     const base = new Date();
     for (let i = 0; i < 365; i++) {
       const d = new Date(base); d.setDate(d.getDate() - i);
-      const key = `${habit.id}-${d.toISOString().split('T')[0]}`;
+      const key = `${h.id}-${d.toISOString().split('T')[0]}`;
       if (completions[key]) { streak++; } else if (i > 0) { break; }
     }
-    if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = habit.name; }
-  }
-  return { doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays };
+    if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = h.name; }
+    return { id: h.id, name: h.name, doneToday, streakDays: streak };
+  });
+  const doneTodayCount = habitItems.filter(h => h.doneToday).length;
+  return { habits: habitItems, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays };
 }
 
 async function computeCalendarData(): Promise<CalendarWidgetData> {
@@ -284,9 +302,15 @@ async function computeGiftsData(): Promise<GiftsWidgetData> {
 
 async function computeBingoData(): Promise<BingoWidgetData> {
   const bingoData: any[] = await load('bingoData', []);
+  const cells: BingoCellData[] = bingoData.map(item => ({
+    emoji: item.e ?? '',
+    text: item.t ?? '',
+    done: item.d ?? false,
+    isFreeSpace: item.t === 'FREE SPACE',
+  }));
   const completedCount = bingoData.filter(item => item.d).length;
   const recentGoal = [...bingoData].reverse().find(item => item.d && item.t !== 'FREE SPACE')?.t ?? '';
-  return { completedCount, hasBingo: false, recentGoal };
+  return { cells, completedCount, hasBingo: false, recentGoal };
 }
 
 async function computeBudgetData(): Promise<WidgetData> {

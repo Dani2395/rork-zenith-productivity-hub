@@ -1,23 +1,84 @@
 "use no memo";
 /**
- * Android home-screen widget — 2026 Bingo Goals
+ * Android home-screen widget — 2026 Bingo Goals (full 5×5 card)
  *
- * Shows completed squares out of 25 and whether a bingo line has been achieved.
- * Tapping the widget opens the app's Bingo screen.
+ * Renders the complete bingo grid. Done cells are green, free space is
+ * gold, pending cells are dark. Each row is tappable to open the app.
  */
 
 import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
-export interface BingoWidgetProps {
-  completedCount: number;   // out of 25
-  hasBingo: boolean;
-  recentGoal: string;       // last completed goal text
+export interface BingoCellData {
+  emoji: string;
+  text: string;
+  done: boolean;
+  isFreeSpace: boolean;
 }
 
-export function BingoWidget({ completedCount, hasBingo, recentGoal }: BingoWidgetProps) {
+export interface BingoWidgetProps {
+  cells: BingoCellData[];
+  completedCount: number;
+  hasBingo: boolean;
+  recentGoal: string;
+}
+
+function BingoCell({ cell }: { cell: BingoCellData }) {
+  "use no memo";
+  if (!cell) return null;
+  const bg = cell.isFreeSpace ? '#713f12' : cell.done ? '#14532d' : '#1e293b';
+  const emojiColor = cell.done || cell.isFreeSpace ? '#ffffff' : '#64748b';
+  const textColor = cell.isFreeSpace ? '#fef08a' : cell.done ? '#86efac' : '#475569';
+  const label = cell.isFreeSpace ? 'FREE' : cell.text.length > 6 ? cell.text.slice(0, 6) : cell.text;
+
+  return (
+    <FlexWidget
+      style={{
+        flex: 1,
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: bg,
+        borderRadius: 6,
+        margin: 2,
+        paddingTop: 4,
+        paddingBottom: 4,
+      }}
+      clickAction="OPEN_APP"
+    >
+      <TextWidget
+        text={cell.isFreeSpace ? '⭐' : (cell.done ? cell.emoji : cell.emoji)}
+        style={{ fontSize: 13, textAlign: 'center', color: emojiColor }}
+      />
+      <TextWidget
+        text={label}
+        style={{ fontSize: 7, color: textColor, textAlign: 'center', marginTop: 1 }}
+      />
+      {cell.done && !cell.isFreeSpace ? (
+        <TextWidget text="✓" style={{ fontSize: 8, color: '#4ade80', fontWeight: 'bold' }} />
+      ) : null}
+    </FlexWidget>
+  );
+}
+
+function BingoRow({ c0, c1, c2, c3, c4 }: { c0: BingoCellData; c1: BingoCellData; c2: BingoCellData; c3: BingoCellData; c4: BingoCellData }) {
+  "use no memo";
+  return (
+    <FlexWidget style={{ flexDirection: 'row', flex: 1, paddingLeft: 4, paddingRight: 4 }}>
+      <BingoCell cell={c0} />
+      <BingoCell cell={c1} />
+      <BingoCell cell={c2} />
+      <BingoCell cell={c3} />
+      <BingoCell cell={c4} />
+    </FlexWidget>
+  );
+}
+
+const EMPTY_CELL: BingoCellData = { emoji: '', text: '', done: false, isFreeSpace: false };
+
+export function BingoWidget({ cells = [], completedCount, hasBingo, recentGoal }: BingoWidgetProps) {
   const pct = Math.round((completedCount / 25) * 100);
-  const pctColor = hasBingo ? '#4ade80' : completedCount >= 13 ? '#facc15' : '#818cf8';
+  const c = (i: number): BingoCellData => cells[i] ?? EMPTY_CELL;
 
   return (
     <FlexWidget
@@ -25,65 +86,86 @@ export function BingoWidget({ completedCount, hasBingo, recentGoal }: BingoWidge
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: '#0f172a',
-        borderRadius: 16,
-        padding: 12,
-        justifyContent: 'space-between',
+        backgroundColor: '#111827',
+        borderRadius: 20,
       }}
       clickAction="OPEN_APP"
     >
-      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <TextWidget text="🎯" style={{ fontSize: 14 }} />
-        <TextWidget
-          text=" 2026 Bingo"
-          style={{ fontSize: 13, fontWeight: 'bold', color: '#e2e8f0' }}
-        />
-      </FlexWidget>
-
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-        <TextWidget text="Goals done" style={{ fontSize: 11, color: '#94a3b8' }} />
-        <TextWidget
-          text={`${completedCount} / 25`}
-          style={{ fontSize: 11, color: '#e2e8f0', fontWeight: 'bold' }}
-        />
-      </FlexWidget>
-
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
-        <TextWidget text="Progress" style={{ fontSize: 11, color: '#94a3b8' }} />
-        <TextWidget
-          text={`${pct}%`}
-          style={{ fontSize: 11, color: pctColor, fontWeight: 'bold' }}
-        />
-      </FlexWidget>
-
-      <FlexWidget style={{ height: 1, backgroundColor: '#1e293b', marginTop: 6, marginBottom: 6 }} />
-
-      {hasBingo && (
-        <TextWidget
-          text="🎉 BINGO achieved!"
-          style={{ fontSize: 12, color: '#4ade80', fontWeight: 'bold', marginBottom: 4 }}
-        />
-      )}
-
-      {recentGoal ? (
-        <FlexWidget style={{ flexDirection: 'column' }}>
-          <TextWidget text="Latest" style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }} />
+      {/* ── Header ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#1a1a2e',
+          borderRadius: 20,
+          paddingTop: 10,
+          paddingBottom: 10,
+          paddingLeft: 14,
+          paddingRight: 14,
+        }}
+      >
+        <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TextWidget text="🎯" style={{ fontSize: 15 }} />
           <TextWidget
-            text={recentGoal}
-            style={{ fontSize: 10, color: '#cbd5e1' }}
+            text="  2026 Bingo"
+            style={{ fontSize: 15, fontWeight: 'bold', color: '#f1f5f9' }}
+          />
+          {hasBingo ? (
+            <TextWidget text="  🎉" style={{ fontSize: 13 }} />
+          ) : null}
+        </FlexWidget>
+        <FlexWidget
+          style={{
+            backgroundColor: hasBingo ? '#14532d' : '#312e81',
+            borderRadius: 10,
+            paddingTop: 3,
+            paddingBottom: 3,
+            paddingLeft: 8,
+            paddingRight: 8,
+          }}
+        >
+          <TextWidget
+            text={`${completedCount}/25  ${pct}%`}
+            style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 'bold' }}
           />
         </FlexWidget>
-      ) : (
-        <TextWidget
-          text="Start checking off goals!"
-          style={{ fontSize: 10, color: '#475569', fontStyle: 'italic' }}
-        />
-      )}
+      </FlexWidget>
 
-      <TextWidget
-        text="Tap to open Zenith"
-        style={{ fontSize: 9, color: '#475569', marginTop: 4, textAlign: 'right' }}
-      />
+      {/* ── 5×5 Grid ── */}
+      <FlexWidget
+        style={{
+          flex: 1,
+          flexDirection: 'column',
+          paddingTop: 6,
+          paddingBottom: 6,
+        }}
+      >
+        <BingoRow c0={c(0)}  c1={c(1)}  c2={c(2)}  c3={c(3)}  c4={c(4)}  />
+        <BingoRow c0={c(5)}  c1={c(6)}  c2={c(7)}  c3={c(8)}  c4={c(9)}  />
+        <BingoRow c0={c(10)} c1={c(11)} c2={c(12)} c3={c(13)} c4={c(14)} />
+        <BingoRow c0={c(15)} c1={c(16)} c2={c(17)} c3={c(18)} c4={c(19)} />
+        <BingoRow c0={c(20)} c1={c(21)} c2={c(22)} c3={c(23)} c4={c(24)} />
+      </FlexWidget>
+
+      {/* ── Footer ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingTop: 6,
+          paddingBottom: 8,
+          paddingLeft: 14,
+          paddingRight: 14,
+        }}
+      >
+        <TextWidget
+          text={recentGoal ? `✓ ${recentGoal.slice(0, 20)}` : '🌟 Start your journey!'}
+          style={{ fontSize: 9, color: recentGoal ? '#4ade80' : '#475569', fontStyle: recentGoal ? 'normal' : 'italic' }}
+        />
+        <TextWidget text="Tap to open →" style={{ fontSize: 9, color: '#334155' }} />
+      </FlexWidget>
     </FlexWidget>
   );
 }

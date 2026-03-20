@@ -143,12 +143,12 @@
             {
               "name": "HabitsWidget",
               "label": "Habits Today",
-              "description": "Shows today's habit completion and best streak",
+              "description": "Shows each habit with completion status, streak, and overall percentage",
               "previewImage": "./assets/images/adaptive-icon.png",
               "minWidth": "180dp",
-              "minHeight": "110dp",
+              "minHeight": "200dp",
               "targetCellWidth": 3,
-              "targetCellHeight": 2,
+              "targetCellHeight": 4,
               "updatePeriodMillis": 1800000,
               "resizeMode": "horizontal|vertical",
               "widgetFeatures": "reconfigurable|configuration_optional"
@@ -208,12 +208,12 @@
             {
               "name": "BingoWidget",
               "label": "2026 Bingo Goals",
-              "description": "Shows bingo goal completion progress",
+              "description": "Shows the full 5x5 bingo card with goal completion status",
               "previewImage": "./assets/images/adaptive-icon.png",
-              "minWidth": "180dp",
-              "minHeight": "110dp",
-              "targetCellWidth": 3,
-              "targetCellHeight": 2,
+              "minWidth": "220dp",
+              "minHeight": "260dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 5,
               "updatePeriodMillis": 1800000,
               "resizeMode": "horizontal|vertical",
               "widgetFeatures": "reconfigurable|configuration_optional"
