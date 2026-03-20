@@ -54,7 +54,7 @@ export function CalendarWidget({
       <FlexWidget style={{ height: 1, backgroundColor: '#1e293b', marginTop: 6, marginBottom: 6 }} />
 
       {nextEventName ? (
-        <>
+        <FlexWidget style={{ flexDirection: 'column' }}>
           <TextWidget
             text="Next up"
             style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}
@@ -69,7 +69,7 @@ export function CalendarWidget({
               style={{ fontSize: 10, color: '#818cf8', marginTop: 2 }}
             />
           ) : null}
-        </>
+        </FlexWidget>
       ) : (
         <TextWidget
           text="Nothing scheduled today 🌴"

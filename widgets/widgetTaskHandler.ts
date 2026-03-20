@@ -136,42 +136,42 @@ export async function saveBingoWidgetData(data: BingoWidgetData) {
 
 export async function updateBudgetWidget(data: WidgetData) {
   await saveWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'BudgetWidget', renderWidget: async () => React.createElement(BudgetWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'BudgetWidget', renderWidget: () => React.createElement(BudgetWidget, data), widgetNotFound: () => {} });
 }
 
 export async function updateTasksWidget(data: TasksWidgetData) {
   await saveTasksWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'TasksWidget', renderWidget: async () => React.createElement(TasksWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'TasksWidget', renderWidget: () => React.createElement(TasksWidget, data), widgetNotFound: () => {} });
 }
 
 export async function updateHabitsWidget(data: HabitsWidgetData) {
   await saveHabitsWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'HabitsWidget', renderWidget: async () => React.createElement(HabitsWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'HabitsWidget', renderWidget: () => React.createElement(HabitsWidget, data), widgetNotFound: () => {} });
 }
 
 export async function updateCalendarWidget(data: CalendarWidgetData) {
   await saveCalendarWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'CalendarWidget', renderWidget: async () => React.createElement(CalendarWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'CalendarWidget', renderWidget: () => React.createElement(CalendarWidget, data), widgetNotFound: () => {} });
 }
 
 export async function updateNotesWidget(data: NotesWidgetData) {
   await saveNotesWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'NotesWidget', renderWidget: async () => React.createElement(NotesWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'NotesWidget', renderWidget: () => React.createElement(NotesWidget, data), widgetNotFound: () => {} });
 }
 
 export async function updatePrioritiesWidget(data: PrioritiesWidgetData) {
   await savePrioritiesWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'PrioritiesWidget', renderWidget: async () => React.createElement(PrioritiesWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'PrioritiesWidget', renderWidget: () => React.createElement(PrioritiesWidget, data), widgetNotFound: () => {} });
 }
 
 export async function updateGiftsWidget(data: GiftsWidgetData) {
   await saveGiftsWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'GiftsWidget', renderWidget: async () => React.createElement(GiftsWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'GiftsWidget', renderWidget: () => React.createElement(GiftsWidget, data), widgetNotFound: () => {} });
 }
 
 export async function updateBingoWidget(data: BingoWidgetData) {
   await saveBingoWidgetData(data);
-  requestWidgetUpdate({ widgetName: 'BingoWidget', renderWidget: async () => React.createElement(BingoWidget, data), widgetNotFound: () => {} });
+  requestWidgetUpdate({ widgetName: 'BingoWidget', renderWidget: () => React.createElement(BingoWidget, data), widgetNotFound: () => {} });
 }
 
 // ─── Load helpers ─────────────────────────────────────────────────────────────

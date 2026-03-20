@@ -62,7 +62,7 @@ export function NotesWidget({
       <FlexWidget style={{ height: 1, backgroundColor: '#1e293b', marginTop: 6, marginBottom: 6 }} />
 
       {latestNoteTitle ? (
-        <>
+        <FlexWidget style={{ flexDirection: 'column' }}>
           <TextWidget
             text="Latest note"
             style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}
@@ -77,7 +77,7 @@ export function NotesWidget({
               style={{ fontSize: 9, color: '#475569', marginTop: 2 }}
             />
           ) : null}
-        </>
+        </FlexWidget>
       ) : (
         <TextWidget
           text="No notes yet — write one!"

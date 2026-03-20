@@ -67,7 +67,7 @@ export function PrioritiesWidget({
           style={{ fontSize: 11, color: '#4ade80', fontWeight: 'bold' }}
         />
       ) : nextPriority ? (
-        <>
+        <FlexWidget style={{ flexDirection: 'column' }}>
           <TextWidget
             text="Next up"
             style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}
@@ -76,7 +76,7 @@ export function PrioritiesWidget({
             text={nextPriority}
             style={{ fontSize: 11, color: '#cbd5e1' }}
           />
-        </>
+        </FlexWidget>
       ) : (
         <TextWidget
           text="Add your priorities for today"
