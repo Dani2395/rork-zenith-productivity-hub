@@ -74,12 +74,21 @@ export interface HabitItemData {
   streakDays: number;
 }
 
+export interface WeekDayData {
+  label: string; // "M", "T", "W", etc.
+  pct: number;   // 0-100: habits completed that day / total habits
+  isToday: boolean;
+}
+
 export interface HabitsWidgetData {
   habits: HabitItemData[];
   doneTodayCount: number;
   totalHabits: number;
   bestStreakName: string;
   bestStreakDays: number;
+  weeklyPct: number;
+  monthlyPct: number;
+  weekDays: WeekDayData[];
 }
 
 export interface CalendarWidgetData {
@@ -239,7 +248,10 @@ async function computeTasksData(): Promise<TasksWidgetData> {
 async function computeHabitsData(): Promise<HabitsWidgetData> {
   const habits: any[] = await load('habits', []);
   const completions: any = await load('habitCompletions', {});
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const totalHabits = habits.length;
+
   let bestStreakName = '', bestStreakDays = 0;
   const habitItems: HabitItemData[] = habits.slice(0, 7).map(h => {
     const doneToday = !!completions[`${h.id}-${today}`];
@@ -254,7 +266,35 @@ async function computeHabitsData(): Promise<HabitsWidgetData> {
     return { id: h.id, name: h.name, doneToday, streakDays: streak };
   });
   const doneTodayCount = habitItems.filter(h => h.doneToday).length;
-  return { habits: habitItems, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays };
+
+  // Weekly heatmap: last 7 days (oldest → today)
+  const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const weekDays: WeekDayData[] = [];
+  let weeklySum = 0;
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const dayDone = habits.filter(h => !!completions[`${h.id}-${dateStr}`]).length;
+    const pct = totalHabits > 0 ? Math.round((dayDone / totalHabits) * 100) : 0;
+    weeklySum += pct;
+    weekDays.push({ label: DAY_LABELS[d.getDay()], pct, isToday: i === 0 });
+  }
+  const weeklyPct = Math.round(weeklySum / 7);
+
+  // Monthly progress: completions so far this month / (habits * days elapsed)
+  const daysElapsed = now.getDate();
+  let monthlyCompletions = 0;
+  for (let day = 1; day <= daysElapsed; day++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), day);
+    const dateStr = d.toISOString().split('T')[0];
+    monthlyCompletions += habits.filter(h => !!completions[`${h.id}-${dateStr}`]).length;
+  }
+  const monthlyPct = totalHabits > 0 && daysElapsed > 0
+    ? Math.round((monthlyCompletions / (totalHabits * daysElapsed)) * 100)
+    : 0;
+
+  return { habits: habitItems, doneTodayCount, totalHabits, bestStreakName, bestStreakDays, weeklyPct, monthlyPct, weekDays };
 }
 
 async function computeCalendarData(): Promise<CalendarWidgetData> {

@@ -61,7 +61,35 @@ export default function HabitsScreen() {
         return streak;
       })(),
     }));
-    updateHabitsWidget({ habits: habitItems as any, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays });
+
+    // Weekly heatmap data
+    const now = new Date();
+    const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const weekDays = [];
+    let weeklySum = 0;
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const ds = d.toISOString().split('T')[0];
+      const dayDone = habits.filter(h => !!habitCompletions[`${h.id}-${ds}`]).length;
+      const pct = habits.length > 0 ? Math.round((dayDone / habits.length) * 100) : 0;
+      weeklySum += pct;
+      weekDays.push({ label: DAY_LABELS[d.getDay()], pct, isToday: i === 0 });
+    }
+    const weeklyPct = Math.round(weeklySum / 7);
+
+    // Monthly progress
+    const daysElapsed = now.getDate();
+    let monthlyCompletions = 0;
+    for (let day = 1; day <= daysElapsed; day++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), day);
+      const ds = d.toISOString().split('T')[0];
+      monthlyCompletions += habits.filter(h => !!habitCompletions[`${h.id}-${ds}`]).length;
+    }
+    const monthlyPct = habits.length > 0 && daysElapsed > 0
+      ? Math.round((monthlyCompletions / (habits.length * daysElapsed)) * 100)
+      : 0;
+
+    updateHabitsWidget({ habits: habitItems as any, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays, weeklyPct, monthlyPct, weekDays: weekDays as any });
     scheduleHabitsMorningReminder(habits.length);
     scheduleHabitsEveningCheckIn(doneTodayCount, habits.length);
     scheduleHabitsWeeklyDigest(bestStreakDays, bestStreakName);
