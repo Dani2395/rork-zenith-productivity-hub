@@ -32,6 +32,8 @@ const PRIORITY_COLOR: Record<string, string> = {
   low: '#4ade80',
 };
 
+const TASKS_URI = 'rork-app:///tasks';
+
 export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }: TasksWidgetProps) {
   const allDone = todayTotal > 0 && todayDone >= todayTotal;
 
@@ -44,7 +46,8 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
         backgroundColor: '#111827',
         borderRadius: 20,
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: TASKS_URI }}
     >
       {/* ── Header ── */}
       <FlexWidget
@@ -52,6 +55,7 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
+          width: 'match_parent',
           backgroundColor: '#1e2a3a',
           borderRadius: 20,
           paddingTop: 12,
@@ -88,6 +92,7 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
       <FlexWidget
         style={{
           flexDirection: 'column',
+          width: 'match_parent',
           paddingLeft: 10,
           paddingRight: 10,
           paddingTop: 4,
@@ -97,6 +102,7 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
         {tasks.length === 0 ? (
           <FlexWidget
             style={{
+              width: 'match_parent',
               paddingTop: 18,
               paddingBottom: 18,
               alignItems: 'center',
@@ -115,12 +121,14 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              width: 'match_parent',
               paddingTop: 7,
               paddingBottom: 7,
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="OPEN_APP"
+            clickAction="android.intent.action.VIEW"
+            clickActionData={{ uri: TASKS_URI }}
           >
             <TextWidget
               text={tasks[0].completed ? '✓' : '○'}
@@ -163,12 +171,14 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              width: 'match_parent',
               paddingTop: 7,
               paddingBottom: 7,
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="OPEN_APP"
+            clickAction="android.intent.action.VIEW"
+            clickActionData={{ uri: TASKS_URI }}
           >
             <TextWidget
               text={tasks[1].completed ? '✓' : '○'}
@@ -211,12 +221,14 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              width: 'match_parent',
               paddingTop: 7,
               paddingBottom: 7,
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="OPEN_APP"
+            clickAction="android.intent.action.VIEW"
+            clickActionData={{ uri: TASKS_URI }}
           >
             <TextWidget
               text={tasks[2].completed ? '✓' : '○'}
@@ -259,12 +271,14 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              width: 'match_parent',
               paddingTop: 7,
               paddingBottom: 7,
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="OPEN_APP"
+            clickAction="android.intent.action.VIEW"
+            clickActionData={{ uri: TASKS_URI }}
           >
             <TextWidget
               text={tasks[3].completed ? '✓' : '○'}
@@ -307,12 +321,14 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
             style={{
               flexDirection: 'row',
               alignItems: 'center',
+              width: 'match_parent',
               paddingTop: 7,
               paddingBottom: 7,
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="OPEN_APP"
+            clickAction="android.intent.action.VIEW"
+            clickActionData={{ uri: TASKS_URI }}
           >
             <TextWidget
               text={tasks[4].completed ? '✓' : '○'}
@@ -353,7 +369,7 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
 
       {/* ── Divider ── */}
       <FlexWidget
-        style={{ height: 1, backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
+        style={{ height: 1, width: 'match_parent', backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
       />
 
       {/* ── Footer ── */}
@@ -362,6 +378,7 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
+          width: 'match_parent',
           paddingTop: 8,
           paddingBottom: 8,
           paddingLeft: 14,
@@ -390,6 +407,7 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
         style={{
           flexDirection: 'row',
           alignItems: 'center',
+          width: 'match_parent',
           paddingBottom: 10,
           paddingLeft: 14,
         }}

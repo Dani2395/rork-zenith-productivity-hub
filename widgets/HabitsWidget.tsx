@@ -24,6 +24,8 @@ export interface HabitsWidgetProps {
   bestStreakDays: number;
 }
 
+const HABITS_URI = 'rork-app:///habits';
+
 function HabitRow({ habit }: { habit: HabitItemData }) {
   "use no memo";
   return (
@@ -31,12 +33,14 @@ function HabitRow({ habit }: { habit: HabitItemData }) {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
+        width: 'match_parent',
         paddingTop: 6,
         paddingBottom: 6,
         paddingLeft: 4,
         paddingRight: 4,
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: HABITS_URI }}
     >
       {/* Circle indicator */}
       <FlexWidget
@@ -111,7 +115,8 @@ export function HabitsWidget({ habits = [], doneTodayCount, totalHabits, bestStr
         backgroundColor: '#111827',
         borderRadius: 20,
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: HABITS_URI }}
     >
       {/* ── Header ── */}
       <FlexWidget
@@ -119,6 +124,7 @@ export function HabitsWidget({ habits = [], doneTodayCount, totalHabits, bestStr
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
+          width: 'match_parent',
           backgroundColor: '#1c1a0f',
           borderRadius: 20,
           paddingTop: 12,
@@ -161,6 +167,7 @@ export function HabitsWidget({ habits = [], doneTodayCount, totalHabits, bestStr
       <FlexWidget
         style={{
           flexDirection: 'column',
+          width: 'match_parent',
           paddingLeft: 10,
           paddingRight: 10,
           paddingTop: 4,
@@ -168,7 +175,7 @@ export function HabitsWidget({ habits = [], doneTodayCount, totalHabits, bestStr
         }}
       >
         {habits.length === 0 ? (
-          <FlexWidget style={{ paddingTop: 20, paddingBottom: 20, alignItems: 'center' }}>
+          <FlexWidget style={{ width: 'match_parent', paddingTop: 20, paddingBottom: 20, alignItems: 'center' }}>
             <TextWidget
               text="✨  Add your first habit!"
               style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}
@@ -187,7 +194,7 @@ export function HabitsWidget({ habits = [], doneTodayCount, totalHabits, bestStr
 
       {/* ── Divider ── */}
       <FlexWidget
-        style={{ height: 1, backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
+        style={{ height: 1, width: 'match_parent', backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
       />
 
       {/* ── Footer: best streak ── */}
@@ -196,6 +203,7 @@ export function HabitsWidget({ habits = [], doneTodayCount, totalHabits, bestStr
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
+          width: 'match_parent',
           paddingTop: 8,
           paddingBottom: 10,
           paddingLeft: 14,

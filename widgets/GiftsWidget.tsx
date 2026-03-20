@@ -35,7 +35,8 @@ export function GiftsWidget({
         padding: 12,
         justifyContent: 'space-between',
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: 'rork-app:///gifts' }}
     >
       <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
         <TextWidget text="🎁" style={{ fontSize: 14 }} />

@@ -44,7 +44,8 @@ export function BudgetWidget({
         padding: 12,
         justifyContent: 'space-between',
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: 'rork-app:///budget' }}
     >
       {/* Header */}
       <FlexWidget

@@ -33,7 +33,8 @@ export function NotesWidget({
         padding: 12,
         justifyContent: 'space-between',
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: 'rork-app:///notes' }}
     >
       <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
         <TextWidget text="📝" style={{ fontSize: 14 }} />
