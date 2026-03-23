@@ -425,8 +425,77 @@ async function computeBudgetData(): Promise<WidgetData> {
 // ─── Widget task handler ──────────────────────────────────────────────────────
 
 async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
-  const { widgetInfo, widgetAction, renderWidget } = props;
+  const { widgetInfo, widgetAction, clickAction, clickActionData, renderWidget } = props;
   const widgetName: string = (widgetInfo as any)?.widgetName ?? '';
+
+  if (widgetAction === 'WIDGET_CLICK') {
+    switch (clickAction) {
+      case 'TOGGLE_TASK': {
+        const taskId = parseInt((clickActionData as any)?.taskId ?? '0', 10);
+        if (taskId) {
+          const today = new Date().toISOString().split('T')[0];
+          const tasks: any[] = await load('tasks', []);
+          const updated = tasks.map((t: any) =>
+            t.id === taskId
+              ? { ...t, completed: !t.completed, completedDate: !t.completed ? today : undefined }
+              : t
+          );
+          await AsyncStorage.setItem('tasks', JSON.stringify(updated));
+        }
+        renderWidget(React.createElement(TasksWidget, await computeTasksData()));
+        break;
+      }
+
+      case 'TOGGLE_HABIT': {
+        const habitId = parseInt((clickActionData as any)?.habitId ?? '0', 10);
+        if (habitId) {
+          const today = new Date().toISOString().split('T')[0];
+          const completions: Record<string, boolean> = await load('habitCompletions', {});
+          const key = `${habitId}-${today}`;
+          if (completions[key]) {
+            delete completions[key];
+          } else {
+            completions[key] = true;
+          }
+          await AsyncStorage.setItem('habitCompletions', JSON.stringify(completions));
+        }
+        renderWidget(React.createElement(HabitsWidget, await computeHabitsData()));
+        break;
+      }
+
+      case 'TOGGLE_BINGO': {
+        const cellIndex = parseInt((clickActionData as any)?.cellIndex ?? '-1', 10);
+        if (cellIndex >= 0) {
+          const bingoData: any[] = await load('bingoData', []);
+          if (bingoData[cellIndex] && bingoData[cellIndex].t !== 'FREE SPACE') {
+            bingoData[cellIndex] = { ...bingoData[cellIndex], d: !bingoData[cellIndex].d };
+            await AsyncStorage.setItem('bingoData', JSON.stringify(bingoData));
+          }
+        }
+        renderWidget(React.createElement(BingoWidget, await computeBingoData()));
+        break;
+      }
+
+      case 'TOGGLE_PRIORITY': {
+        const priorityId = parseInt((clickActionData as any)?.priorityId ?? '0', 10);
+        if (priorityId) {
+          const priorities: Record<string, any[]> = await load('priorities', {});
+          for (const date of Object.keys(priorities)) {
+            const list: any[] = priorities[date] ?? [];
+            const idx = list.findIndex((p: any) => p.id === priorityId);
+            if (idx >= 0) {
+              priorities[date][idx] = { ...priorities[date][idx], completed: !priorities[date][idx].completed };
+              break;
+            }
+          }
+          await AsyncStorage.setItem('priorities', JSON.stringify(priorities));
+        }
+        renderWidget(React.createElement(PrioritiesWidget, await computePrioritiesData()));
+        break;
+      }
+    }
+    return;
+  }
 
   switch (widgetAction) {
     case 'WIDGET_ADDED':
@@ -456,69 +525,6 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
       } else if (widgetName === 'BudgetWidget') {
         renderWidget(React.createElement(BudgetWidget, await computeBudgetData()));
       }
-      break;
-    }
-    case 'TOGGLE_TASK': {
-      const taskId = parseInt((widgetInfo as any)?.clickData?.taskId ?? '0', 10);
-      if (taskId) {
-        const today = new Date().toISOString().split('T')[0];
-        const tasks: any[] = await load('tasks', []);
-        const updated = tasks.map((t: any) =>
-          t.id === taskId
-            ? { ...t, completed: !t.completed, completedDate: !t.completed ? today : undefined }
-            : t
-        );
-        await AsyncStorage.setItem('tasks', JSON.stringify(updated));
-      }
-      renderWidget(React.createElement(TasksWidget, await computeTasksData()));
-      break;
-    }
-
-    case 'TOGGLE_HABIT': {
-      const habitId = parseInt((widgetInfo as any)?.clickData?.habitId ?? '0', 10);
-      if (habitId) {
-        const today = new Date().toISOString().split('T')[0];
-        const completions: Record<string, boolean> = await load('habitCompletions', {});
-        const key = `${habitId}-${today}`;
-        if (completions[key]) {
-          delete completions[key];
-        } else {
-          completions[key] = true;
-        }
-        await AsyncStorage.setItem('habitCompletions', JSON.stringify(completions));
-      }
-      renderWidget(React.createElement(HabitsWidget, await computeHabitsData()));
-      break;
-    }
-
-    case 'TOGGLE_BINGO': {
-      const cellIndex = parseInt((widgetInfo as any)?.clickData?.cellIndex ?? '-1', 10);
-      if (cellIndex >= 0) {
-        const bingoData: any[] = await load('bingoData', []);
-        if (bingoData[cellIndex] && bingoData[cellIndex].t !== 'FREE SPACE') {
-          bingoData[cellIndex] = { ...bingoData[cellIndex], d: !bingoData[cellIndex].d };
-          await AsyncStorage.setItem('bingoData', JSON.stringify(bingoData));
-        }
-      }
-      renderWidget(React.createElement(BingoWidget, await computeBingoData()));
-      break;
-    }
-
-    case 'TOGGLE_PRIORITY': {
-      const priorityId = parseInt((widgetInfo as any)?.clickData?.priorityId ?? '0', 10);
-      if (priorityId) {
-        const priorities: Record<string, any[]> = await load('priorities', {});
-        for (const date of Object.keys(priorities)) {
-          const list: any[] = priorities[date] ?? [];
-          const idx = list.findIndex((p: any) => p.id === priorityId);
-          if (idx >= 0) {
-            priorities[date][idx] = { ...priorities[date][idx], completed: !priorities[date][idx].completed };
-            break;
-          }
-        }
-        await AsyncStorage.setItem('priorities', JSON.stringify(priorities));
-      }
-      renderWidget(React.createElement(PrioritiesWidget, await computePrioritiesData()));
       break;
     }
 
