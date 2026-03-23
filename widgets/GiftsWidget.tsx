@@ -1,9 +1,9 @@
 "use no memo";
 /**
- * Android home-screen widget — Gifts Overview
+ * Android home-screen widget — Gifts (vault aesthetic)
  *
- * Shows number of people tracked, total gift ideas, and how many are purchased.
- * Tapping the widget opens the app's Gifts screen.
+ * Shows gift purchase progress, people count, and remaining gifts.
+ * Tapping opens the Gifts screen.
  */
 
 import React from 'react';
@@ -13,16 +13,15 @@ export interface GiftsWidgetProps {
   peopleCount: number;
   totalGifts: number;
   purchasedCount: number;
-  nextEventLabel: string; // e.g. "Mom — Birthday in 5 days"
+  nextEventLabel: string;
 }
 
-export function GiftsWidget({
-  peopleCount,
-  totalGifts,
-  purchasedCount,
-  nextEventLabel,
-}: GiftsWidgetProps) {
+export function GiftsWidget({ peopleCount, totalGifts, purchasedCount, nextEventLabel }: GiftsWidgetProps) {
   const remaining = totalGifts - purchasedCount;
+  const pct = totalGifts > 0 ? Math.round((purchasedCount / totalGifts) * 100) : 0;
+  const barFilled = Math.max(1, pct);
+  const barEmpty = Math.max(1, 100 - pct);
+  const allDone = totalGifts > 0 && remaining === 0;
 
   return (
     <FlexWidget
@@ -30,59 +29,161 @@ export function GiftsWidget({
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: '#0f172a',
-        borderRadius: 16,
-        padding: 12,
-        justifyContent: 'space-between',
+        backgroundColor: '#0f0810',
+        borderRadius: 20,
       }}
       clickAction="android.intent.action.VIEW"
       clickActionData={{ uri: 'rork-app:///gifts' }}
     >
-      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <TextWidget text="🎁" style={{ fontSize: 14 }} />
+      {/* ── Header ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: 'match_parent',
+          paddingTop: 16,
+          paddingBottom: 12,
+        }}
+      >
         <TextWidget
-          text=" Gift Tracker"
-          style={{ fontSize: 13, fontWeight: 'bold', color: '#e2e8f0' }}
+          text="g i f t   v a u l t"
+          style={{ fontSize: 9, color: '#c084fc', fontWeight: 'bold' }}
+        />
+        <TextWidget
+          text="GIFTS"
+          style={{ fontSize: 22, color: '#ffffff', fontWeight: 'bold', marginTop: 2 }}
         />
       </FlexWidget>
 
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-        <TextWidget text="People" style={{ fontSize: 11, color: '#94a3b8' }} />
-        <TextWidget
-          text={`${peopleCount}`}
-          style={{ fontSize: 11, color: '#e2e8f0', fontWeight: 'bold' }}
-        />
-      </FlexWidget>
+      {/* ── Divider ── */}
+      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1028' }} />
 
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
-        <TextWidget text="Purchased" style={{ fontSize: 11, color: '#94a3b8' }} />
-        <TextWidget
-          text={`${purchasedCount} / ${totalGifts}`}
-          style={{ fontSize: 11, color: '#4ade80', fontWeight: 'bold' }}
-        />
-      </FlexWidget>
-
-      {remaining > 0 && (
-        <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
-          <TextWidget text="Still needed" style={{ fontSize: 11, color: '#94a3b8' }} />
-          <TextWidget
-            text={`${remaining}`}
-            style={{ fontSize: 11, color: '#f87171', fontWeight: 'bold' }}
-          />
+      {/* ── Stats grid ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          width: 'match_parent',
+          paddingLeft: 14,
+          paddingRight: 14,
+          paddingTop: 14,
+          paddingBottom: 10,
+        }}
+      >
+        {/* People */}
+        <FlexWidget
+          style={{
+            flex: 1,
+            flexDirection: 'column',
+            alignItems: 'center',
+            backgroundColor: '#1a0f22',
+            borderRadius: 10,
+            paddingTop: 10,
+            paddingBottom: 10,
+            marginRight: 6,
+            borderWidth: 1,
+            borderColor: '#2e1f40',
+          }}
+        >
+          <TextWidget text={String(peopleCount)} style={{ fontSize: 22, color: '#c084fc', fontWeight: 'bold' }} />
+          <TextWidget text="PEOPLE" style={{ fontSize: 8, color: '#4a3860', fontWeight: 'bold', marginTop: 2 }} />
         </FlexWidget>
-      )}
 
-      <FlexWidget style={{ height: 1, backgroundColor: '#1e293b', marginTop: 6, marginBottom: 6 }} />
+        {/* Purchased */}
+        <FlexWidget
+          style={{
+            flex: 1,
+            flexDirection: 'column',
+            alignItems: 'center',
+            backgroundColor: allDone ? '#0a1f14' : '#1a0f22',
+            borderRadius: 10,
+            paddingTop: 10,
+            paddingBottom: 10,
+            marginRight: 6,
+            borderWidth: 1,
+            borderColor: allDone ? '#166534' : '#2e1f40',
+          }}
+        >
+          <TextWidget
+            text={`${purchasedCount}/${totalGifts}`}
+            style={{ fontSize: 18, color: allDone ? '#4ade80' : '#c084fc', fontWeight: 'bold' }}
+          />
+          <TextWidget text="BOUGHT" style={{ fontSize: 8, color: '#4a3860', fontWeight: 'bold', marginTop: 2 }} />
+        </FlexWidget>
 
-      <TextWidget
-        text={nextEventLabel || 'No upcoming gift events'}
-        style={{ fontSize: 10, color: nextEventLabel ? '#cbd5e1' : '#475569', fontStyle: nextEventLabel ? 'normal' : 'italic' }}
-      />
+        {/* Remaining */}
+        <FlexWidget
+          style={{
+            flex: 1,
+            flexDirection: 'column',
+            alignItems: 'center',
+            backgroundColor: remaining > 0 ? '#1f0a14' : '#0a1f14',
+            borderRadius: 10,
+            paddingTop: 10,
+            paddingBottom: 10,
+            borderWidth: 1,
+            borderColor: remaining > 0 ? '#4a1030' : '#166534',
+          }}
+        >
+          <TextWidget
+            text={String(remaining)}
+            style={{ fontSize: 22, color: remaining > 0 ? '#f472b6' : '#4ade80', fontWeight: 'bold' }}
+          />
+          <TextWidget text="LEFT" style={{ fontSize: 8, color: '#4a3860', fontWeight: 'bold', marginTop: 2 }} />
+        </FlexWidget>
+      </FlexWidget>
 
-      <TextWidget
-        text="Tap to open Zenith"
-        style={{ fontSize: 9, color: '#475569', marginTop: 4, textAlign: 'right' }}
-      />
+      {/* ── Progress bar ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          width: 'match_parent',
+          paddingLeft: 14,
+          paddingRight: 14,
+          paddingBottom: 4,
+          alignItems: 'center',
+        }}
+      >
+        <FlexWidget
+          style={{
+            flex: 1,
+            height: 6,
+            borderRadius: 3,
+            flexDirection: 'row',
+            backgroundColor: '#1e1028',
+            overflow: 'hidden',
+          }}
+        >
+          <FlexWidget style={{ flex: barFilled, height: 6, borderRadius: 3, backgroundColor: allDone ? '#4ade80' : '#a855f7' }} />
+          <FlexWidget style={{ flex: barEmpty, height: 6 }} />
+        </FlexWidget>
+        <TextWidget
+          text={`  ${pct}%`}
+          style={{ fontSize: 10, color: allDone ? '#4ade80' : '#a855f7', fontWeight: 'bold' }}
+        />
+      </FlexWidget>
+
+      {/* ── Divider ── */}
+      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1028', marginTop: 6 }} />
+
+      {/* ── Footer: next event ── */}
+      <FlexWidget
+        style={{
+          width: 'match_parent',
+          paddingTop: 8,
+          paddingBottom: 10,
+          paddingLeft: 14,
+          paddingRight: 14,
+        }}
+      >
+        <TextWidget
+          text={nextEventLabel ? nextEventLabel.toUpperCase() : allDone ? '✓ ALL GIFTS SORTED' : 'NO UPCOMING EVENTS'}
+          style={{
+            fontSize: 9,
+            color: nextEventLabel ? '#7c3aed' : allDone ? '#4ade80' : '#2e1f40',
+            fontWeight: 'bold',
+          }}
+        />
+      </FlexWidget>
     </FlexWidget>
   );
 }
