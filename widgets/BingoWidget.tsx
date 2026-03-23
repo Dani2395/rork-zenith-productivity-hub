@@ -25,7 +25,7 @@ export interface BingoWidgetProps {
 
 const BINGO_URI = 'rork-app:///bingo';
 
-function BingoCell({ cell }: { cell: BingoCellData }) {
+function BingoCell({ cell, index }: { cell: BingoCellData; index: number }) {
   "use no memo";
   if (!cell) return null;
   const bg = cell.isFreeSpace ? '#713f12' : cell.done ? '#14532d' : '#1e293b';
@@ -46,8 +46,8 @@ function BingoCell({ cell }: { cell: BingoCellData }) {
         paddingTop: 4,
         paddingBottom: 4,
       }}
-      clickAction="android.intent.action.VIEW"
-      clickActionData={{ uri: BINGO_URI }}
+      clickAction={cell.isFreeSpace ? 'android.intent.action.VIEW' : 'TOGGLE_BINGO'}
+      clickActionData={cell.isFreeSpace ? { uri: BINGO_URI } : { cellIndex: String(index) }}
     >
       <TextWidget
         text={cell.isFreeSpace ? '⭐' : (cell.done ? cell.emoji : cell.emoji)}
@@ -64,15 +64,15 @@ function BingoCell({ cell }: { cell: BingoCellData }) {
   );
 }
 
-function BingoRow({ c0, c1, c2, c3, c4 }: { c0: BingoCellData; c1: BingoCellData; c2: BingoCellData; c3: BingoCellData; c4: BingoCellData }) {
+function BingoRow({ c0, c1, c2, c3, c4, startIndex }: { c0: BingoCellData; c1: BingoCellData; c2: BingoCellData; c3: BingoCellData; c4: BingoCellData; startIndex: number }) {
   "use no memo";
   return (
     <FlexWidget style={{ flexDirection: 'row', flex: 1, width: 'match_parent', paddingLeft: 4, paddingRight: 4 }}>
-      <BingoCell cell={c0} />
-      <BingoCell cell={c1} />
-      <BingoCell cell={c2} />
-      <BingoCell cell={c3} />
-      <BingoCell cell={c4} />
+      <BingoCell cell={c0} index={startIndex} />
+      <BingoCell cell={c1} index={startIndex + 1} />
+      <BingoCell cell={c2} index={startIndex + 2} />
+      <BingoCell cell={c3} index={startIndex + 3} />
+      <BingoCell cell={c4} index={startIndex + 4} />
     </FlexWidget>
   );
 }
@@ -147,11 +147,11 @@ export function BingoWidget({ cells = [], completedCount, hasBingo, recentGoal }
           paddingBottom: 6,
         }}
       >
-        <BingoRow c0={c(0)}  c1={c(1)}  c2={c(2)}  c3={c(3)}  c4={c(4)}  />
-        <BingoRow c0={c(5)}  c1={c(6)}  c2={c(7)}  c3={c(8)}  c4={c(9)}  />
-        <BingoRow c0={c(10)} c1={c(11)} c2={c(12)} c3={c(13)} c4={c(14)} />
-        <BingoRow c0={c(15)} c1={c(16)} c2={c(17)} c3={c(18)} c4={c(19)} />
-        <BingoRow c0={c(20)} c1={c(21)} c2={c(22)} c3={c(23)} c4={c(24)} />
+        <BingoRow c0={c(0)}  c1={c(1)}  c2={c(2)}  c3={c(3)}  c4={c(4)}  startIndex={0}  />
+        <BingoRow c0={c(5)}  c1={c(6)}  c2={c(7)}  c3={c(8)}  c4={c(9)}  startIndex={5}  />
+        <BingoRow c0={c(10)} c1={c(11)} c2={c(12)} c3={c(13)} c4={c(14)} startIndex={10} />
+        <BingoRow c0={c(15)} c1={c(16)} c2={c(17)} c3={c(18)} c4={c(19)} startIndex={15} />
+        <BingoRow c0={c(20)} c1={c(21)} c2={c(22)} c3={c(23)} c4={c(24)} startIndex={20} />
       </FlexWidget>
 
       {/* ── Footer ── */}

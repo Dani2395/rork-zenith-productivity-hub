@@ -93,8 +93,8 @@ function HabitRow({ habit }: { habit: HabitItemData }) {
         paddingLeft: 4,
         paddingRight: 4,
       }}
-      clickAction="android.intent.action.VIEW"
-      clickActionData={{ uri: HABITS_URI }}
+      clickAction="TOGGLE_HABIT"
+      clickActionData={{ habitId: String(habit.id) }}
     >
       <FlexWidget
         style={{

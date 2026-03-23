@@ -44,8 +44,8 @@ function PriorityRow({ item, num }: { item: PriorityItemData; num: number }) {
         paddingLeft: 4,
         paddingRight: 4,
       }}
-      clickAction="android.intent.action.VIEW"
-      clickActionData={{ uri: PRIORITIES_URI }}
+      clickAction="TOGGLE_PRIORITY"
+      clickActionData={{ priorityId: String(item.id) }}
     >
       {/* Number badge */}
       <FlexWidget

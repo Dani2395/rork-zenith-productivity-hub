@@ -127,8 +127,8 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="android.intent.action.VIEW"
-            clickActionData={{ uri: TASKS_URI }}
+            clickAction="TOGGLE_TASK"
+            clickActionData={{ taskId: String(tasks[0].id) }}
           >
             <TextWidget
               text={tasks[0].completed ? '✓' : '○'}
@@ -177,8 +177,8 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="android.intent.action.VIEW"
-            clickActionData={{ uri: TASKS_URI }}
+            clickAction="TOGGLE_TASK"
+            clickActionData={{ taskId: String(tasks[1].id) }}
           >
             <TextWidget
               text={tasks[1].completed ? '✓' : '○'}
@@ -227,8 +227,8 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="android.intent.action.VIEW"
-            clickActionData={{ uri: TASKS_URI }}
+            clickAction="TOGGLE_TASK"
+            clickActionData={{ taskId: String(tasks[2].id) }}
           >
             <TextWidget
               text={tasks[2].completed ? '✓' : '○'}
@@ -277,8 +277,8 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="android.intent.action.VIEW"
-            clickActionData={{ uri: TASKS_URI }}
+            clickAction="TOGGLE_TASK"
+            clickActionData={{ taskId: String(tasks[3].id) }}
           >
             <TextWidget
               text={tasks[3].completed ? '✓' : '○'}
@@ -327,8 +327,8 @@ export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }:
               paddingLeft: 4,
               paddingRight: 4,
             }}
-            clickAction="android.intent.action.VIEW"
-            clickActionData={{ uri: TASKS_URI }}
+            clickAction="TOGGLE_TASK"
+            clickActionData={{ taskId: String(tasks[4].id) }}
           >
             <TextWidget
               text={tasks[4].completed ? '✓' : '○'}
