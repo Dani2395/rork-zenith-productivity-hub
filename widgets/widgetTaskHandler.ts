@@ -94,11 +94,26 @@ export interface HabitsWidgetData {
   weekDays: WeekDayData[];
 }
 
+export interface CalendarEventData {
+  name: string;
+  time: string;
+}
+
 export interface CalendarWidgetData {
   todayLabel: string;
+  dayNumber: string;    // e.g. "23"
+  dayName: string;      // e.g. "MON"
+  monthName: string;    // e.g. "MARCH"
   eventCount: number;
   nextEventName: string;
   nextEventTime: string;
+  events: CalendarEventData[];
+}
+
+export interface RecentNoteData {
+  title: string;
+  date: string;
+  pinned: boolean;
 }
 
 export interface NotesWidgetData {
@@ -106,6 +121,7 @@ export interface NotesWidgetData {
   pinnedCount: number;
   latestNoteTitle: string;
   latestNoteDate: string;
+  recentNotes: RecentNoteData[];
 }
 
 export interface PriorityItemData {
@@ -315,17 +331,29 @@ async function computeCalendarData(): Promise<CalendarWidgetData> {
   const events: any[] = await load('events', []);
   const today = new Date().toISOString().split('T')[0];
   const d = new Date();
+  const DAY_NAMES_SHORT = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const MONTH_NAMES = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   const todayLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
+  const dayNumber = String(d.getDate());
+  const dayName = DAY_NAMES_SHORT[d.getDay()];
+  const monthName = MONTH_NAMES[d.getMonth()];
   const todayEvents = events.filter((e: any) => e.date === today).sort((a: any, b: any) => (a.time ?? '').localeCompare(b.time ?? ''));
   const next = todayEvents[0];
-  return { todayLabel, eventCount: todayEvents.length, nextEventName: next?.name ?? '', nextEventTime: next?.time ?? '' };
+  const eventItems: CalendarEventData[] = todayEvents.slice(0, 4).map((e: any) => ({ name: e.name ?? '', time: e.time ?? '' }));
+  return { todayLabel, dayNumber, dayName, monthName, eventCount: todayEvents.length, nextEventName: next?.name ?? '', nextEventTime: next?.time ?? '', events: eventItems };
 }
 
 async function computeNotesData(): Promise<NotesWidgetData> {
   const notes: any[] = await load('notes', []);
   const pinned = notes.filter(n => n.pinned);
-  const latest = [...notes].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
-  return { totalNotes: notes.length, pinnedCount: pinned.length, latestNoteTitle: latest?.name ?? '', latestNoteDate: latest?.date ?? '' };
+  const sorted = [...notes].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+  const latest = sorted[0];
+  const recentNotes: RecentNoteData[] = sorted.slice(0, 4).map(n => ({
+    title: n.name ?? n.title ?? 'Untitled',
+    date: n.date ?? '',
+    pinned: !!n.pinned,
+  }));
+  return { totalNotes: notes.length, pinnedCount: pinned.length, latestNoteTitle: latest?.name ?? '', latestNoteDate: latest?.date ?? '', recentNotes };
 }
 
 async function computePrioritiesData(): Promise<PrioritiesWidgetData> {

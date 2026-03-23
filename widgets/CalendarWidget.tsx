@@ -1,26 +1,39 @@
 "use no memo";
 /**
- * Android home-screen widget — Calendar / Agenda
+ * Android home-screen widget — Calendar / Agenda (timeline aesthetic)
  *
- * Shows today's date, event count, and the next upcoming event.
- * Tapping the widget opens the app's Calendar screen.
+ * Shows today's large day number, month, and up to 4 events with times.
+ * Tapping opens the Calendar screen.
  */
 
 import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
+export interface CalendarEventData {
+  name: string;
+  time: string;
+}
+
 export interface CalendarWidgetProps {
-  todayLabel: string;   // e.g. "Wednesday, Mar 18"
+  todayLabel: string;
+  dayNumber: string;
+  dayName: string;
+  monthName: string;
   eventCount: number;
   nextEventName: string;
   nextEventTime: string;
+  events: CalendarEventData[];
 }
 
+const EVENT_COLORS = ['#818cf8', '#34d399', '#fb923c', '#f472b6'];
+
 export function CalendarWidget({
-  todayLabel,
+  dayNumber,
+  dayName,
+  monthName,
   eventCount,
-  nextEventName,
-  nextEventTime,
+  events = [],
+  todayLabel,
 }: CalendarWidgetProps) {
   return (
     <FlexWidget
@@ -28,60 +41,238 @@ export function CalendarWidget({
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: '#0f172a',
-        borderRadius: 16,
-        padding: 12,
-        justifyContent: 'space-between',
+        backgroundColor: '#09090f',
+        borderRadius: 20,
       }}
       clickAction="android.intent.action.VIEW"
       clickActionData={{ uri: 'rork-app:///calendar' }}
     >
-      <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <TextWidget text="📅" style={{ fontSize: 14 }} />
-        <TextWidget
-          text={` ${todayLabel}`}
-          style={{ fontSize: 12, fontWeight: 'bold', color: '#e2e8f0' }}
-        />
-      </FlexWidget>
-
-      <FlexWidget style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-        <TextWidget text="Events today" style={{ fontSize: 11, color: '#94a3b8' }} />
-        <TextWidget
-          text={`${eventCount}`}
-          style={{ fontSize: 11, color: eventCount > 0 ? '#818cf8' : '#475569', fontWeight: 'bold' }}
-        />
-      </FlexWidget>
-
-      <FlexWidget style={{ height: 1, backgroundColor: '#1e293b', marginTop: 6, marginBottom: 6 }} />
-
-      {nextEventName ? (
-        <FlexWidget style={{ flexDirection: 'column' }}>
+      {/* ── Header: day number + month ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          width: 'match_parent',
+          paddingTop: 14,
+          paddingBottom: 12,
+          paddingLeft: 16,
+          paddingRight: 16,
+        }}
+      >
+        {/* Big day number */}
+        <FlexWidget
+          style={{
+            flexDirection: 'column',
+            alignItems: 'center',
+            backgroundColor: '#12103a',
+            borderRadius: 14,
+            paddingTop: 10,
+            paddingBottom: 10,
+            paddingLeft: 14,
+            paddingRight: 14,
+            marginRight: 14,
+            borderWidth: 1,
+            borderColor: '#2d2b5e',
+          }}
+        >
           <TextWidget
-            text="Next up"
-            style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}
+            text={dayNumber}
+            style={{ fontSize: 28, fontWeight: 'bold', color: '#818cf8' }}
           />
           <TextWidget
-            text={nextEventName}
-            style={{ fontSize: 11, color: '#cbd5e1', fontWeight: 'bold' }}
+            text={dayName}
+            style={{ fontSize: 9, color: '#4a4880', fontWeight: 'bold', marginTop: 2 }}
           />
-          {nextEventTime ? (
-            <TextWidget
-              text={nextEventTime}
-              style={{ fontSize: 10, color: '#818cf8', marginTop: 2 }}
-            />
-          ) : null}
         </FlexWidget>
-      ) : (
-        <TextWidget
-          text="Nothing scheduled today 🌴"
-          style={{ fontSize: 10, color: '#475569', fontStyle: 'italic' }}
-        />
-      )}
 
-      <TextWidget
-        text="Tap to open Zenith"
-        style={{ fontSize: 9, color: '#475569', marginTop: 6, textAlign: 'right' }}
-      />
+        {/* Month + event count */}
+        <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
+          <TextWidget
+            text={monthName}
+            style={{ fontSize: 11, color: '#4a4880', fontWeight: 'bold' }}
+          />
+          <TextWidget
+            text={eventCount === 0 ? 'No events' : `${eventCount} event${eventCount !== 1 ? 's' : ''}`}
+            style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: eventCount > 0 ? '#e2e0ff' : '#2a2840',
+              marginTop: 2,
+            }}
+          />
+        </FlexWidget>
+      </FlexWidget>
+
+      {/* ── Divider ── */}
+      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#12103a' }} />
+
+      {/* ── Event list ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'column',
+          width: 'match_parent',
+          flex: 1,
+          paddingTop: 6,
+          paddingBottom: 6,
+        }}
+      >
+        {events.length === 0 ? (
+          <FlexWidget
+            style={{
+              width: 'match_parent',
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <TextWidget
+              text="[ CLEAR SCHEDULE ]"
+              style={{ fontSize: 11, color: '#1e1c3a', fontStyle: 'italic' }}
+            />
+          </FlexWidget>
+        ) : null}
+
+        {events[0] ? (
+          <FlexWidget
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 'match_parent',
+              paddingTop: 7,
+              paddingBottom: 7,
+              paddingLeft: 14,
+              paddingRight: 14,
+            }}
+          >
+            <FlexWidget
+              style={{
+                backgroundColor: '#12103a',
+                borderRadius: 6,
+                paddingTop: 3,
+                paddingBottom: 3,
+                paddingLeft: 6,
+                paddingRight: 6,
+                marginRight: 10,
+                borderWidth: 1,
+                borderColor: EVENT_COLORS[0],
+              }}
+            >
+              <TextWidget text={events[0].time || '--:--'} style={{ fontSize: 9, color: EVENT_COLORS[0], fontWeight: 'bold' }} />
+            </FlexWidget>
+            <TextWidget text={events[0].name} style={{ fontSize: 12, color: '#c8c6ff', fontWeight: 'bold', flex: 1 }} />
+          </FlexWidget>
+        ) : null}
+
+        {events[1] ? (
+          <FlexWidget
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 'match_parent',
+              paddingTop: 7,
+              paddingBottom: 7,
+              paddingLeft: 14,
+              paddingRight: 14,
+            }}
+          >
+            <FlexWidget
+              style={{
+                backgroundColor: '#12103a',
+                borderRadius: 6,
+                paddingTop: 3,
+                paddingBottom: 3,
+                paddingLeft: 6,
+                paddingRight: 6,
+                marginRight: 10,
+                borderWidth: 1,
+                borderColor: EVENT_COLORS[1],
+              }}
+            >
+              <TextWidget text={events[1].time || '--:--'} style={{ fontSize: 9, color: EVENT_COLORS[1], fontWeight: 'bold' }} />
+            </FlexWidget>
+            <TextWidget text={events[1].name} style={{ fontSize: 12, color: '#c8c6ff', fontWeight: 'bold', flex: 1 }} />
+          </FlexWidget>
+        ) : null}
+
+        {events[2] ? (
+          <FlexWidget
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 'match_parent',
+              paddingTop: 7,
+              paddingBottom: 7,
+              paddingLeft: 14,
+              paddingRight: 14,
+            }}
+          >
+            <FlexWidget
+              style={{
+                backgroundColor: '#12103a',
+                borderRadius: 6,
+                paddingTop: 3,
+                paddingBottom: 3,
+                paddingLeft: 6,
+                paddingRight: 6,
+                marginRight: 10,
+                borderWidth: 1,
+                borderColor: EVENT_COLORS[2],
+              }}
+            >
+              <TextWidget text={events[2].time || '--:--'} style={{ fontSize: 9, color: EVENT_COLORS[2], fontWeight: 'bold' }} />
+            </FlexWidget>
+            <TextWidget text={events[2].name} style={{ fontSize: 12, color: '#c8c6ff', fontWeight: 'bold', flex: 1 }} />
+          </FlexWidget>
+        ) : null}
+
+        {events[3] ? (
+          <FlexWidget
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 'match_parent',
+              paddingTop: 7,
+              paddingBottom: 7,
+              paddingLeft: 14,
+              paddingRight: 14,
+            }}
+          >
+            <FlexWidget
+              style={{
+                backgroundColor: '#12103a',
+                borderRadius: 6,
+                paddingTop: 3,
+                paddingBottom: 3,
+                paddingLeft: 6,
+                paddingRight: 6,
+                marginRight: 10,
+                borderWidth: 1,
+                borderColor: EVENT_COLORS[3],
+              }}
+            >
+              <TextWidget text={events[3].time || '--:--'} style={{ fontSize: 9, color: EVENT_COLORS[3], fontWeight: 'bold' }} />
+            </FlexWidget>
+            <TextWidget text={events[3].name} style={{ fontSize: 12, color: '#c8c6ff', fontWeight: 'bold', flex: 1 }} />
+          </FlexWidget>
+        ) : null}
+      </FlexWidget>
+
+      {/* ── Divider + footer ── */}
+      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#12103a' }} />
+      <FlexWidget
+        style={{
+          width: 'match_parent',
+          paddingTop: 7,
+          paddingBottom: 9,
+          paddingLeft: 14,
+          paddingRight: 14,
+        }}
+      >
+        <TextWidget
+          text={todayLabel.toUpperCase()}
+          style={{ fontSize: 9, color: '#2d2b5e', fontWeight: 'bold' }}
+        />
+      </FlexWidget>
     </FlexWidget>
   );
 }
