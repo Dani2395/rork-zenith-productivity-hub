@@ -12,17 +12,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles, Bell } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles, Bell, RefreshCw } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateCalendarWidget } from '@/widgets/widgetTaskHandler';
 import { scheduleCalendarDailyAgenda, cancelCalendarDailyAgenda, scheduleCalendarWeeklyPreview, cancelAllCalendarNotifications } from '@/utils/calendarNotifications';
 import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
+import { useGoogleAuth, syncGoogleCalendar, signOut as googleSignOut, isConfigured, GOOGLE_TOKEN_KEY } from '@/utils/googleCalendarSync';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function CalendarScreen() {
   const { events, tasks, workouts, notes, moods, priorities, addEvent, holidays, addHoliday, updateHoliday, deleteHoliday } = useData();
@@ -46,6 +50,78 @@ export default function CalendarScreen() {
   const [holidayDate, setHolidayDate] = useState('');
   const [holidayAnimation, setHolidayAnimation] = useState<Holiday['animation']>('sparkles');
   const [holidayImage, setHolidayImage] = useState('');
+
+  // ── Google Calendar Sync ──────────────────────────────────────────────────
+  const [googleSyncing, setGoogleSyncing] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const { request, response, promptAsync } = useGoogleAuth();
+
+  useEffect(() => {
+    AsyncStorage.getItem(GOOGLE_TOKEN_KEY).then(t => setGoogleConnected(!!t));
+  }, []);
+
+  useEffect(() => {
+    if (response?.type === 'success' && response.authentication?.accessToken) {
+      handleGoogleSyncWithToken(response.authentication.accessToken);
+    } else if (response?.type === 'error') {
+      Alert.alert('Google Sign-In Failed', response.error?.message ?? 'Please try again.');
+    }
+  }, [response]);
+
+  const handleGoogleSyncWithToken = async (token: string) => {
+    setGoogleSyncing(true);
+    try {
+      const result = await syncGoogleCalendar(token, addEvent, events);
+      setGoogleConnected(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (result.error) {
+        Alert.alert('Sync Error', result.error);
+      } else {
+        Alert.alert(
+          'Google Calendar Synced',
+          result.added > 0
+            ? `Added ${result.added} new event${result.added !== 1 ? 's' : ''} from Google Calendar.`
+            : 'All events are already up to date.',
+        );
+      }
+    } finally {
+      setGoogleSyncing(false);
+    }
+  };
+
+  const handleGoogleSync = async () => {
+    if (!isConfigured()) {
+      Alert.alert(
+        'Setup Required',
+        'To connect Google Calendar:\n\n1. Go to console.cloud.google.com\n2. Create a project & enable Google Calendar API\n3. Create OAuth 2.0 credentials\n4. Paste your Client IDs in utils/googleCalendarSync.ts',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+    const cached = await AsyncStorage.getItem(GOOGLE_TOKEN_KEY);
+    if (cached) {
+      // Re-sync with cached token
+      await handleGoogleSyncWithToken(cached);
+    } else {
+      promptAsync();
+    }
+  };
+
+  const handleGoogleDisconnect = () => {
+    Alert.alert('Disconnect Google Calendar', 'Remove the connection? Synced events will remain.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disconnect',
+        style: 'destructive',
+        onPress: async () => {
+          await googleSignOut();
+          setGoogleConnected(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+      },
+    ]);
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const formatTimeDisplay = (timeStr: string) => {
     if (!timeStr) return '';
@@ -482,12 +558,25 @@ export default function CalendarScreen() {
                 day: 'numeric',
               })}
             </Text>
-            <TouchableOpacity
-              style={styles.addEventButton}
-              onPress={() => setModalVisible(true)}
-            >
-              <Plus size={20} color={Colors.primary} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.addEventButton, googleConnected && { borderColor: '#4ade80', borderWidth: 1 }]}
+                onPress={googleConnected ? handleGoogleDisconnect : handleGoogleSync}
+                onLongPress={googleConnected ? handleGoogleSync : undefined}
+                disabled={googleSyncing}
+              >
+                {googleSyncing
+                  ? <ActivityIndicator size="small" color={googleConnected ? '#4ade80' : Colors.primary} />
+                  : <RefreshCw size={18} color={googleConnected ? '#4ade80' : Colors.primary} />
+                }
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addEventButton}
+                onPress={() => setModalVisible(true)}
+              >
+                <Plus size={20} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView style={styles.eventsList} showsVerticalScrollIndicator={false}>
