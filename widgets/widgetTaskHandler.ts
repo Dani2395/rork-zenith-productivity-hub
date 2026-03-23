@@ -72,6 +72,9 @@ export interface HabitItemData {
   name: string;
   doneToday: boolean;
   streakDays: number;
+  weeklyDone: number;  // completions in the last 7 days
+  emoji: string;       // auto-assigned nature emoji
+  color: string;       // dot / accent color
 }
 
 export interface WeekDayData {
@@ -245,6 +248,9 @@ async function computeTasksData(): Promise<TasksWidgetData> {
   return { tasks: displayTasks, todayTotal: todayTasks.length, todayDone: completedToday.length, overdueCount: overdueTasks.length, nextTask: todayTasks[0]?.name ?? '' };
 }
 
+const HABIT_EMOJIS = ['🌿', '🌸', '🍄', '🌵', '⚡', '🎯', '📚', '💧'];
+const HABIT_COLORS = ['#4ade80', '#f472b6', '#34d399', '#fb923c', '#60a5fa', '#a78bfa', '#facc15', '#38bdf8'];
+
 async function computeHabitsData(): Promise<HabitsWidgetData> {
   const habits: any[] = await load('habits', []);
   const completions: any = await load('habitCompletions', {});
@@ -253,7 +259,7 @@ async function computeHabitsData(): Promise<HabitsWidgetData> {
   const totalHabits = habits.length;
 
   let bestStreakName = '', bestStreakDays = 0;
-  const habitItems: HabitItemData[] = habits.slice(0, 7).map(h => {
+  const habitItems: HabitItemData[] = habits.slice(0, 7).map((h, idx) => {
     const doneToday = !!completions[`${h.id}-${today}`];
     let streak = 0;
     const base = new Date();
@@ -263,7 +269,15 @@ async function computeHabitsData(): Promise<HabitsWidgetData> {
       if (completions[key]) { streak++; } else if (i > 0) { break; }
     }
     if (streak > bestStreakDays) { bestStreakDays = streak; bestStreakName = h.name; }
-    return { id: h.id, name: h.name, doneToday, streakDays: streak };
+    // Count completions in the last 7 days
+    let weeklyDone = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      if (completions[`${h.id}-${d.toISOString().split('T')[0]}`]) weeklyDone++;
+    }
+    const emoji = HABIT_EMOJIS[idx % HABIT_EMOJIS.length];
+    const color = HABIT_COLORS[idx % HABIT_COLORS.length];
+    return { id: h.id, name: h.name, doneToday, streakDays: streak, weeklyDone, emoji, color };
   });
   const doneTodayCount = habitItems.filter(h => h.doneToday).length;
 
