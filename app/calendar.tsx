@@ -25,7 +25,7 @@ import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 
 export default function CalendarScreen() {
-  const { events, tasks, workouts, notes, addEvent, holidays, addHoliday, updateHoliday, deleteHoliday } = useData();
+  const { events, tasks, workouts, notes, moods, priorities, addEvent, holidays, addHoliday, updateHoliday, deleteHoliday } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const todayString = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState<string | null>(todayString);
@@ -87,6 +87,14 @@ export default function CalendarScreen() {
 
   const getDateNotes = (dateStr: string) => {
     return notes.filter(n => n.date === dateStr);
+  };
+
+  const getDateMoods = (dateStr: string) => {
+    return moods[dateStr]?.entries || [];
+  };
+
+  const getDatePriorities = (dateStr: string) => {
+    return priorities[dateStr] || [];
   };
 
   const handleDatePress = (day: number) => {
@@ -371,6 +379,8 @@ export default function CalendarScreen() {
   const selectedDateTasks = selectedDate ? getDateTasks(selectedDate) : [];
   const selectedDateWorkouts = selectedDate ? getDateWorkouts(selectedDate) : [];
   const selectedDateNotes = selectedDate ? getDateNotes(selectedDate) : [];
+  const selectedDateMoods = selectedDate ? getDateMoods(selectedDate) : [];
+  const selectedDatePriorities = selectedDate ? getDatePriorities(selectedDate) : [];
   const selectedHoliday = selectedDate ? getHoliday(selectedDate) : null;
 
   return (
@@ -505,10 +515,13 @@ export default function CalendarScreen() {
               </View>
             )}
 
-            {selectedDateEvents.length === 0 && selectedDateTasks.length === 0 && selectedDateWorkouts.length === 0 && selectedDateNotes.length === 0 && !selectedHoliday && (
+            {selectedDateEvents.length === 0 && selectedDateTasks.length === 0 && selectedDateWorkouts.length === 0 && selectedDateNotes.length === 0 && selectedDateMoods.length === 0 && selectedDatePriorities.length === 0 && !selectedHoliday && (
               <Text style={styles.emptyText}>Nothing scheduled for this day</Text>
             )}
 
+            {selectedDateEvents.length > 0 && (
+              <Text style={styles.sectionLabel}>Events</Text>
+            )}
             {selectedDateEvents.map(event => (
               <View key={event.id} style={styles.eventCard}>
                 <View style={styles.eventIcon}>
@@ -522,6 +535,31 @@ export default function CalendarScreen() {
               </View>
             ))}
 
+            {selectedDatePriorities.length > 0 && (
+              <Text style={styles.sectionLabel}>Top Priorities</Text>
+            )}
+            {selectedDatePriorities.map(priority => (
+              <View key={priority.id} style={[styles.eventCard, priority.completed && styles.eventCardCompleted]}>
+                <View style={[styles.eventIcon, { backgroundColor: priority.overdue ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)' }]}>
+                  <Text style={styles.eventIconText}>{priority.completed ? '✅' : priority.overdue ? '⚠️' : '⭐'}</Text>
+                </View>
+                <View style={styles.eventContent}>
+                  <Text style={[styles.eventName, priority.completed && styles.eventNameCompleted]}>{priority.task}</Text>
+                  {priority.overdue && !priority.completed && (
+                    <Text style={styles.overdueLabel}>Overdue</Text>
+                  )}
+                  {priority.subtasks && priority.subtasks.length > 0 && (
+                    <Text style={styles.eventDesc}>
+                      {priority.subtasks.filter(s => s.completed).length}/{priority.subtasks.length} subtasks done
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+
+            {selectedDateTasks.length > 0 && (
+              <Text style={styles.sectionLabel}>Tasks</Text>
+            )}
             {selectedDateTasks.map(task => (
               <View key={task.id} style={styles.eventCard}>
                 <View style={styles.eventIcon}>
@@ -530,10 +568,18 @@ export default function CalendarScreen() {
                 <View style={styles.eventContent}>
                   <Text style={styles.eventName}>{task.name}</Text>
                   {task.time && <Text style={styles.eventTime}>{formatTimeDisplay(task.time)}</Text>}
+                  {task.priority && task.priority !== 'low' && (
+                    <Text style={[styles.eventDesc, { color: task.priority === 'high' ? '#ef4444' : '#f59e0b' }]}>
+                      {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority
+                    </Text>
+                  )}
                 </View>
               </View>
             ))}
 
+            {selectedDateWorkouts.length > 0 && (
+              <Text style={styles.sectionLabel}>Workouts</Text>
+            )}
             {selectedDateWorkouts.map(workout => (
               <View key={workout.id} style={styles.eventCard}>
                 <View style={styles.eventIcon}>
@@ -547,6 +593,25 @@ export default function CalendarScreen() {
               </View>
             ))}
 
+            {selectedDateMoods.length > 0 && (
+              <Text style={styles.sectionLabel}>Moods Logged</Text>
+            )}
+            {selectedDateMoods.map((entry, index) => (
+              <View key={index} style={styles.eventCard}>
+                <View style={[styles.eventIcon, { backgroundColor: 'rgba(236,72,153,0.15)' }]}>
+                  <Text style={styles.eventIconText}>{entry.emoji}</Text>
+                </View>
+                <View style={styles.eventContent}>
+                  <Text style={styles.eventName}>{entry.emoji} Mood</Text>
+                  {entry.time && <Text style={styles.eventTime}>{formatTimeDisplay(entry.time)}</Text>}
+                  {entry.note ? <Text style={styles.eventDesc}>{entry.note}</Text> : null}
+                </View>
+              </View>
+            ))}
+
+            {selectedDateNotes.length > 0 && (
+              <Text style={styles.sectionLabel}>Notes</Text>
+            )}
             {selectedDateNotes.map(note => (
               <View key={note.id} style={styles.eventCard}>
                 <View style={styles.eventIcon}>
@@ -976,6 +1041,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: Colors.textDim,
     marginTop: 20,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: Colors.textDim,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  eventCardCompleted: {
+    opacity: 0.55,
+  },
+  eventNameCompleted: {
+    textDecorationLine: 'line-through' as const,
+    color: Colors.textDim,
+  },
+  overdueLabel: {
+    fontSize: 11,
+    color: '#ef4444',
+    fontWeight: '600' as const,
+    marginTop: 2,
   },
   holidayCard: {
     backgroundColor: 'rgba(245, 158, 11, 0.1)',
