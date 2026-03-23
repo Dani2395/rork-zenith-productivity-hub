@@ -114,6 +114,7 @@ export interface RecentNoteData {
   title: string;
   date: string;
   pinned: boolean;
+  preview?: string;
 }
 
 export interface NotesWidgetData {
@@ -146,6 +147,7 @@ export interface GiftsWidgetData {
   totalGifts: number;
   purchasedCount: number;
   nextEventLabel: string;
+  people?: import('./GiftsWidget').GiftPersonData[];
 }
 
 export interface BingoCellData {
@@ -346,12 +348,17 @@ async function computeCalendarData(): Promise<CalendarWidgetData> {
 async function computeNotesData(): Promise<NotesWidgetData> {
   const notes: any[] = await load('notes', []);
   const pinned = notes.filter(n => n.pinned);
-  const sorted = [...notes].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+  // Pinned notes first, then by date descending
+  const sorted = [
+    ...pinned.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
+    ...notes.filter(n => !n.pinned).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
+  ];
   const latest = sorted[0];
-  const recentNotes: RecentNoteData[] = sorted.slice(0, 4).map(n => ({
+  const recentNotes: RecentNoteData[] = sorted.map(n => ({
     title: n.name ?? n.title ?? 'Untitled',
     date: n.date ?? '',
     pinned: !!n.pinned,
+    preview: typeof n.content === 'string' ? n.content.replace(/\n/g, ' ').slice(0, 60) : undefined,
   }));
   return { totalNotes: notes.length, pinnedCount: pinned.length, latestNoteTitle: latest?.name ?? '', latestNoteDate: latest?.date ?? '', recentNotes };
 }
@@ -395,7 +402,19 @@ async function computeGiftsData(): Promise<GiftsWidgetData> {
   const giftPeople: any[] = await load('giftPeople', []);
   const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
   const purchasedCount = allGifts.filter((g: any) => g.purchased).length;
-  return { peopleCount: giftPeople.length, totalGifts: allGifts.length, purchasedCount, nextEventLabel: '' };
+  const people = giftPeople.map(p => ({
+    id: p.id,
+    name: p.name,
+    tag: p.tag ?? 'other',
+    gifts: (p.gifts ?? []).map((g: any) => ({
+      id: g.id,
+      name: g.name,
+      event: g.event ?? '',
+      price: g.price ?? '',
+      purchased: !!g.purchased,
+    })),
+  }));
+  return { peopleCount: giftPeople.length, totalGifts: allGifts.length, purchasedCount, nextEventLabel: '', people };
 }
 
 async function computeBingoData(): Promise<BingoWidgetData> {

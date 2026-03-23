@@ -2,17 +2,18 @@
 /**
  * Android home-screen widget — Notes (codex / journal aesthetic)
  *
- * Shows recent notes with pinned markers, title, and date.
+ * Shows notes in a scrollable list with pinned markers, title, and date.
  * Tapping opens the Notes screen.
  */
 
 import React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
 
 export interface RecentNoteData {
   title: string;
   date: string;
   pinned: boolean;
+  preview?: string;
 }
 
 export interface NotesWidgetProps {
@@ -34,57 +35,65 @@ function NoteRow({ note }: { note: RecentNoteData }) {
   "use no memo";
   return (
     <FlexWidget
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: 'rork-app:///notes' }}
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: 'column',
         width: 'match_parent',
-        paddingTop: 8,
-        paddingBottom: 8,
+        paddingTop: 10,
+        paddingBottom: 10,
         paddingLeft: 14,
         paddingRight: 14,
+        borderBottomWidth: 1,
+        borderColor: '#1e1c10',
+        backgroundColor: note.pinned ? '#12110a' : '#0e0d08',
       }}
     >
-      {/* Pin marker */}
-      <TextWidget
-        text={note.pinned ? '★' : '·'}
+      {/* Title row */}
+      <FlexWidget
         style={{
-          fontSize: note.pinned ? 13 : 16,
-          color: note.pinned ? '#fbbf24' : '#2a2820',
-          marginRight: 10,
-          fontWeight: 'bold',
+          flexDirection: 'row',
+          alignItems: 'center',
+          width: 'match_parent',
         }}
-      />
-
-      {/* Title */}
-      <TextWidget
-        text={note.title}
-        style={{
-          fontSize: 12,
-          color: note.pinned ? '#fef3c7' : '#d6d0c4',
-          fontWeight: note.pinned ? 'bold' : 'normal',
-          flex: 1,
-        }}
-      />
-
-      {/* Date chip */}
-      {note.date ? (
-        <FlexWidget
+      >
+        <TextWidget
+          text={note.pinned ? '★' : '·'}
           style={{
-            backgroundColor: '#1a1910',
-            borderRadius: 6,
-            paddingTop: 2,
-            paddingBottom: 2,
-            paddingLeft: 5,
-            paddingRight: 5,
-            borderWidth: 1,
-            borderColor: '#2a2820',
+            fontSize: note.pinned ? 13 : 16,
+            color: note.pinned ? '#fbbf24' : '#3a3820',
+            marginRight: 8,
+            fontWeight: 'bold',
           }}
-        >
+        />
+        <TextWidget
+          text={note.title}
+          style={{
+            fontSize: 13,
+            color: note.pinned ? '#fef3c7' : '#d6d0c4',
+            fontWeight: note.pinned ? 'bold' : 'normal',
+            flex: 1,
+          }}
+        />
+        {note.date ? (
           <TextWidget
             text={formatDate(note.date)}
-            style={{ fontSize: 9, color: '#4a4830', fontWeight: 'bold' }}
+            style={{ fontSize: 10, color: '#4a4830' }}
           />
-        </FlexWidget>
+        ) : null}
+      </FlexWidget>
+
+      {/* Preview line */}
+      {note.preview ? (
+        <TextWidget
+          text={note.preview}
+          style={{
+            fontSize: 11,
+            color: '#3a3820',
+            marginTop: 3,
+            marginLeft: 21,
+          }}
+        />
       ) : null}
     </FlexWidget>
   );
@@ -100,91 +109,78 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [] }: Notes
         backgroundColor: '#0e0d08',
         borderRadius: 20,
       }}
-      clickAction="android.intent.action.VIEW"
-      clickActionData={{ uri: 'rork-app:///notes' }}
     >
       {/* ── Header ── */}
       <FlexWidget
-        style={{
-          flexDirection: 'column',
-          alignItems: 'center',
-          width: 'match_parent',
-          paddingTop: 16,
-          paddingBottom: 12,
-        }}
-      >
-        <TextWidget
-          text="y o u r   c o d e x"
-          style={{ fontSize: 9, color: '#a16207', fontWeight: 'bold' }}
-        />
-        <TextWidget
-          text="NOTES"
-          style={{ fontSize: 22, color: '#ffffff', fontWeight: 'bold', marginTop: 2 }}
-        />
-      </FlexWidget>
-
-      {/* ── Divider ── */}
-      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1c10' }} />
-
-      {/* ── Notes list ── */}
-      <FlexWidget
-        style={{
-          flexDirection: 'column',
-          width: 'match_parent',
-          flex: 1,
-          paddingTop: 4,
-          paddingBottom: 4,
-        }}
-      >
-        {recentNotes.length === 0 ? (
-          <FlexWidget
-            style={{
-              width: 'match_parent',
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <TextWidget
-              text="[ CODEX EMPTY ]"
-              style={{ fontSize: 11, color: '#2a2820', fontStyle: 'italic' }}
-            />
-          </FlexWidget>
-        ) : null}
-
-        {recentNotes[0] ? <NoteRow note={recentNotes[0]} /> : null}
-        {recentNotes[1] ? <NoteRow note={recentNotes[1]} /> : null}
-        {recentNotes[2] ? <NoteRow note={recentNotes[2]} /> : null}
-        {recentNotes[3] ? <NoteRow note={recentNotes[3]} /> : null}
-      </FlexWidget>
-
-      {/* ── Divider ── */}
-      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1c10' }} />
-
-      {/* ── Footer: stats ── */}
-      <FlexWidget
+        clickAction="android.intent.action.VIEW"
+        clickActionData={{ uri: 'rork-app:///notes' }}
         style={{
           flexDirection: 'row',
-          justifyContent: 'space-between',
           alignItems: 'center',
+          justifyContent: 'space-between',
           width: 'match_parent',
-          paddingTop: 8,
-          paddingBottom: 10,
-          paddingLeft: 14,
-          paddingRight: 14,
+          paddingTop: 14,
+          paddingBottom: 12,
+          paddingLeft: 16,
+          paddingRight: 16,
         }}
       >
-        <TextWidget
-          text={`${totalNotes} ENTRIES`}
-          style={{ fontSize: 9, color: '#4a4830', fontWeight: 'bold' }}
-        />
-        {pinnedCount > 0 ? (
+        <FlexWidget style={{ flexDirection: 'column' }}>
           <TextWidget
-            text={`★ ${pinnedCount} PINNED`}
-            style={{ fontSize: 9, color: '#a16207', fontWeight: 'bold' }}
+            text="y o u r   c o d e x"
+            style={{ fontSize: 8, color: '#a16207', fontWeight: 'bold' }}
           />
-        ) : null}
+          <TextWidget
+            text="NOTES"
+            style={{ fontSize: 20, color: '#ffffff', fontWeight: 'bold', marginTop: 1 }}
+          />
+        </FlexWidget>
+
+        <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {pinnedCount > 0 ? (
+            <TextWidget
+              text={`★ ${pinnedCount}  `}
+              style={{ fontSize: 11, color: '#a16207', fontWeight: 'bold' }}
+            />
+          ) : null}
+          <TextWidget
+            text={`${totalNotes} entries`}
+            style={{ fontSize: 10, color: '#4a4830' }}
+          />
+        </FlexWidget>
       </FlexWidget>
+
+      {/* ── Divider ── */}
+      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1c10' }} />
+
+      {/* ── Scrollable notes list ── */}
+      {recentNotes.length === 0 ? (
+        <FlexWidget
+          style={{
+            width: 'match_parent',
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <TextWidget
+            text="[ CODEX EMPTY ]"
+            style={{ fontSize: 11, color: '#2a2820', fontStyle: 'italic' }}
+          />
+        </FlexWidget>
+      ) : (
+        <ListWidget
+          style={{
+            width: 'match_parent',
+            flex: 1,
+            backgroundColor: '#0e0d08',
+          }}
+        >
+          {recentNotes.map((note, i) => (
+            <NoteRow key={i} note={note} />
+          ))}
+        </ListWidget>
+      )}
     </FlexWidget>
   );
 }
