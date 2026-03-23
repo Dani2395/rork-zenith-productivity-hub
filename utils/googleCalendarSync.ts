@@ -23,7 +23,7 @@ import { scheduleEventReminder } from './calendarNotifications';
 import type { Event } from '@/types';
 
 // ─── Replace these with your own Google OAuth Client IDs ──────────────────────
-export const GOOGLE_CLIENT_ID_ANDROID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID_ANDROID = '188861853335-73q8n9tulraa9ch1m6cepv32mfqrt27k.apps.googleusercontent.com';
 export const GOOGLE_CLIENT_ID_IOS     = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
 export const GOOGLE_CLIENT_ID_WEB     = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
 // ─────────────────────────────────────────────────────────────────────────────
