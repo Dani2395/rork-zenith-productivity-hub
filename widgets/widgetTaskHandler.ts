@@ -319,7 +319,23 @@ async function computePrioritiesData(): Promise<PrioritiesWidgetData> {
   const today = new Date().toISOString().split('T')[0];
   const d = new Date();
   const todayLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
-  const todayList: any[] = priorities[today] ?? [];
+
+  // Cascade uncompleted priorities from all past dates (same logic as rolloverPriorities)
+  const seenIds = new Set<number>();
+  const allPastUncompleted: any[] = [];
+  const pastDates = Object.keys(priorities).filter(date => date < today).sort().reverse();
+  for (const date of pastDates) {
+    for (const p of priorities[date] ?? []) {
+      if (!p.completed && !seenIds.has(p.id)) {
+        seenIds.add(p.id);
+        allPastUncompleted.push({ ...p, overdue: true });
+      }
+    }
+  }
+  const todayStored: any[] = priorities[today] ?? [];
+  const todayNew = todayStored.filter(p => !seenIds.has(p.id));
+  const todayList = [...allPastUncompleted, ...todayNew].slice(0, 5);
+
   const completedCount = todayList.filter(p => p.completed).length;
   const nextPriority = todayList.find(p => !p.completed)?.task ?? '';
   const priorityItems: PriorityItemData[] = todayList.map(p => ({

@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Edit3, Settings, Edit2, Bell } from 'lucide-react-native';
+import { Plus, Trash2, Circle, CheckCircle2, Settings, Edit2, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateTasksWidget } from '@/widgets/widgetTaskHandler';
@@ -360,7 +360,7 @@ export default function TasksScreen() {
                   isOverdue && styles.taskItemOverdue,
                 ]}
                 onPress={() => {
-                  toggleTask(task.id);
+                  handleEditTask(task.id);
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }}
               >
@@ -404,13 +404,23 @@ export default function TasksScreen() {
                 <View style={styles.taskActions}>
                   <TouchableOpacity
                     style={styles.taskActionButton}
-                    onPress={() => handleEditTask(task.id)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      toggleTask(task.id);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
                   >
-                    <Edit3 size={18} color={Colors.textDim} />
+                    {task.completed
+                      ? <CheckCircle2 size={22} color={Colors.primary} />
+                      : <Circle size={22} color={Colors.textDim} />
+                    }
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.taskActionButton}
-                    onPress={() => handleDeleteTask(task.id)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteTask(task.id);
+                    }}
                   >
                     <Trash2 size={18} color={Colors.danger} />
                   </TouchableOpacity>

@@ -427,20 +427,31 @@ export const [DataProvider, useData] = createContextHook(() => {
 
   const rolloverPriorities = useCallback(() => {
     const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    
+
     setPriorities(prev => {
-      const yesterdayPriorities = prev[yesterday] || [];
-      const uncompletedPriorities = yesterdayPriorities.filter(p => !p.completed);
-      
-      if (uncompletedPriorities.length === 0) return prev;
-      
+      // Gather all uncompleted priorities from every past date, deduplicated by id
+      const seenIds = new Set<number>();
+      const allPastUncompleted: Priority[] = [];
+
+      const pastDates = Object.keys(prev).filter(date => date < today).sort().reverse();
+      for (const date of pastDates) {
+        for (const p of prev[date]) {
+          if (!p.completed && !seenIds.has(p.id)) {
+            seenIds.add(p.id);
+            allPastUncompleted.push({ ...p, overdue: true });
+          }
+        }
+      }
+
+      if (allPastUncompleted.length === 0) return prev;
+
       const todayPriorities = prev[today] || [];
-      const overdueWithTag = uncompletedPriorities.map(p => ({ ...p, overdue: true }));
-      
+      // Keep today's items that aren't already represented in the overdue list
+      const todayNewItems = todayPriorities.filter(p => !seenIds.has(p.id));
+
       const updated = {
         ...prev,
-        [today]: [...overdueWithTag, ...todayPriorities].slice(0, 5),
+        [today]: [...allPastUncompleted, ...todayNewItems].slice(0, 5),
       };
       saveData('priorities', updated);
       return updated;
