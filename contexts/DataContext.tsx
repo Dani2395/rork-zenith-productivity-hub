@@ -193,7 +193,15 @@ export const [DataProvider, useData] = createContextHook(() => {
       if (debtsData) setDebts(JSON.parse(debtsData));
       if (savingsData) setSavings(JSON.parse(savingsData));
       if (giftPeopleData) setGiftPeople(JSON.parse(giftPeopleData));
-      if (bingoDataStored) setBingoData(JSON.parse(bingoDataStored));
+      if (bingoDataStored) {
+        const stored: BingoItem[] = JSON.parse(bingoDataStored);
+        // Merge stored state over defaults so all 25 cells always exist
+        // and any checked/custom state is preserved even across app updates
+        const merged = DEFAULT_BINGO.map((def, i) =>
+          stored[i] !== undefined ? { ...def, ...stored[i] } : def
+        );
+        setBingoData(merged);
+      }
       if (bingoPrizeData) setBingoPrize(JSON.parse(bingoPrizeData));
       if (holidaysData) setHolidays(JSON.parse(holidaysData));
       if (noteCategoriesData) setNoteCategories(JSON.parse(noteCategoriesData));
