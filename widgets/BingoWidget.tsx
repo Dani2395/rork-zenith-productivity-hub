@@ -23,6 +23,8 @@ export interface BingoWidgetProps {
   recentGoal: string;
 }
 
+const BINGO_URI = 'rork-app:///bingo';
+
 function BingoCell({ cell }: { cell: BingoCellData }) {
   "use no memo";
   if (!cell) return null;
@@ -44,7 +46,8 @@ function BingoCell({ cell }: { cell: BingoCellData }) {
         paddingTop: 4,
         paddingBottom: 4,
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: BINGO_URI }}
     >
       <TextWidget
         text={cell.isFreeSpace ? '⭐' : (cell.done ? cell.emoji : cell.emoji)}
@@ -64,7 +67,7 @@ function BingoCell({ cell }: { cell: BingoCellData }) {
 function BingoRow({ c0, c1, c2, c3, c4 }: { c0: BingoCellData; c1: BingoCellData; c2: BingoCellData; c3: BingoCellData; c4: BingoCellData }) {
   "use no memo";
   return (
-    <FlexWidget style={{ flexDirection: 'row', flex: 1, paddingLeft: 4, paddingRight: 4 }}>
+    <FlexWidget style={{ flexDirection: 'row', flex: 1, width: 'match_parent', paddingLeft: 4, paddingRight: 4 }}>
       <BingoCell cell={c0} />
       <BingoCell cell={c1} />
       <BingoCell cell={c2} />
@@ -89,7 +92,8 @@ export function BingoWidget({ cells = [], completedCount, hasBingo, recentGoal }
         backgroundColor: '#111827',
         borderRadius: 20,
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: BINGO_URI }}
     >
       {/* ── Header ── */}
       <FlexWidget
@@ -97,6 +101,7 @@ export function BingoWidget({ cells = [], completedCount, hasBingo, recentGoal }
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
+          width: 'match_parent',
           backgroundColor: '#1a1a2e',
           borderRadius: 20,
           paddingTop: 10,
@@ -137,6 +142,7 @@ export function BingoWidget({ cells = [], completedCount, hasBingo, recentGoal }
         style={{
           flex: 1,
           flexDirection: 'column',
+          width: 'match_parent',
           paddingTop: 6,
           paddingBottom: 6,
         }}
@@ -154,6 +160,7 @@ export function BingoWidget({ cells = [], completedCount, hasBingo, recentGoal }
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
+          width: 'match_parent',
           paddingTop: 6,
           paddingBottom: 8,
           paddingLeft: 14,

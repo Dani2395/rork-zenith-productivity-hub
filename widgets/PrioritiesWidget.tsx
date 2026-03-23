@@ -26,6 +26,8 @@ export interface PrioritiesWidgetProps {
   priorities: PriorityItemData[];
 }
 
+const PRIORITIES_URI = 'rork-app:///';
+
 function PriorityRow({ item, num }: { item: PriorityItemData; num: number }) {
   "use no memo";
   const hasSubtasks = item.subtaskTotal > 0;
@@ -36,12 +38,14 @@ function PriorityRow({ item, num }: { item: PriorityItemData; num: number }) {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
+        width: 'match_parent',
         paddingTop: 7,
         paddingBottom: 7,
         paddingLeft: 4,
         paddingRight: 4,
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: PRIORITIES_URI }}
     >
       {/* Number badge */}
       <FlexWidget
@@ -111,7 +115,8 @@ export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextP
         backgroundColor: '#111827',
         borderRadius: 20,
       }}
-      clickAction="OPEN_APP"
+      clickAction="android.intent.action.VIEW"
+      clickActionData={{ uri: PRIORITIES_URI }}
     >
       {/* ── Header ── */}
       <FlexWidget
@@ -119,6 +124,7 @@ export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextP
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
+          width: 'match_parent',
           backgroundColor: '#1a2a1a',
           borderRadius: 20,
           paddingTop: 12,
@@ -161,6 +167,7 @@ export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextP
       <FlexWidget
         style={{
           flexDirection: 'column',
+          width: 'match_parent',
           paddingLeft: 10,
           paddingRight: 10,
           paddingTop: 4,
@@ -170,6 +177,7 @@ export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextP
         {priorities.length === 0 ? (
           <FlexWidget
             style={{
+              width: 'match_parent',
               paddingTop: 20,
               paddingBottom: 20,
               alignItems: 'center',
@@ -202,7 +210,7 @@ export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextP
 
       {/* ── Divider ── */}
       <FlexWidget
-        style={{ height: 1, backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
+        style={{ height: 1, width: 'match_parent', backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
       />
 
       {/* ── Footer ── */}
@@ -211,6 +219,7 @@ export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextP
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
+          width: 'match_parent',
           paddingTop: 8,
           paddingBottom: 10,
           paddingLeft: 14,
