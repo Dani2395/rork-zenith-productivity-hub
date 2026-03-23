@@ -1,9 +1,9 @@
 "use no memo";
 /**
- * Android home-screen widget — Top Priorities (Google Tasks-style)
+ * Android home-screen widget — Top Priorities (TASK_OS cyberpunk style)
  *
- * Shows today's up-to-5 priorities as individual rows with subtask
- * progress and overdue indicators. Tapping opens the Home screen.
+ * Shows today's up-to-5 priorities as numbered rows with status badges
+ * and interactive checkboxes. Tapping a row toggles completion.
  */
 
 import React from 'react';
@@ -28,10 +28,25 @@ export interface PrioritiesWidgetProps {
 
 const PRIORITIES_URI = 'rork-app:///';
 
+function pad(n: number) {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+function getBadge(item: PriorityItemData): { color: string; label: string } {
+  if (item.completed) return { color: '#3d3d5c', label: 'DONE' };
+  if (item.overdue)   return { color: '#f87171', label: 'LATE' };
+  if (item.subtaskTotal > 0) {
+    const allSub = item.subtaskDone >= item.subtaskTotal;
+    return allSub
+      ? { color: '#34d399', label: `${item.subtaskDone}/${item.subtaskTotal}` }
+      : { color: '#60a5fa', label: `${item.subtaskDone}/${item.subtaskTotal}` };
+  }
+  return { color: '#c084fc', label: 'TODO' };
+}
+
 function PriorityRow({ item, num }: { item: PriorityItemData; num: number }) {
   "use no memo";
-  const hasSubtasks = item.subtaskTotal > 0;
-  const subtaskLabel = hasSubtasks ? `${item.subtaskDone}/${item.subtaskTotal} subtasks` : '';
+  const badge = getBadge(item);
 
   return (
     <FlexWidget
@@ -39,80 +54,93 @@ function PriorityRow({ item, num }: { item: PriorityItemData; num: number }) {
         flexDirection: 'row',
         alignItems: 'center',
         width: 'match_parent',
-        paddingTop: 7,
-        paddingBottom: 7,
-        paddingLeft: 4,
-        paddingRight: 4,
+        paddingTop: 9,
+        paddingBottom: 9,
+        paddingLeft: 14,
+        paddingRight: 14,
       }}
       clickAction="TOGGLE_PRIORITY"
       clickActionData={{ priorityId: String(item.id) }}
     >
-      {/* Number badge */}
+      {/* Row number */}
+      <TextWidget
+        text={pad(num)}
+        style={{
+          fontSize: 10,
+          color: '#3d3d5c',
+          fontWeight: 'bold',
+          marginRight: 12,
+          width: 18,
+        }}
+      />
+
+      {/* Task name */}
+      <TextWidget
+        text={item.task}
+        style={{
+          fontSize: 13,
+          color: item.completed ? '#3d3d5c' : '#dde1f0',
+          fontWeight: item.completed ? 'normal' : 'bold',
+          flex: 1,
+        }}
+      />
+
+      {/* Status badge */}
       <FlexWidget
         style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          backgroundColor: item.completed ? '#14532d' : (item.overdue ? '#7f1d1d' : '#1e3a5f'),
-          justifyContent: 'center',
-          alignItems: 'center',
+          backgroundColor: item.completed ? '#1a1a2e' : `${badge.color}22`,
+          borderRadius: 10,
+          paddingTop: 3,
+          paddingBottom: 3,
+          paddingLeft: 7,
+          paddingRight: 7,
           marginRight: 10,
+          borderWidth: 1,
+          borderColor: item.completed ? '#2a2a40' : badge.color,
         }}
       >
         <TextWidget
-          text={item.completed ? '✓' : String(num)}
+          text={badge.label}
           style={{
-            fontSize: 11,
-            color: item.completed ? '#4ade80' : (item.overdue ? '#f87171' : '#93c5fd'),
+            fontSize: 9,
+            color: item.completed ? '#3d3d5c' : badge.color,
             fontWeight: 'bold',
           }}
         />
       </FlexWidget>
 
-      {/* Task + subtask info */}
-      <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
-        <TextWidget
-          text={item.task}
-          style={{
-            fontSize: 13,
-            color: item.completed ? '#475569' : (item.overdue ? '#fca5a5' : '#f1f5f9'),
-            fontWeight: item.completed ? 'normal' : 'bold',
-          }}
-        />
-        {hasSubtasks ? (
-          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-            <TextWidget
-              text="↳ "
-              style={{ fontSize: 10, color: '#475569' }}
-            />
-            <TextWidget
-              text={subtaskLabel}
-              style={{
-                fontSize: 10,
-                color: item.subtaskDone === item.subtaskTotal ? '#4ade80' : '#64748b',
-              }}
-            />
-          </FlexWidget>
+      {/* Checkbox */}
+      <FlexWidget
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 4,
+          borderWidth: 1.5,
+          borderColor: item.completed ? '#4ade80' : '#3a3a5c',
+          backgroundColor: item.completed ? '#14532d' : 'transparent',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        {item.completed ? (
+          <TextWidget
+            text="✓"
+            style={{ fontSize: 10, color: '#4ade80', fontWeight: 'bold' }}
+          />
         ) : null}
       </FlexWidget>
-
-      {item.overdue && !item.completed ? (
-        <TextWidget text="!" style={{ fontSize: 12, color: '#f87171', fontWeight: 'bold', marginLeft: 4 }} />
-      ) : null}
     </FlexWidget>
   );
 }
 
-export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextPriority, priorities = [] }: PrioritiesWidgetProps) {
-  const allDone = totalCount > 0 && completedCount >= totalCount;
-
+export function PrioritiesWidget({ completedCount, totalCount, priorities = [] }: PrioritiesWidgetProps) {
   return (
     <FlexWidget
       style={{
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: '#111827',
+        backgroundColor: '#0a0b14',
         borderRadius: 20,
       }}
       clickAction="android.intent.action.VIEW"
@@ -121,125 +149,94 @@ export function PrioritiesWidget({ todayLabel, completedCount, totalCount, nextP
       {/* ── Header ── */}
       <FlexWidget
         style={{
-          flexDirection: 'row',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'space-between',
           width: 'match_parent',
-          backgroundColor: '#1a2a1a',
-          borderRadius: 20,
-          paddingTop: 12,
+          paddingTop: 16,
           paddingBottom: 12,
-          paddingLeft: 14,
-          paddingRight: 14,
         }}
       >
-        <FlexWidget style={{ flexDirection: 'column' }}>
-          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TextWidget text="⭐" style={{ fontSize: 14 }} />
-            <TextWidget
-              text="  Top Priorities"
-              style={{ fontSize: 15, fontWeight: 'bold', color: '#f1f5f9' }}
-            />
-          </FlexWidget>
-          <TextWidget
-            text={todayLabel}
-            style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}
-          />
-        </FlexWidget>
-        <FlexWidget
-          style={{
-            backgroundColor: allDone ? '#166534' : '#365314',
-            borderRadius: 10,
-            paddingTop: 3,
-            paddingBottom: 3,
-            paddingLeft: 8,
-            paddingRight: 8,
-          }}
-        >
-          <TextWidget
-            text={`${completedCount} / ${totalCount}`}
-            style={{ fontSize: 11, color: '#ffffff', fontWeight: 'bold' }}
-          />
-        </FlexWidget>
+        <TextWidget
+          text="m i s s i o n   c o n t r o l"
+          style={{ fontSize: 9, color: '#c084fc', fontWeight: 'bold' }}
+        />
+        <TextWidget
+          text="PRIORITIES"
+          style={{ fontSize: 22, color: '#ffffff', fontWeight: 'bold', marginTop: 2 }}
+        />
       </FlexWidget>
+
+      {/* ── Divider ── */}
+      <FlexWidget
+        style={{
+          height: 1,
+          width: 'match_parent',
+          backgroundColor: '#1e2038',
+          marginBottom: 4,
+        }}
+      />
 
       {/* ── Priority rows ── */}
       <FlexWidget
         style={{
           flexDirection: 'column',
           width: 'match_parent',
-          paddingLeft: 10,
-          paddingRight: 10,
-          paddingTop: 4,
-          paddingBottom: 4,
+          flex: 1,
         }}
       >
         {priorities.length === 0 ? (
           <FlexWidget
             style={{
               width: 'match_parent',
-              paddingTop: 20,
-              paddingBottom: 20,
+              paddingTop: 24,
+              paddingBottom: 24,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
             <TextWidget
-              text="✨  Add your priorities for today"
-              style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}
+              text="[ NO ACTIVE MISSIONS ]"
+              style={{ fontSize: 11, color: '#3d3d5c', fontStyle: 'italic' }}
             />
           </FlexWidget>
         ) : null}
 
-        {priorities[0] ? (
-          <PriorityRow item={priorities[0]} num={1} />
-        ) : null}
-        {priorities[1] ? (
-          <PriorityRow item={priorities[1]} num={2} />
-        ) : null}
-        {priorities[2] ? (
-          <PriorityRow item={priorities[2]} num={3} />
-        ) : null}
-        {priorities[3] ? (
-          <PriorityRow item={priorities[3]} num={4} />
-        ) : null}
-        {priorities[4] ? (
-          <PriorityRow item={priorities[4]} num={5} />
-        ) : null}
+        {priorities[0] ? <PriorityRow item={priorities[0]} num={1} /> : null}
+        {priorities[1] ? <PriorityRow item={priorities[1]} num={2} /> : null}
+        {priorities[2] ? <PriorityRow item={priorities[2]} num={3} /> : null}
+        {priorities[3] ? <PriorityRow item={priorities[3]} num={4} /> : null}
+        {priorities[4] ? <PriorityRow item={priorities[4]} num={5} /> : null}
       </FlexWidget>
 
       {/* ── Divider ── */}
       <FlexWidget
-        style={{ height: 1, width: 'match_parent', backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
+        style={{
+          height: 1,
+          width: 'match_parent',
+          backgroundColor: '#1e2038',
+          marginTop: 4,
+        }}
       />
 
       {/* ── Footer ── */}
       <FlexWidget
         style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
           width: 'match_parent',
           paddingTop: 8,
           paddingBottom: 10,
-          paddingLeft: 14,
-          paddingRight: 14,
+          paddingLeft: 16,
+          paddingRight: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
         }}
       >
-        {allDone ? (
-          <TextWidget
-            text="🎉  All priorities done!"
-            style={{ fontSize: 10, color: '#4ade80', fontWeight: 'bold' }}
-          />
-        ) : (
-          <TextWidget
-            text={nextPriority ? `Next: ${nextPriority}` : ''}
-            style={{ fontSize: 10, color: '#94a3b8' }}
-          />
-        )}
         <TextWidget
-          text="Tap to open →"
-          style={{ fontSize: 9, color: '#334155' }}
+          text={`${completedCount} / ${totalCount} DONE`}
+          style={{
+            fontSize: 10,
+            color: completedCount >= totalCount && totalCount > 0 ? '#4ade80' : '#34d399',
+            fontWeight: 'bold',
+          }}
         />
       </FlexWidget>
     </FlexWidget>

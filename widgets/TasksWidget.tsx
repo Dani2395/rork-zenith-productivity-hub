@@ -1,9 +1,9 @@
 "use no memo";
 /**
- * Android home-screen widget — My Tasks (Google Tasks-style)
+ * Android home-screen widget — My Tasks (TASK_OS cyberpunk style)
  *
- * Shows today's tasks as individual rows with priority dots, times,
- * and overdue indicators. Tapping opens the Tasks screen.
+ * Shows today's tasks as numbered rows with priority badges and
+ * interactive checkboxes. Tapping a row toggles completion.
  */
 
 import React from 'react';
@@ -26,398 +26,209 @@ export interface TasksWidgetProps {
   nextTask: string;
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  high: '#f87171',
-  medium: '#facc15',
-  low: '#4ade80',
+const BADGE: Record<string, { color: string; label: string }> = {
+  high:   { color: '#f472b6', label: 'HIGH'   },
+  medium: { color: '#fb923c', label: 'MED'    },
+  low:    { color: '#34d399', label: 'LOW'    },
+  late:   { color: '#f87171', label: 'LATE'   },
 };
 
-const TASKS_URI = 'rork-app:///tasks';
+function pad(n: number) {
+  return n < 10 ? `0${n}` : String(n);
+}
 
-export function TasksWidget({ tasks = [], todayTotal, todayDone, overdueCount }: TasksWidgetProps) {
-  const allDone = todayTotal > 0 && todayDone >= todayTotal;
+function TaskRow({ item, num }: { item: TaskItemData; num: number }) {
+  "use no memo";
+  const badge = item.overdue && !item.completed ? BADGE.late : (BADGE[item.priority] ?? BADGE.low);
 
+  return (
+    <FlexWidget
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: 'match_parent',
+        paddingTop: 9,
+        paddingBottom: 9,
+        paddingLeft: 14,
+        paddingRight: 14,
+      }}
+      clickAction="TOGGLE_TASK"
+      clickActionData={{ taskId: String(item.id) }}
+    >
+      {/* Row number */}
+      <TextWidget
+        text={pad(num)}
+        style={{
+          fontSize: 10,
+          color: '#3d3d5c',
+          fontWeight: 'bold',
+          marginRight: 12,
+          width: 18,
+        }}
+      />
+
+      {/* Task name */}
+      <TextWidget
+        text={item.name}
+        style={{
+          fontSize: 13,
+          color: item.completed ? '#3d3d5c' : '#dde1f0',
+          fontWeight: item.completed ? 'normal' : 'bold',
+          flex: 1,
+        }}
+      />
+
+      {/* Priority / status badge */}
+      <FlexWidget
+        style={{
+          backgroundColor: item.completed ? '#1a1a2e' : `${badge.color}22`,
+          borderRadius: 10,
+          paddingTop: 3,
+          paddingBottom: 3,
+          paddingLeft: 7,
+          paddingRight: 7,
+          marginRight: 10,
+          borderWidth: 1,
+          borderColor: item.completed ? '#2a2a40' : badge.color,
+        }}
+      >
+        <TextWidget
+          text={item.completed ? 'DONE' : badge.label}
+          style={{
+            fontSize: 9,
+            color: item.completed ? '#3d3d5c' : badge.color,
+            fontWeight: 'bold',
+          }}
+        />
+      </FlexWidget>
+
+      {/* Checkbox */}
+      <FlexWidget
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 4,
+          borderWidth: 1.5,
+          borderColor: item.completed ? '#4ade80' : '#3a3a5c',
+          backgroundColor: item.completed ? '#14532d' : 'transparent',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        {item.completed ? (
+          <TextWidget
+            text="✓"
+            style={{ fontSize: 10, color: '#4ade80', fontWeight: 'bold' }}
+          />
+        ) : null}
+      </FlexWidget>
+    </FlexWidget>
+  );
+}
+
+export function TasksWidget({ tasks = [], todayTotal, todayDone }: TasksWidgetProps) {
   return (
     <FlexWidget
       style={{
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: '#111827',
+        backgroundColor: '#0a0b14',
         borderRadius: 20,
       }}
-      clickAction="android.intent.action.VIEW"
-      clickActionData={{ uri: TASKS_URI }}
     >
       {/* ── Header ── */}
       <FlexWidget
         style={{
-          flexDirection: 'row',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'space-between',
           width: 'match_parent',
-          backgroundColor: '#1e2a3a',
-          borderRadius: 20,
-          paddingTop: 12,
+          paddingTop: 16,
           paddingBottom: 12,
-          paddingLeft: 14,
-          paddingRight: 14,
         }}
       >
-        <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TextWidget text="📋" style={{ fontSize: 15 }} />
-          <TextWidget
-            text="  My Tasks"
-            style={{ fontSize: 15, fontWeight: 'bold', color: '#f1f5f9' }}
-          />
-        </FlexWidget>
-        <FlexWidget
-          style={{
-            backgroundColor: allDone ? '#166534' : '#1d4ed8',
-            borderRadius: 10,
-            paddingTop: 3,
-            paddingBottom: 3,
-            paddingLeft: 8,
-            paddingRight: 8,
-          }}
-        >
-          <TextWidget
-            text={`${todayDone} / ${todayTotal}`}
-            style={{ fontSize: 11, color: '#ffffff', fontWeight: 'bold' }}
-          />
-        </FlexWidget>
+        <TextWidget
+          text="m i s s i o n   c o n t r o l"
+          style={{ fontSize: 9, color: '#c084fc', fontWeight: 'bold', letterSpacing: 2 }}
+        />
+        <TextWidget
+          text="TASK_OS"
+          style={{ fontSize: 22, color: '#ffffff', fontWeight: 'bold', marginTop: 2 }}
+        />
       </FlexWidget>
+
+      {/* ── Divider ── */}
+      <FlexWidget
+        style={{
+          height: 1,
+          width: 'match_parent',
+          backgroundColor: '#1e2038',
+          marginBottom: 4,
+        }}
+      />
 
       {/* ── Task rows ── */}
       <FlexWidget
         style={{
           flexDirection: 'column',
           width: 'match_parent',
-          paddingLeft: 10,
-          paddingRight: 10,
-          paddingTop: 4,
-          paddingBottom: 4,
+          flex: 1,
         }}
       >
         {tasks.length === 0 ? (
           <FlexWidget
             style={{
               width: 'match_parent',
-              paddingTop: 18,
-              paddingBottom: 18,
+              paddingTop: 24,
+              paddingBottom: 24,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
             <TextWidget
-              text="✨  All clear for today!"
-              style={{ fontSize: 13, color: '#64748b', fontStyle: 'italic' }}
+              text="[ NO ACTIVE MISSIONS ]"
+              style={{ fontSize: 11, color: '#3d3d5c', fontStyle: 'italic' }}
             />
           </FlexWidget>
         ) : null}
 
-        {tasks[0] ? (
-          <FlexWidget
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              width: 'match_parent',
-              paddingTop: 7,
-              paddingBottom: 7,
-              paddingLeft: 4,
-              paddingRight: 4,
-            }}
-            clickAction="TOGGLE_TASK"
-            clickActionData={{ taskId: String(tasks[0].id) }}
-          >
-            <TextWidget
-              text={tasks[0].completed ? '✓' : '○'}
-              style={{
-                fontSize: 15,
-                color: tasks[0].completed ? '#4ade80' : (tasks[0].overdue ? '#f87171' : '#60a5fa'),
-                marginRight: 10,
-                fontWeight: 'bold',
-              }}
-            />
-            <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
-              <TextWidget
-                text={tasks[0].name}
-                style={{
-                  fontSize: 13,
-                  color: tasks[0].completed ? '#475569' : (tasks[0].overdue ? '#fca5a5' : '#e2e8f0'),
-                  fontWeight: tasks[0].completed ? 'normal' : 'bold',
-                }}
-              />
-              {tasks[0].time ? (
-                <TextWidget
-                  text={tasks[0].time}
-                  style={{ fontSize: 10, color: tasks[0].overdue ? '#f87171' : '#64748b', marginTop: 1 }}
-                />
-              ) : null}
-            </FlexWidget>
-            <FlexWidget
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: PRIORITY_COLOR[tasks[0].priority] ?? '#94a3b8',
-              }}
-            />
-          </FlexWidget>
-        ) : null}
-
-        {tasks[1] ? (
-          <FlexWidget
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              width: 'match_parent',
-              paddingTop: 7,
-              paddingBottom: 7,
-              paddingLeft: 4,
-              paddingRight: 4,
-            }}
-            clickAction="TOGGLE_TASK"
-            clickActionData={{ taskId: String(tasks[1].id) }}
-          >
-            <TextWidget
-              text={tasks[1].completed ? '✓' : '○'}
-              style={{
-                fontSize: 15,
-                color: tasks[1].completed ? '#4ade80' : (tasks[1].overdue ? '#f87171' : '#60a5fa'),
-                marginRight: 10,
-                fontWeight: 'bold',
-              }}
-            />
-            <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
-              <TextWidget
-                text={tasks[1].name}
-                style={{
-                  fontSize: 13,
-                  color: tasks[1].completed ? '#475569' : (tasks[1].overdue ? '#fca5a5' : '#e2e8f0'),
-                  fontWeight: tasks[1].completed ? 'normal' : 'bold',
-                }}
-              />
-              {tasks[1].time ? (
-                <TextWidget
-                  text={tasks[1].time}
-                  style={{ fontSize: 10, color: tasks[1].overdue ? '#f87171' : '#64748b', marginTop: 1 }}
-                />
-              ) : null}
-            </FlexWidget>
-            <FlexWidget
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: PRIORITY_COLOR[tasks[1].priority] ?? '#94a3b8',
-              }}
-            />
-          </FlexWidget>
-        ) : null}
-
-        {tasks[2] ? (
-          <FlexWidget
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              width: 'match_parent',
-              paddingTop: 7,
-              paddingBottom: 7,
-              paddingLeft: 4,
-              paddingRight: 4,
-            }}
-            clickAction="TOGGLE_TASK"
-            clickActionData={{ taskId: String(tasks[2].id) }}
-          >
-            <TextWidget
-              text={tasks[2].completed ? '✓' : '○'}
-              style={{
-                fontSize: 15,
-                color: tasks[2].completed ? '#4ade80' : (tasks[2].overdue ? '#f87171' : '#60a5fa'),
-                marginRight: 10,
-                fontWeight: 'bold',
-              }}
-            />
-            <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
-              <TextWidget
-                text={tasks[2].name}
-                style={{
-                  fontSize: 13,
-                  color: tasks[2].completed ? '#475569' : (tasks[2].overdue ? '#fca5a5' : '#e2e8f0'),
-                  fontWeight: tasks[2].completed ? 'normal' : 'bold',
-                }}
-              />
-              {tasks[2].time ? (
-                <TextWidget
-                  text={tasks[2].time}
-                  style={{ fontSize: 10, color: tasks[2].overdue ? '#f87171' : '#64748b', marginTop: 1 }}
-                />
-              ) : null}
-            </FlexWidget>
-            <FlexWidget
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: PRIORITY_COLOR[tasks[2].priority] ?? '#94a3b8',
-              }}
-            />
-          </FlexWidget>
-        ) : null}
-
-        {tasks[3] ? (
-          <FlexWidget
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              width: 'match_parent',
-              paddingTop: 7,
-              paddingBottom: 7,
-              paddingLeft: 4,
-              paddingRight: 4,
-            }}
-            clickAction="TOGGLE_TASK"
-            clickActionData={{ taskId: String(tasks[3].id) }}
-          >
-            <TextWidget
-              text={tasks[3].completed ? '✓' : '○'}
-              style={{
-                fontSize: 15,
-                color: tasks[3].completed ? '#4ade80' : (tasks[3].overdue ? '#f87171' : '#60a5fa'),
-                marginRight: 10,
-                fontWeight: 'bold',
-              }}
-            />
-            <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
-              <TextWidget
-                text={tasks[3].name}
-                style={{
-                  fontSize: 13,
-                  color: tasks[3].completed ? '#475569' : (tasks[3].overdue ? '#fca5a5' : '#e2e8f0'),
-                  fontWeight: tasks[3].completed ? 'normal' : 'bold',
-                }}
-              />
-              {tasks[3].time ? (
-                <TextWidget
-                  text={tasks[3].time}
-                  style={{ fontSize: 10, color: tasks[3].overdue ? '#f87171' : '#64748b', marginTop: 1 }}
-                />
-              ) : null}
-            </FlexWidget>
-            <FlexWidget
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: PRIORITY_COLOR[tasks[3].priority] ?? '#94a3b8',
-              }}
-            />
-          </FlexWidget>
-        ) : null}
-
-        {tasks[4] ? (
-          <FlexWidget
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              width: 'match_parent',
-              paddingTop: 7,
-              paddingBottom: 7,
-              paddingLeft: 4,
-              paddingRight: 4,
-            }}
-            clickAction="TOGGLE_TASK"
-            clickActionData={{ taskId: String(tasks[4].id) }}
-          >
-            <TextWidget
-              text={tasks[4].completed ? '✓' : '○'}
-              style={{
-                fontSize: 15,
-                color: tasks[4].completed ? '#4ade80' : (tasks[4].overdue ? '#f87171' : '#60a5fa'),
-                marginRight: 10,
-                fontWeight: 'bold',
-              }}
-            />
-            <FlexWidget style={{ flexDirection: 'column', flex: 1 }}>
-              <TextWidget
-                text={tasks[4].name}
-                style={{
-                  fontSize: 13,
-                  color: tasks[4].completed ? '#475569' : (tasks[4].overdue ? '#fca5a5' : '#e2e8f0'),
-                  fontWeight: tasks[4].completed ? 'normal' : 'bold',
-                }}
-              />
-              {tasks[4].time ? (
-                <TextWidget
-                  text={tasks[4].time}
-                  style={{ fontSize: 10, color: tasks[4].overdue ? '#f87171' : '#64748b', marginTop: 1 }}
-                />
-              ) : null}
-            </FlexWidget>
-            <FlexWidget
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: PRIORITY_COLOR[tasks[4].priority] ?? '#94a3b8',
-              }}
-            />
-          </FlexWidget>
-        ) : null}
+        {tasks[0] ? <TaskRow item={tasks[0]} num={1} /> : null}
+        {tasks[1] ? <TaskRow item={tasks[1]} num={2} /> : null}
+        {tasks[2] ? <TaskRow item={tasks[2]} num={3} /> : null}
+        {tasks[3] ? <TaskRow item={tasks[3]} num={4} /> : null}
+        {tasks[4] ? <TaskRow item={tasks[4]} num={5} /> : null}
       </FlexWidget>
 
       {/* ── Divider ── */}
       <FlexWidget
-        style={{ height: 1, width: 'match_parent', backgroundColor: '#1e293b', marginLeft: 14, marginRight: 14 }}
+        style={{
+          height: 1,
+          width: 'match_parent',
+          backgroundColor: '#1e2038',
+          marginTop: 4,
+        }}
       />
 
       {/* ── Footer ── */}
       <FlexWidget
         style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
           width: 'match_parent',
           paddingTop: 8,
-          paddingBottom: 8,
-          paddingLeft: 14,
-          paddingRight: 14,
-        }}
-      >
-        {overdueCount > 0 ? (
-          <TextWidget
-            text={`⚠  ${overdueCount} overdue`}
-            style={{ fontSize: 10, color: '#f87171', fontWeight: 'bold' }}
-          />
-        ) : (
-          <TextWidget
-            text={allDone ? '🎉  All done!' : ''}
-            style={{ fontSize: 10, color: '#4ade80', fontWeight: 'bold' }}
-          />
-        )}
-        <TextWidget
-          text="Tap to open →"
-          style={{ fontSize: 9, color: '#334155' }}
-        />
-      </FlexWidget>
-
-      {/* ── Priority legend ── */}
-      <FlexWidget
-        style={{
+          paddingBottom: 10,
+          paddingLeft: 16,
+          paddingRight: 16,
           flexDirection: 'row',
           alignItems: 'center',
-          width: 'match_parent',
-          paddingBottom: 10,
-          paddingLeft: 14,
         }}
       >
-        <FlexWidget style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#f87171', marginRight: 4 }} />
-        <TextWidget text="High  " style={{ fontSize: 9, color: '#475569' }} />
-        <FlexWidget style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#facc15', marginRight: 4 }} />
-        <TextWidget text="Med  " style={{ fontSize: 9, color: '#475569' }} />
-        <FlexWidget style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ade80', marginRight: 4 }} />
-        <TextWidget text="Low" style={{ fontSize: 9, color: '#475569' }} />
+        <TextWidget
+          text={`${todayDone} / ${todayTotal} DONE`}
+          style={{
+            fontSize: 10,
+            color: todayDone >= todayTotal && todayTotal > 0 ? '#4ade80' : '#34d399',
+            fontWeight: 'bold',
+          }}
+        />
       </FlexWidget>
     </FlexWidget>
   );
