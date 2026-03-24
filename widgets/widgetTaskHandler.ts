@@ -358,7 +358,7 @@ async function computeNotesData(): Promise<NotesWidgetData> {
     title: n.name ?? n.title ?? 'Untitled',
     date: n.date ?? '',
     pinned: !!n.pinned,
-    preview: typeof n.content === 'string' ? n.content.replace(/\n/g, ' ').slice(0, 60) : undefined,
+    preview: typeof n.text === 'string' && n.text ? n.text.replace(/\n/g, ' ').slice(0, 80) : undefined,
   }));
   return { totalNotes: notes.length, pinnedCount: pinned.length, latestNoteTitle: latest?.name ?? '', latestNoteDate: latest?.date ?? '', recentNotes };
 }

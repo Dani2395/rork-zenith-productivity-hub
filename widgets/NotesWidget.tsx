@@ -35,7 +35,7 @@ function NoteRow({ note }: { note: RecentNoteData }) {
   "use no memo";
   return (
     <FlexWidget
-      clickAction="android.intent.action.VIEW"
+      clickAction="OPEN_URI"
       clickActionData={{ uri: 'rork-app:///notes' }}
       style={{
         flexDirection: 'column',
@@ -112,7 +112,7 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [] }: Notes
     >
       {/* ── Header ── */}
       <FlexWidget
-        clickAction="android.intent.action.VIEW"
+        clickAction="OPEN_URI"
         clickActionData={{ uri: 'rork-app:///notes' }}
         style={{
           flexDirection: 'row',
