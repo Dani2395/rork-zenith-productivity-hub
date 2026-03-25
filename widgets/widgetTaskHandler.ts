@@ -100,14 +100,21 @@ export interface CalendarEventData {
 }
 
 export interface CalendarWidgetData {
+  // legacy fields (kept for backward compat)
   todayLabel: string;
-  dayNumber: string;    // e.g. "23"
-  dayName: string;      // e.g. "MON"
-  monthName: string;    // e.g. "MARCH"
+  dayNumber: string;
+  dayName: string;
+  monthName: string;
   eventCount: number;
   nextEventName: string;
   nextEventTime: string;
   events: CalendarEventData[];
+  // new interactive fields
+  monthYear: string;
+  selectedDate: string;
+  selectedDayLabel: string;
+  weekDays: import('./CalendarWidget').DayData[];
+  scheduleItems: import('./CalendarWidget').CalendarScheduleItem[];
 }
 
 export interface RecentNoteData {
@@ -329,20 +336,134 @@ async function computeHabitsData(): Promise<HabitsWidgetData> {
   return { habits: habitItems, doneTodayCount, totalHabits, bestStreakName, bestStreakDays, weeklyPct, monthlyPct, weekDays };
 }
 
-async function computeCalendarData(): Promise<CalendarWidgetData> {
-  const events: any[] = await load('events', []);
-  const today = new Date().toISOString().split('T')[0];
-  const d = new Date();
-  const DAY_NAMES_SHORT = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-  const MONTH_NAMES = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
-  const todayLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getDate()}`;
-  const dayNumber = String(d.getDate());
-  const dayName = DAY_NAMES_SHORT[d.getDay()];
-  const monthName = MONTH_NAMES[d.getMonth()];
-  const todayEvents = events.filter((e: any) => e.date === today).sort((a: any, b: any) => (a.time ?? '').localeCompare(b.time ?? ''));
+async function computeCalendarData(selectedDateOverride?: string, weekStartOverride?: string): Promise<CalendarWidgetData> {
+  const [events, tasks, priorities, workouts, notes] = await Promise.all([
+    load('events', []),
+    load('tasks', []),
+    load('priorities', {}),
+    load('workouts', []),
+    load('notes', []),
+  ]);
+
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTH_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const DAY_ABBR = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  // Load persisted selected date and week start
+  const storedSelected = await AsyncStorage.getItem('calWidgetSelectedDate');
+  const storedWeekStart = await AsyncStorage.getItem('calWidgetWeekStart');
+
+  const selectedDate = selectedDateOverride ?? storedSelected ?? todayStr;
+
+  // Determine week start (Monday of the selected date's week)
+  let weekStart: Date;
+  if (weekStartOverride) {
+    weekStart = new Date(weekStartOverride + 'T00:00:00');
+  } else if (storedWeekStart) {
+    weekStart = new Date(storedWeekStart + 'T00:00:00');
+  } else {
+    // Default: Monday of current week
+    weekStart = new Date(now);
+    const dow = weekStart.getDay(); // 0=Sun
+    const diff = dow === 0 ? -6 : 1 - dow; // shift to Monday
+    weekStart.setDate(weekStart.getDate() + diff);
+  }
+
+  // Build 7 day cells
+  const weekDays: import('./CalendarWidget').DayData[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const dateStr = d.toISOString().split('T')[0];
+    const hasEvents = (events as any[]).some((e: any) => e.date === dateStr);
+    const hasTasks = (tasks as any[]).some((t: any) => t.dueDate === dateStr);
+    weekDays.push({
+      dateStr,
+      dayNum: d.getDate(),
+      dayName: DAY_ABBR[d.getDay()],
+      isToday: dateStr === todayStr,
+      isSelected: dateStr === selectedDate,
+      hasEvents,
+      hasTasks,
+    });
+  }
+
+  // Build schedule items for selected date
+  const scheduleItems: import('./CalendarWidget').CalendarScheduleItem[] = [];
+
+  // Events
+  const dayEvents = (events as any[])
+    .filter((e: any) => e.date === selectedDate)
+    .sort((a: any, b: any) => (a.time ?? '').localeCompare(b.time ?? ''));
+  for (const e of dayEvents) {
+    scheduleItems.push({ type: 'event', emoji: '📅', name: e.name ?? '', time: e.time ?? '' });
+  }
+
+  // Priorities
+  const dayPriorities: any[] = (priorities as any)[selectedDate] ?? [];
+  for (const p of dayPriorities) {
+    scheduleItems.push({
+      type: 'priority',
+      emoji: p.completed ? '✅' : p.overdue ? '⚠️' : '⭐',
+      name: p.task ?? '',
+      done: !!p.completed,
+      overdue: !!p.overdue,
+    });
+  }
+
+  // Tasks
+  const dayTasks = (tasks as any[]).filter((t: any) => t.dueDate === selectedDate);
+  for (const t of dayTasks) {
+    scheduleItems.push({
+      type: 'task',
+      emoji: t.completed ? '✅' : '☐',
+      name: t.name ?? '',
+      time: t.time ?? '',
+      done: !!t.completed,
+      desc: t.priority && t.priority !== 'low' ? `${t.priority} priority` : undefined,
+    });
+  }
+
+  // Workouts
+  const dayWorkouts = (workouts as any[]).filter((w: any) => (w.date ?? '') === selectedDate);
+  for (const w of dayWorkouts) {
+    scheduleItems.push({ type: 'workout', emoji: '💪', name: w.name ?? '', desc: w.duration > 0 ? `${w.duration} min` : undefined });
+  }
+
+  // Notes
+  const dayNotes = (notes as any[]).filter((n: any) => (n.date ?? '').startsWith(selectedDate));
+  for (const n of dayNotes) {
+    scheduleItems.push({ type: 'note', emoji: '📝', name: n.name ?? n.title ?? 'Note', desc: typeof n.text === 'string' ? n.text.slice(0, 50) : undefined });
+  }
+
+  // Labels
+  const selD = new Date(selectedDate + 'T00:00:00');
+  const selectedDayLabel = `${DAY_SHORT[selD.getDay()]}, ${MONTH_SHORT[selD.getMonth()]} ${selD.getDate()}`;
+  const monthYear = `${MONTH_LONG[now.getMonth()]} ${now.getFullYear()}`;
+
+  // Legacy fields
+  const todayLabel = `${DAY_SHORT[now.getDay()]}, ${MONTH_SHORT[now.getMonth()]} ${now.getDate()}`;
+  const todayEvents = dayEvents;
   const next = todayEvents[0];
-  const eventItems: CalendarEventData[] = todayEvents.slice(0, 4).map((e: any) => ({ name: e.name ?? '', time: e.time ?? '' }));
-  return { todayLabel, dayNumber, dayName, monthName, eventCount: todayEvents.length, nextEventName: next?.name ?? '', nextEventTime: next?.time ?? '', events: eventItems };
+
+  return {
+    todayLabel,
+    dayNumber: String(now.getDate()),
+    dayName: DAY_ABBR[now.getDay()],
+    monthName: MONTH_LONG[now.getMonth()],
+    eventCount: dayEvents.length,
+    nextEventName: next?.name ?? '',
+    nextEventTime: next?.time ?? '',
+    events: (dayEvents as any[]).slice(0, 4).map((e: any) => ({ name: e.name ?? '', time: e.time ?? '' })),
+    monthYear,
+    selectedDate,
+    selectedDayLabel,
+    weekDays,
+    scheduleItems,
+  };
 }
 
 async function computeNotesData(): Promise<NotesWidgetData> {
@@ -546,6 +667,66 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
       }
       break;
     }
+
+      case 'SELECT_DATE': {
+        const date = (clickActionData as any)?.date as string;
+        if (date) {
+          await AsyncStorage.setItem('calWidgetSelectedDate', date);
+          // If selected date is outside stored week, update week start to that date's Monday
+          const storedWeekStart = await AsyncStorage.getItem('calWidgetWeekStart');
+          if (storedWeekStart) {
+            const ws = new Date(storedWeekStart + 'T00:00:00');
+            const we = new Date(ws);
+            we.setDate(ws.getDate() + 6);
+            const sel = new Date(date + 'T00:00:00');
+            if (sel < ws || sel > we) {
+              const dow = sel.getDay();
+              const diff = dow === 0 ? -6 : 1 - dow;
+              sel.setDate(sel.getDate() + diff);
+              await AsyncStorage.setItem('calWidgetWeekStart', sel.toISOString().split('T')[0]);
+            }
+          }
+        }
+        renderWidget(React.createElement(CalendarWidget, await computeCalendarData()));
+        break;
+      }
+
+      case 'PREV_WEEK': {
+        const storedWeekStart = await AsyncStorage.getItem('calWidgetWeekStart');
+        const ws = storedWeekStart
+          ? new Date(storedWeekStart + 'T00:00:00')
+          : (() => { const d = new Date(); const dow = d.getDay(); d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1)); return d; })();
+        ws.setDate(ws.getDate() - 7);
+        const newWeekStart = ws.toISOString().split('T')[0];
+        await AsyncStorage.setItem('calWidgetWeekStart', newWeekStart);
+        // Move selected date back a week too
+        const storedSel = await AsyncStorage.getItem('calWidgetSelectedDate');
+        if (storedSel) {
+          const sel = new Date(storedSel + 'T00:00:00');
+          sel.setDate(sel.getDate() - 7);
+          await AsyncStorage.setItem('calWidgetSelectedDate', sel.toISOString().split('T')[0]);
+        }
+        renderWidget(React.createElement(CalendarWidget, await computeCalendarData()));
+        break;
+      }
+
+      case 'NEXT_WEEK': {
+        const storedWeekStart2 = await AsyncStorage.getItem('calWidgetWeekStart');
+        const ws2 = storedWeekStart2
+          ? new Date(storedWeekStart2 + 'T00:00:00')
+          : (() => { const d = new Date(); const dow = d.getDay(); d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1)); return d; })();
+        ws2.setDate(ws2.getDate() + 7);
+        const newWeekStart2 = ws2.toISOString().split('T')[0];
+        await AsyncStorage.setItem('calWidgetWeekStart', newWeekStart2);
+        const storedSel2 = await AsyncStorage.getItem('calWidgetSelectedDate');
+        if (storedSel2) {
+          const sel2 = new Date(storedSel2 + 'T00:00:00');
+          sel2.setDate(sel2.getDate() + 7);
+          await AsyncStorage.setItem('calWidgetSelectedDate', sel2.toISOString().split('T')[0]);
+        }
+        renderWidget(React.createElement(CalendarWidget, await computeCalendarData()));
+        break;
+      }
 
     case 'WIDGET_DELETED':
       break;
