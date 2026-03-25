@@ -43,7 +43,7 @@ function GiftRow({ gift }: { gift: GiftItemData }) {
   "use no memo";
   return (
     <FlexWidget
-      clickAction="android.intent.action.VIEW"
+      clickAction="OPEN_URI"
       clickActionData={{ uri: 'rork-app:///gifts' }}
       style={{
         flexDirection: 'row',
