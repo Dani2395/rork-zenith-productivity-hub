@@ -3,7 +3,8 @@
  * Android home-screen widget — Gifts
  *
  * Shows people and their gift lists, matching the in-app layout.
- * Tapping opens the Gifts screen.
+ * Uses a flat ListWidget so each row is its own tappable item.
+ * Tapping any row opens the Gifts screen.
  */
 
 import React from 'react';
@@ -39,7 +40,25 @@ export interface GiftsWidgetProps {
   people?: GiftPersonData[];
 }
 
-function GiftRow({ gift }: { gift: GiftItemData }) {
+// Flat list item types
+type PersonHeaderItem = { kind: 'person'; person: GiftPersonData; purchasedCount: number; allDone: boolean };
+type GiftRowItem = { kind: 'gift'; gift: GiftItemData };
+type ListItem = PersonHeaderItem | GiftRowItem;
+
+function flattenItems(people: GiftPersonData[]): ListItem[] {
+  const items: ListItem[] = [];
+  for (const person of people) {
+    const purchasedCount = person.gifts.filter(g => g.purchased).length;
+    const allDone = person.gifts.length > 0 && purchasedCount === person.gifts.length;
+    items.push({ kind: 'person', person, purchasedCount, allDone });
+    for (const gift of person.gifts) {
+      items.push({ kind: 'gift', gift });
+    }
+  }
+  return items;
+}
+
+function PersonHeaderRow({ person, purchasedCount, allDone }: PersonHeaderItem) {
   "use no memo";
   return (
     <FlexWidget
@@ -49,34 +68,84 @@ function GiftRow({ gift }: { gift: GiftItemData }) {
         flexDirection: 'row',
         alignItems: 'center',
         width: 'match_parent',
-        paddingTop: 7,
-        paddingBottom: 7,
-        paddingLeft: 36,
+        paddingTop: 12,
+        paddingBottom: 12,
+        paddingLeft: 14,
         paddingRight: 14,
-        backgroundColor: '#0f0810',
+        backgroundColor: '#13131a',
         borderBottomWidth: 1,
-        borderColor: '#16102a',
+        borderColor: 'rgba(255,255,255,0.08)',
       }}
     >
-      {/* Purchased checkbox */}
+      {/* Tag emoji */}
+      <TextWidget
+        text={TAG_EMOJIS[person.tag] ?? '✨'}
+        style={{ fontSize: 18, marginRight: 10 }}
+      />
+
+      {/* Name */}
+      <TextWidget
+        text={person.name}
+        style={{ fontSize: 14, color: '#e5e7eb', fontWeight: 'bold', flex: 1 }}
+      />
+
+      {/* Bought/total badge */}
       <FlexWidget
         style={{
-          width: 18,
-          height: 18,
+          backgroundColor: allDone ? '#052e16' : '#1e1b4b',
+          borderRadius: 10,
+          paddingTop: 3,
+          paddingBottom: 3,
+          paddingLeft: 9,
+          paddingRight: 9,
+          borderWidth: 1,
+          borderColor: allDone ? '#10b981' : '#6366f1',
+        }}
+      >
+        <TextWidget
+          text={`${purchasedCount}/${person.gifts.length} gifts`}
+          style={{ fontSize: 10, color: allDone ? '#10b981' : '#a5b4fc', fontWeight: 'bold' }}
+        />
+      </FlexWidget>
+    </FlexWidget>
+  );
+}
+
+function GiftRowWidget({ gift }: { gift: GiftItemData }) {
+  "use no memo";
+  return (
+    <FlexWidget
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: 'rork-app:///gifts' }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: 'match_parent',
+        paddingTop: 9,
+        paddingBottom: 9,
+        paddingLeft: 42,
+        paddingRight: 14,
+        backgroundColor: '#0a0a0f',
+        borderBottomWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
+      }}
+    >
+      {/* Checkbox */}
+      <FlexWidget
+        style={{
+          width: 20,
+          height: 20,
           borderRadius: 4,
           borderWidth: 1.5,
-          borderColor: gift.purchased ? '#4ade80' : '#3a2860',
-          backgroundColor: gift.purchased ? '#14532d' : 'transparent',
+          borderColor: gift.purchased ? '#10b981' : 'rgba(255,255,255,0.2)',
+          backgroundColor: gift.purchased ? '#052e16' : 'transparent',
           justifyContent: 'center',
           alignItems: 'center',
           marginRight: 10,
         }}
       >
         {gift.purchased ? (
-          <TextWidget
-            text="✓"
-            style={{ fontSize: 10, color: '#4ade80', fontWeight: 'bold' }}
-          />
+          <TextWidget text="✓" style={{ fontSize: 11, color: '#10b981', fontWeight: 'bold' }} />
         ) : null}
       </FlexWidget>
 
@@ -84,112 +153,44 @@ function GiftRow({ gift }: { gift: GiftItemData }) {
       <TextWidget
         text={gift.name}
         style={{
-          fontSize: 12,
-          color: gift.purchased ? '#3a2860' : '#d4bfff',
+          fontSize: 13,
+          color: gift.purchased ? '#6b7280' : '#e5e7eb',
           flex: 1,
-          fontWeight: gift.purchased ? 'normal' : 'bold',
         }}
       />
 
-      {/* Event tag */}
-      {gift.event ? (
-        <TextWidget
-          text={gift.event.split(' ').slice(0, 2).join(' ')}
-          style={{ fontSize: 9, color: '#6b3fa0', marginLeft: 6 }}
-        />
-      ) : null}
-
-      {/* Price */}
-      {gift.price ? (
-        <TextWidget
-          text={gift.price}
-          style={{ fontSize: 9, color: '#4a3860', marginLeft: 6 }}
-        />
-      ) : null}
+      {/* Right side: event + price stacked */}
+      <FlexWidget style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+        {gift.event ? (
+          <TextWidget
+            text={gift.event}
+            style={{ fontSize: 9, color: '#9ca3af' }}
+          />
+        ) : null}
+        {gift.price ? (
+          <TextWidget
+            text={gift.price}
+            style={{ fontSize: 10, color: '#a5b4fc', fontWeight: 'bold', marginTop: 1 }}
+          />
+        ) : null}
+      </FlexWidget>
     </FlexWidget>
   );
 }
 
-function PersonSection({ person }: { person: GiftPersonData }) {
+function renderItem(item: ListItem, i: number) {
   "use no memo";
-  const purchasedCount = person.gifts.filter(g => g.purchased).length;
-  const allDone = person.gifts.length > 0 && purchasedCount === person.gifts.length;
-
-  return (
-    <FlexWidget style={{ flexDirection: 'column', width: 'match_parent' }}>
-      {/* Person header */}
-      <FlexWidget
-        clickAction="android.intent.action.VIEW"
-        clickActionData={{ uri: 'rork-app:///gifts' }}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          width: 'match_parent',
-          paddingTop: 10,
-          paddingBottom: 10,
-          paddingLeft: 14,
-          paddingRight: 14,
-          backgroundColor: '#150d22',
-          borderBottomWidth: 1,
-          borderColor: '#2e1f40',
-        }}
-      >
-        <TextWidget
-          text={TAG_EMOJIS[person.tag] ?? '✨'}
-          style={{ fontSize: 16, marginRight: 10 }}
-        />
-        <TextWidget
-          text={person.name}
-          style={{ fontSize: 14, color: '#e8d5ff', fontWeight: 'bold', flex: 1 }}
-        />
-        <FlexWidget
-          style={{
-            backgroundColor: allDone ? '#0a1f14' : '#1a0f22',
-            borderRadius: 8,
-            paddingTop: 3,
-            paddingBottom: 3,
-            paddingLeft: 8,
-            paddingRight: 8,
-            borderWidth: 1,
-            borderColor: allDone ? '#166534' : '#3d1f5c',
-          }}
-        >
-          <TextWidget
-            text={`${purchasedCount}/${person.gifts.length}`}
-            style={{ fontSize: 10, color: allDone ? '#4ade80' : '#c084fc', fontWeight: 'bold' }}
-          />
-        </FlexWidget>
-      </FlexWidget>
-
-      {/* Gift items */}
-      {person.gifts.length === 0 ? (
-        <FlexWidget
-          style={{
-            paddingTop: 6,
-            paddingBottom: 6,
-            paddingLeft: 36,
-            backgroundColor: '#0f0810',
-            borderBottomWidth: 1,
-            borderColor: '#16102a',
-          }}
-        >
-          <TextWidget
-            text="No gift ideas yet"
-            style={{ fontSize: 11, color: '#2e1f40', fontStyle: 'italic' }}
-          />
-        </FlexWidget>
-      ) : null}
-      {person.gifts.map((gift, i) => (
-        <GiftRow key={i} gift={gift} />
-      ))}
-    </FlexWidget>
-  );
+  if (item.kind === 'person') {
+    return <PersonHeaderRow key={i} {...item} />;
+  }
+  return <GiftRowWidget key={i} gift={item.gift} />;
 }
 
 export function GiftsWidget({ peopleCount, totalGifts, purchasedCount, people = [] }: GiftsWidgetProps) {
   const remaining = totalGifts - purchasedCount;
   const pct = totalGifts > 0 ? Math.round((purchasedCount / totalGifts) * 100) : 0;
   const allDone = totalGifts > 0 && remaining === 0;
+  const flatItems = flattenItems(people);
 
   return (
     <FlexWidget
@@ -197,13 +198,13 @@ export function GiftsWidget({ peopleCount, totalGifts, purchasedCount, people = 
         height: 'match_parent',
         width: 'match_parent',
         flexDirection: 'column',
-        backgroundColor: '#0f0810',
+        backgroundColor: '#0a0a0f',
         borderRadius: 20,
       }}
     >
       {/* ── Header ── */}
       <FlexWidget
-        clickAction="android.intent.action.VIEW"
+        clickAction="OPEN_URI"
         clickActionData={{ uri: 'rork-app:///gifts' }}
         style={{
           flexDirection: 'row',
@@ -211,30 +212,38 @@ export function GiftsWidget({ peopleCount, totalGifts, purchasedCount, people = 
           justifyContent: 'space-between',
           width: 'match_parent',
           paddingTop: 14,
-          paddingBottom: 10,
+          paddingBottom: 12,
           paddingLeft: 16,
           paddingRight: 16,
+          backgroundColor: '#13131a',
         }}
       >
-        <FlexWidget style={{ flexDirection: 'column' }}>
-          <TextWidget
-            text="g i f t   v a u l t"
-            style={{ fontSize: 8, color: '#c084fc', fontWeight: 'bold' }}
-          />
-          <TextWidget
-            text="🎁 GIFTS"
-            style={{ fontSize: 20, color: '#ffffff', fontWeight: 'bold', marginTop: 1 }}
-          />
-        </FlexWidget>
-
         <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TextWidget
+            text="🎁"
+            style={{ fontSize: 20, marginRight: 8 }}
+          />
+          <FlexWidget style={{ flexDirection: 'column' }}>
+            <TextWidget
+              text="Gift Ideas"
+              style={{ fontSize: 18, color: '#e5e7eb', fontWeight: 'bold' }}
+            />
+            <TextWidget
+              text={`${peopleCount} ${peopleCount === 1 ? 'person' : 'people'}`}
+              style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}
+            />
+          </FlexWidget>
+        </FlexWidget>
+
+        {/* Stats */}
+        <FlexWidget style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+          <TextWidget
             text={`${purchasedCount}/${totalGifts}`}
-            style={{ fontSize: 14, color: allDone ? '#4ade80' : '#c084fc', fontWeight: 'bold' }}
+            style={{ fontSize: 15, color: allDone ? '#10b981' : '#a855f7', fontWeight: 'bold' }}
           />
           <TextWidget
-            text={`  ${pct}%`}
-            style={{ fontSize: 10, color: allDone ? '#4ade80' : '#7c3aed' }}
+            text={`${pct}% bought`}
+            style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}
           />
         </FlexWidget>
       </FlexWidget>
@@ -242,68 +251,39 @@ export function GiftsWidget({ peopleCount, totalGifts, purchasedCount, people = 
       {/* ── Progress bar ── */}
       <FlexWidget
         style={{
-          flexDirection: 'row',
           width: 'match_parent',
-          paddingLeft: 16,
-          paddingRight: 16,
-          paddingBottom: 10,
-          alignItems: 'center',
+          height: 3,
+          backgroundColor: '#1e1b4b',
+          flexDirection: 'row',
         }}
       >
-        <FlexWidget
-          style={{
-            flex: 1,
-            height: 5,
-            borderRadius: 3,
-            flexDirection: 'row',
-            backgroundColor: '#1e1028',
-          }}
-        >
-          {pct > 0 ? (
-            <FlexWidget
-              style={{
-                flex: Math.max(1, pct),
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: allDone ? '#4ade80' : '#a855f7',
-              }}
-            />
-          ) : null}
-          {pct < 100 ? (
-            <FlexWidget style={{ flex: Math.max(1, 100 - pct), height: 5 }} />
-          ) : null}
-        </FlexWidget>
+        {pct > 0 ? (
+          <FlexWidget
+            style={{
+              flex: Math.max(1, pct),
+              height: 3,
+              backgroundColor: allDone ? '#10b981' : '#6366f1',
+            }}
+          />
+        ) : null}
+        {pct < 100 ? (
+          <FlexWidget style={{ flex: Math.max(1, 100 - pct), height: 3 }} />
+        ) : null}
       </FlexWidget>
 
-      {/* ── Divider ── */}
-      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1028' }} />
-
-      {/* ── Scrollable people/gifts list ── */}
-      {people.length === 0 ? (
+      {/* ── Scrollable list ── */}
+      {flatItems.length === 0 ? (
         <FlexWidget
-          style={{
-            width: 'match_parent',
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          clickAction="OPEN_URI"
+          clickActionData={{ uri: 'rork-app:///gifts' }}
+          style={{ width: 'match_parent', flex: 1, alignItems: 'center', justifyContent: 'center' }}
         >
-          <TextWidget
-            text="No people added yet"
-            style={{ fontSize: 11, color: '#2e1f40', fontStyle: 'italic' }}
-          />
+          <TextWidget text="No people added yet" style={{ fontSize: 12, color: '#6b7280', fontStyle: 'italic' }} />
+          <TextWidget text="Tap to open and add people" style={{ fontSize: 10, color: '#4b5563', marginTop: 6 }} />
         </FlexWidget>
       ) : (
-        <ListWidget
-          style={{
-            width: 'match_parent',
-            flex: 1,
-            backgroundColor: '#0f0810',
-          }}
-        >
-          {people.map((person, i) => (
-            <PersonSection key={i} person={person} />
-          ))}
+        <ListWidget style={{ width: 'match_parent', flex: 1, backgroundColor: '#0a0a0f' }}>
+          {flatItems.map((item, i) => renderItem(item, i))}
         </ListWidget>
       )}
     </FlexWidget>
