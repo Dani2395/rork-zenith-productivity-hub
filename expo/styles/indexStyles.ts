@@ -65,8 +65,7 @@ export default StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   headerCenter: { alignItems: 'center', flex: 1 },
-  headerRight: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
-  headerBellButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  headerRight: { flex: 1 },
   headerWeatherIcon: {
     flexDirection: 'row',
     alignItems: 'center',

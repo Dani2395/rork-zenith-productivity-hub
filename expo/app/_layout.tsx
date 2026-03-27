@@ -21,15 +21,6 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="index" />
-      <Stack.Screen
-        name="notifications"
-        options={{
-          headerShown: true,
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.text,
-          title: "Notifications",
-        }}
-      />
       <Stack.Screen 
         name="tasks" 
         options={{ 
