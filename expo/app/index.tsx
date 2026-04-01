@@ -39,7 +39,6 @@ import {
   ChevronRight,
   Trash2,
   Settings,
-  Bell,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
@@ -1058,11 +1057,7 @@ export default function HomeScreen() {
             <Text style={styles.headerTitle}>Zenith</Text>
             <Text style={styles.headerSubtitle}>Home</Text>
           </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerBellButton}>
-              <Bell size={22} color={Colors.textDim} />
-            </TouchableOpacity>
-          </View>
+          <View style={styles.headerRight} />
         </View>
 
         <ScrollView

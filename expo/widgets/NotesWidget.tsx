@@ -50,7 +50,7 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [], current
     >
       {/* ── Header ── */}
       <FlexWidget
-        clickAction="OPEN_URI"
+        clickAction="android.intent.action.VIEW"
         clickActionData={{ uri: 'rork-app:///notes' }}
         style={{
           flexDirection: 'row',
@@ -108,7 +108,7 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [], current
         </FlexWidget>
       ) : (
         <FlexWidget
-          clickAction="OPEN_URI"
+          clickAction="android.intent.action.VIEW"
           clickActionData={{ uri: 'rork-app:///notes' }}
           style={{
             flex: 1,
