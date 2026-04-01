@@ -25,7 +25,7 @@ import { updateCalendarWidget } from '@/widgets/widgetTaskHandler';
 import { scheduleCalendarDailyAgenda, cancelCalendarDailyAgenda, scheduleCalendarWeeklyPreview, cancelAllCalendarNotifications } from '@/utils/calendarNotifications';
 import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
-import { useGoogleAuth, syncGoogleCalendar, signOut as googleSignOut, isConfigured, GOOGLE_TOKEN_KEY } from '@/utils/googleCalendarSync';
+import { syncFromICalUrl, signOut as icalSignOut, getStoredICalUrl, saveICalUrl } from '@/utils/googleCalendarSync';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function CalendarScreen() {
@@ -51,36 +51,29 @@ export default function CalendarScreen() {
   const [holidayAnimation, setHolidayAnimation] = useState<Holiday['animation']>('sparkles');
   const [holidayImage, setHolidayImage] = useState('');
 
-  // ── Google Calendar Sync ──────────────────────────────────────────────────
+  // ── iCal / Calendar Sync ──────────────────────────────────────────────────
   const [googleSyncing, setGoogleSyncing] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
-  const { request, response, promptAsync } = useGoogleAuth();
+  const [icalModalVisible, setIcalModalVisible] = useState(false);
+  const [icalUrlInput, setIcalUrlInput] = useState('');
 
   useEffect(() => {
-    AsyncStorage.getItem(GOOGLE_TOKEN_KEY).then(t => setGoogleConnected(!!t));
+    getStoredICalUrl().then(url => setGoogleConnected(!!url));
   }, []);
 
-  useEffect(() => {
-    if (response?.type === 'success' && response.authentication?.accessToken) {
-      handleGoogleSyncWithToken(response.authentication.accessToken);
-    } else if (response?.type === 'error') {
-      Alert.alert('Google Sign-In Failed', response.error?.message ?? 'Please try again.');
-    }
-  }, [response]);
-
-  const handleGoogleSyncWithToken = async (token: string) => {
+  const handleICalSync = async (url: string) => {
     setGoogleSyncing(true);
     try {
-      const result = await syncGoogleCalendar(token, addEvent, events);
+      const result = await syncFromICalUrl(url, addEvent, events);
       setGoogleConnected(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (result.error) {
         Alert.alert('Sync Error', result.error);
       } else {
         Alert.alert(
-          'Google Calendar Synced',
+          'Calendar Synced',
           result.added > 0
-            ? `Added ${result.added} new event${result.added !== 1 ? 's' : ''} from Google Calendar.`
+            ? `Added ${result.added} new event${result.added !== 1 ? 's' : ''} from your calendar.`
             : 'All events are already up to date.',
         );
       }
@@ -90,31 +83,34 @@ export default function CalendarScreen() {
   };
 
   const handleGoogleSync = async () => {
-    if (!isConfigured()) {
-      Alert.alert(
-        'Setup Required',
-        'To connect Google Calendar:\n\n1. Go to console.cloud.google.com\n2. Create a project & enable Google Calendar API\n3. Create OAuth 2.0 credentials\n4. Paste your Client IDs in utils/googleCalendarSync.ts',
-        [{ text: 'OK' }],
-      );
-      return;
-    }
-    const cached = await AsyncStorage.getItem(GOOGLE_TOKEN_KEY);
-    if (cached) {
-      // Re-sync with cached token
-      await handleGoogleSyncWithToken(cached);
+    const stored = await getStoredICalUrl();
+    if (stored) {
+      await handleICalSync(stored);
     } else {
-      promptAsync();
+      setIcalUrlInput('');
+      setIcalModalVisible(true);
     }
   };
 
+  const handleConnectIcal = async () => {
+    const url = icalUrlInput.trim();
+    if (!url.startsWith('http')) {
+      Alert.alert('Invalid URL', 'Please paste a valid iCal URL (starts with https://).');
+      return;
+    }
+    setIcalModalVisible(false);
+    await saveICalUrl(url);
+    await handleICalSync(url);
+  };
+
   const handleGoogleDisconnect = () => {
-    Alert.alert('Disconnect Google Calendar', 'Remove the connection? Synced events will remain.', [
+    Alert.alert('Disconnect Calendar', 'Remove the iCal connection? Synced events will remain.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Disconnect',
         style: 'destructive',
         onPress: async () => {
-          await googleSignOut();
+          await icalSignOut();
           setGoogleConnected(false);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
@@ -974,6 +970,58 @@ export default function CalendarScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* iCal URL connect modal */}
+      <Modal
+        visible={icalModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIcalModalVisible(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 8 }}>🗓 Connect Calendar</Text>
+              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
+                {'Paste your private iCal URL below.\n\nTo get it in Google Calendar:\n1. Open Google Calendar on the web\n2. Settings (⚙) → Settings for my calendars\n3. Click your calendar name\n4. Scroll to "Integrate calendar"\n5. Copy "Private address in iCal format"'}
+              </Text>
+              <TextInput
+                value={icalUrlInput}
+                onChangeText={setIcalUrlInput}
+                placeholder="https://calendar.google.com/calendar/ical/..."
+                placeholderTextColor={Colors.textDim}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  backgroundColor: Colors.background,
+                  color: Colors.text,
+                  borderRadius: 10,
+                  padding: 12,
+                  fontSize: 12,
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.1)',
+                }}
+              />
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center' }}
+                  onPress={() => setIcalModalVisible(false)}
+                >
+                  <Text style={{ color: Colors.textDim, fontWeight: '600' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: Colors.primary, alignItems: 'center' }}
+                  onPress={handleConnectIcal}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Connect</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
