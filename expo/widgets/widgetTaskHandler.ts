@@ -123,6 +123,7 @@ export interface NotesWidgetData {
   latestNoteTitle: string;
   latestNoteDate: string;
   recentNotes: RecentNoteData[];
+  currentIndex?: number;
 }
 
 export interface PriorityItemData {
@@ -345,7 +346,7 @@ async function computeCalendarData(): Promise<CalendarWidgetData> {
   return { todayLabel, dayNumber, dayName, monthName, eventCount: todayEvents.length, nextEventName: next?.name ?? '', nextEventTime: next?.time ?? '', events: eventItems };
 }
 
-async function computeNotesData(): Promise<NotesWidgetData> {
+async function computeNotesData(indexOverride?: number): Promise<NotesWidgetData> {
   const notes: any[] = await load('notes', []);
   const pinned = notes.filter(n => n.pinned);
   // Pinned notes first, then by date descending
@@ -358,9 +359,17 @@ async function computeNotesData(): Promise<NotesWidgetData> {
     title: n.name ?? n.title ?? 'Untitled',
     date: n.date ?? '',
     pinned: !!n.pinned,
-    preview: typeof n.content === 'string' ? n.content.replace(/\n/g, ' ').slice(0, 60) : undefined,
+    preview: typeof (n.content ?? n.text) === 'string' && (n.content ?? n.text) ? (n.content ?? n.text).replace(/\n/g, ' ').slice(0, 120) : undefined,
   }));
-  return { totalNotes: notes.length, pinnedCount: pinned.length, latestNoteTitle: latest?.name ?? '', latestNoteDate: latest?.date ?? '', recentNotes };
+  let currentIndex: number;
+  if (indexOverride !== undefined) {
+    currentIndex = Math.max(0, Math.min(indexOverride, Math.max(0, recentNotes.length - 1)));
+    await AsyncStorage.setItem('notesWidgetIndex', String(currentIndex));
+  } else {
+    const stored = await AsyncStorage.getItem('notesWidgetIndex');
+    currentIndex = stored ? Math.max(0, Math.min(parseInt(stored, 10), Math.max(0, recentNotes.length - 1))) : 0;
+  }
+  return { totalNotes: notes.length, pinnedCount: pinned.length, latestNoteTitle: latest?.name ?? '', latestNoteDate: latest?.date ?? '', recentNotes, currentIndex };
 }
 
 async function computePrioritiesData(): Promise<PrioritiesWidgetData> {
@@ -492,6 +501,21 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
           }
         }
         renderWidget(React.createElement(BingoWidget, await computeBingoData()));
+        break;
+      }
+
+      case 'NOTES_PREV': {
+        const storedIdx = await AsyncStorage.getItem('notesWidgetIndex');
+        const currentIdx = storedIdx ? parseInt(storedIdx, 10) : 0;
+        renderWidget(React.createElement(NotesWidget, await computeNotesData(Math.max(0, currentIdx - 1))));
+        break;
+      }
+
+      case 'NOTES_NEXT': {
+        const storedIdx2 = await AsyncStorage.getItem('notesWidgetIndex');
+        const currentIdx2 = storedIdx2 ? parseInt(storedIdx2, 10) : 0;
+        const notesData = await computeNotesData(currentIdx2 + 1);
+        renderWidget(React.createElement(NotesWidget, notesData));
         break;
       }
 

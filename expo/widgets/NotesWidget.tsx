@@ -2,12 +2,12 @@
 /**
  * Android home-screen widget — Notes (codex / journal aesthetic)
  *
- * Shows notes in a scrollable list with pinned markers, title, and date.
- * Tapping opens the Notes screen.
+ * Shows notes as a carousel: one note at a time with ‹ / › navigation.
+ * Tapping the card opens the Notes screen.
  */
 
 import React from 'react';
-import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
 export interface RecentNoteData {
   title: string;
@@ -22,6 +22,7 @@ export interface NotesWidgetProps {
   latestNoteTitle: string;
   latestNoteDate: string;
   recentNotes: RecentNoteData[];
+  currentIndex?: number;
 }
 
 function formatDate(dateStr: string): string {
@@ -31,75 +32,12 @@ function formatDate(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function NoteRow({ note }: { note: RecentNoteData }) {
-  "use no memo";
-  return (
-    <FlexWidget
-      clickAction="android.intent.action.VIEW"
-      clickActionData={{ uri: 'rork-app:///notes' }}
-      style={{
-        flexDirection: 'column',
-        width: 'match_parent',
-        paddingTop: 10,
-        paddingBottom: 10,
-        paddingLeft: 14,
-        paddingRight: 14,
-        borderBottomWidth: 1,
-        borderColor: '#1e1c10',
-        backgroundColor: note.pinned ? '#12110a' : '#0e0d08',
-      }}
-    >
-      {/* Title row */}
-      <FlexWidget
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          width: 'match_parent',
-        }}
-      >
-        <TextWidget
-          text={note.pinned ? '★' : '·'}
-          style={{
-            fontSize: note.pinned ? 13 : 16,
-            color: note.pinned ? '#fbbf24' : '#3a3820',
-            marginRight: 8,
-            fontWeight: 'bold',
-          }}
-        />
-        <TextWidget
-          text={note.title}
-          style={{
-            fontSize: 13,
-            color: note.pinned ? '#fef3c7' : '#d6d0c4',
-            fontWeight: note.pinned ? 'bold' : 'normal',
-            flex: 1,
-          }}
-        />
-        {note.date ? (
-          <TextWidget
-            text={formatDate(note.date)}
-            style={{ fontSize: 10, color: '#4a4830' }}
-          />
-        ) : null}
-      </FlexWidget>
+export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [], currentIndex = 0 }: NotesWidgetProps) {
+  const safeIndex = recentNotes.length > 0 ? Math.max(0, Math.min(currentIndex, recentNotes.length - 1)) : 0;
+  const note = recentNotes[safeIndex] ?? null;
+  const hasPrev = safeIndex > 0;
+  const hasNext = safeIndex < recentNotes.length - 1;
 
-      {/* Preview line */}
-      {note.preview ? (
-        <TextWidget
-          text={note.preview}
-          style={{
-            fontSize: 11,
-            color: '#3a3820',
-            marginTop: 3,
-            marginLeft: 21,
-          }}
-        />
-      ) : null}
-    </FlexWidget>
-  );
-}
-
-export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [] }: NotesWidgetProps) {
   return (
     <FlexWidget
       style={{
@@ -153,8 +91,8 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [] }: Notes
       {/* ── Divider ── */}
       <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1c10' }} />
 
-      {/* ── Scrollable notes list ── */}
-      {recentNotes.length === 0 ? (
+      {/* ── Card body ── */}
+      {recentNotes.length === 0 || !note ? (
         <FlexWidget
           style={{
             width: 'match_parent',
@@ -169,18 +107,168 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [] }: Notes
           />
         </FlexWidget>
       ) : (
-        <ListWidget
+        <FlexWidget
+          clickAction="android.intent.action.VIEW"
+          clickActionData={{ uri: 'rork-app:///notes' }}
           style={{
-            width: 'match_parent',
             flex: 1,
-            backgroundColor: '#0e0d08',
+            width: 'match_parent',
+            flexDirection: 'column',
+            paddingLeft: 18,
+            paddingRight: 18,
+            paddingTop: 14,
+            paddingBottom: 10,
+            backgroundColor: note.pinned ? '#12110a' : '#0e0d08',
           }}
         >
-          {recentNotes.map((note, i) => (
-            <NoteRow key={i} note={note} />
-          ))}
-        </ListWidget>
+          {/* Pin + Title row */}
+          <FlexWidget
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 'match_parent',
+              marginBottom: 6,
+            }}
+          >
+            <TextWidget
+              text={note.pinned ? '★' : '·'}
+              style={{
+                fontSize: note.pinned ? 14 : 18,
+                color: note.pinned ? '#fbbf24' : '#3a3820',
+                marginRight: 8,
+                fontWeight: 'bold',
+              }}
+            />
+            <TextWidget
+              text={note.title}
+              style={{
+                fontSize: 15,
+                color: note.pinned ? '#fef3c7' : '#d6d0c4',
+                fontWeight: note.pinned ? 'bold' : 'normal',
+                flex: 1,
+              }}
+            />
+            {note.date ? (
+              <TextWidget
+                text={formatDate(note.date)}
+                style={{ fontSize: 10, color: '#4a4830' }}
+              />
+            ) : null}
+          </FlexWidget>
+
+          {/* Preview text */}
+          {note.preview ? (
+            <TextWidget
+              text={note.preview}
+              style={{
+                fontSize: 12,
+                color: '#6b6540',
+                marginLeft: 22,
+                flex: 1,
+              }}
+            />
+          ) : (
+            <FlexWidget style={{ flex: 1 }} />
+          )}
+        </FlexWidget>
       )}
+
+      {/* ── Divider ── */}
+      <FlexWidget style={{ height: 1, width: 'match_parent', backgroundColor: '#1e1c10' }} />
+
+      {/* ── Carousel navigation ── */}
+      <FlexWidget
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: 'match_parent',
+          paddingLeft: 8,
+          paddingRight: 8,
+          paddingTop: 8,
+          paddingBottom: 10,
+        }}
+      >
+        {/* Prev button */}
+        <FlexWidget
+          clickAction={hasPrev ? 'NOTES_PREV' : undefined}
+          style={{
+            width: 36,
+            height: 30,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 6,
+            backgroundColor: hasPrev ? '#1e1c10' : 'transparent',
+          }}
+        >
+          <TextWidget
+            text="‹"
+            style={{
+              fontSize: 20,
+              color: hasPrev ? '#fbbf24' : '#2a2820',
+              fontWeight: 'bold',
+            }}
+          />
+        </FlexWidget>
+
+        {/* Index indicator + dots */}
+        <FlexWidget style={{ flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+          {recentNotes.length > 0 ? (
+            <>
+              <TextWidget
+                text={`${safeIndex + 1} / ${recentNotes.length}`}
+                style={{ fontSize: 10, color: '#4a4830' }}
+              />
+              {recentNotes.length > 1 ? (
+                <FlexWidget
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 4,
+                  }}
+                >
+                  {recentNotes.slice(0, Math.min(recentNotes.length, 7)).map((_, i) => (
+                    <FlexWidget
+                      key={i}
+                      style={{
+                        width: i === safeIndex ? 8 : 5,
+                        height: i === safeIndex ? 8 : 5,
+                        borderRadius: 4,
+                        backgroundColor: i === safeIndex ? '#fbbf24' : '#2a2820',
+                        marginLeft: 2,
+                        marginRight: 2,
+                      }}
+                    />
+                  ))}
+                </FlexWidget>
+              ) : null}
+            </>
+          ) : null}
+        </FlexWidget>
+
+        {/* Next button */}
+        <FlexWidget
+          clickAction={hasNext ? 'NOTES_NEXT' : undefined}
+          style={{
+            width: 36,
+            height: 30,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 6,
+            backgroundColor: hasNext ? '#1e1c10' : 'transparent',
+          }}
+        >
+          <TextWidget
+            text="›"
+            style={{
+              fontSize: 20,
+              color: hasNext ? '#fbbf24' : '#2a2820',
+              fontWeight: 'bold',
+            }}
+          />
+        </FlexWidget>
+      </FlexWidget>
     </FlexWidget>
   );
 }

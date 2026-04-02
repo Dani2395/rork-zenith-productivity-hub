@@ -1,91 +1,132 @@
 /**
- * Google Calendar Sync
+ * Calendar sync via iCal / ICS URL
  *
- * Uses expo-auth-session to authenticate with Google via OAuth 2.0,
- * then fetches events from the Google Calendar API and maps them to
- * the app's Event format.
+ * No OAuth, no Google Cloud Console setup required.
  *
- * SETUP (one-time):
- *  1. Go to https://console.cloud.google.com
- *  2. Create a project → Enable "Google Calendar API"
- *  3. OAuth consent screen → External → add your email as test user
- *  4. Credentials → Create OAuth Client ID → Application type: Android
- *     - Package name: app.rork.zenith_productivity_hub
- *     - SHA-1: get it with `eas credentials` or keytool
- *  5. Also create an "iOS" client (needed for expo-auth-session)
- *  6. Paste the Client IDs below.
+ * HOW TO GET YOUR ICAL URL (Google Calendar):
+ *  1. Open Google Calendar on the web
+ *  2. Settings (⚙) → Settings for my calendars → click your calendar name
+ *  3. Scroll to "Integrate calendar"
+ *  4. Copy the "Private address in iCal format" link  (ends in .ics)
+ *  5. Paste it into the app when prompted
+ *
+ * This URL works with Google Calendar, Apple Calendar, Outlook, and any
+ * calendar service that supports the iCal/ICS format.
  */
 
-import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { scheduleEventReminder } from './calendarNotifications';
 import type { Event } from '@/types';
 
-// ─── Replace these with your own Google OAuth Client IDs ──────────────────────
-export const GOOGLE_CLIENT_ID_ANDROID = '188861853335-73q8n9tulraa9ch1m6cepv32mfqrt27k.apps.googleusercontent.com';
-export const GOOGLE_CLIENT_ID_IOS     = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
-export const GOOGLE_CLIENT_ID_WEB     = 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ─── Storage keys ─────────────────────────────────────────────────────────────
+export const ICAL_URL_KEY          = 'icalSyncUrl';
 export const GOOGLE_SYNCED_IDS_KEY = 'googleSyncedEventIds';
-export const GOOGLE_TOKEN_KEY      = 'googleAccessToken';
-export const GOOGLE_TOKEN_EXP_KEY  = 'googleTokenExpiry';
 
-export function isConfigured(): boolean {
-  return (
-    GOOGLE_CLIENT_ID_ANDROID !== 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com' ||
-    GOOGLE_CLIENT_ID_IOS     !== 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com'
-  );
+// ─── URL helpers ──────────────────────────────────────────────────────────────
+
+export async function getStoredICalUrl(): Promise<string | null> {
+  try { return await AsyncStorage.getItem(ICAL_URL_KEY); } catch { return null; }
 }
 
-/** Returns a valid cached token or null */
-async function getCachedToken(): Promise<string | null> {
-  try {
-    const token  = await AsyncStorage.getItem(GOOGLE_TOKEN_KEY);
-    const expiry = await AsyncStorage.getItem(GOOGLE_TOKEN_EXP_KEY);
-    if (token && expiry && Date.now() < parseInt(expiry, 10)) return token;
-  } catch { /* ignore */ }
-  return null;
+export async function saveICalUrl(url: string): Promise<void> {
+  await AsyncStorage.setItem(ICAL_URL_KEY, url.trim());
 }
 
-async function saveToken(token: string, expiresIn: number) {
-  await AsyncStorage.setItem(GOOGLE_TOKEN_KEY, token);
-  await AsyncStorage.setItem(GOOGLE_TOKEN_EXP_KEY, String(Date.now() + expiresIn * 1000));
+export async function signOut(): Promise<void> {
+  await AsyncStorage.multiRemove([ICAL_URL_KEY, GOOGLE_SYNCED_IDS_KEY]);
 }
 
-export async function signOut() {
-  await AsyncStorage.multiRemove([GOOGLE_TOKEN_KEY, GOOGLE_TOKEN_EXP_KEY, GOOGLE_SYNCED_IDS_KEY]);
+// ─── ICS parser ───────────────────────────────────────────────────────────────
+
+interface ICSEvent {
+  uid: string;
+  summary: string;
+  description: string;
+  date: string;   // YYYY-MM-DD
+  time: string;   // HH:MM or ''
 }
 
-/** Parse a Google Calendar datetime into { date, time } for the app */
-function parseGoogleDateTime(dt: { date?: string; dateTime?: string; timeZone?: string }): { date: string; time: string } {
-  if (dt.date) {
-    // All-day event
-    return { date: dt.date, time: '' };
+function parseDT(value: string): { date: string; time: string } {
+  const v = value.trim();
+  if (v.length === 8) {
+    // All-day: YYYYMMDD
+    return { date: `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}`, time: '' };
   }
-  if (dt.dateTime) {
-    const d = new Date(dt.dateTime);
-    const date = d.toISOString().split('T')[0];
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return { date, time: `${hh}:${mm}` };
+  // Datetime: YYYYMMDDTHHMMSS[Z]
+  const datePart = v.slice(0, 8);
+  const timePart = v.slice(9, 15);
+  const date = `${datePart.slice(0,4)}-${datePart.slice(4,6)}-${datePart.slice(6,8)}`;
+  const hh = timePart.slice(0, 2);
+  const mm = timePart.slice(2, 4);
+  const ss = timePart.slice(4, 6) || '00';
+
+  if (v.endsWith('Z')) {
+    // UTC → device local time
+    const d = new Date(`${date}T${hh}:${mm}:${ss}Z`);
+    return {
+      date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+    };
   }
-  return { date: '', time: '' };
+  return { date, time: `${hh}:${mm}` };
 }
 
-/** Map a Google Calendar event object → app Event (minus id/createdDate) */
-function mapGoogleEvent(g: any): Omit<Event, 'id' | 'createdDate'> {
-  const { date, time } = parseGoogleDateTime(g.start ?? {});
-  return {
-    name: g.summary ?? '(No title)',
-    desc: [g.description, g.location].filter(Boolean).join(' · ') ?? '',
-    date,
-    time,
-    recurring: 'none',
-    reminderBefore: 60,
-  };
+function unescape(s: string): string {
+  return s.replace(/\\n/g, ' ').replace(/\\N/g, ' ').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
 }
+
+function parseICS(text: string): ICSEvent[] {
+  // Unfold RFC 5545 continuation lines
+  const unfolded = text.replace(/\r\n([ \t])/g, '').replace(/\n([ \t])/g, '');
+  const lines = unfolded.split(/\r?\n/);
+
+  const events: ICSEvent[] = [];
+  let inEvent = false;
+  let uid = '';
+  let summary = '';
+  let description = '';
+  let dtstart = '';
+
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') {
+      inEvent = true;
+      uid = '';
+      summary = '';
+      description = '';
+      dtstart = '';
+      continue;
+    }
+    if (line === 'END:VEVENT') {
+      if (inEvent && summary && dtstart) {
+        const { date, time } = parseDT(dtstart);
+        if (date) {
+          events.push({ uid: uid || `ics-${Date.now()}-${Math.random()}`, summary, description, date, time });
+        }
+      }
+      inEvent = false;
+      continue;
+    }
+    if (!inEvent) continue;
+
+    const colonIdx = line.indexOf(':');
+    if (colonIdx < 0) continue;
+    const rawProp = line.slice(0, colonIdx);
+    const value   = line.slice(colonIdx + 1);
+    // Property name is before the first ';'
+    const semiIdx = rawProp.indexOf(';');
+    const prop    = (semiIdx >= 0 ? rawProp.slice(0, semiIdx) : rawProp).toUpperCase();
+
+    switch (prop) {
+      case 'UID':         uid         = value; break;
+      case 'SUMMARY':     summary     = unescape(value); break;
+      case 'DESCRIPTION': description = unescape(value); break;
+      case 'DTSTART':     dtstart     = value; break;
+    }
+  }
+
+  return events;
+}
+
+// ─── Sync ─────────────────────────────────────────────────────────────────────
 
 export interface SyncResult {
   added: number;
@@ -94,94 +135,50 @@ export interface SyncResult {
 }
 
 /**
- * Full sync: authenticate → fetch upcoming Google Calendar events →
- * add any new ones to the app, schedule notifications, return counts.
- *
- * @param accessToken  Already-authenticated token (from the hook result)
- * @param addEvent     DataContext addEvent function
- * @param existingEvents  Current app events array (for dedup)
+ * Fetch an ICS URL and import upcoming events into the app.
+ * Already-seen events (by UID or name+date) are skipped.
  */
-export async function syncGoogleCalendar(
-  accessToken: string,
+export async function syncFromICalUrl(
+  url: string,
   addEvent: (event: Omit<Event, 'id' | 'createdDate'>) => void,
   existingEvents: Event[],
 ): Promise<SyncResult> {
   try {
-    // Save token for future use
-    await saveToken(accessToken, 3600);
+    const res = await fetch(url);
+    if (!res.ok) return { added: 0, skipped: 0, error: `HTTP ${res.status} – check your iCal URL` };
 
-    // Load previously synced Google IDs to avoid duplicates
-    const raw = await AsyncStorage.getItem(GOOGLE_SYNCED_IDS_KEY);
-    const syncedIds: Set<string> = new Set(raw ? JSON.parse(raw) : []);
-
-    // Fetch events: next 30 days from today
-    const timeMin = new Date().toISOString();
-    const timeMax = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    const url =
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events` +
-      `?timeMin=${encodeURIComponent(timeMin)}` +
-      `&timeMax=${encodeURIComponent(timeMax)}` +
-      `&singleEvents=true&orderBy=startTime&maxResults=100`;
-
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { added: 0, skipped: 0, error: err?.error?.message ?? `HTTP ${res.status}` };
+    const icsText = await res.text();
+    if (!icsText.includes('BEGIN:VCALENDAR')) {
+      return { added: 0, skipped: 0, error: 'Not a valid iCal file. Double-check the URL.' };
     }
 
-    const data = await res.json();
-    const googleEvents: any[] = data.items ?? [];
+    const parsed = parseICS(icsText);
+
+    // Only import events from the past 7 days onward
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const raw = await AsyncStorage.getItem(GOOGLE_SYNCED_IDS_KEY);
+    const syncedIds = new Set<string>(raw ? JSON.parse(raw) : []);
 
     let added = 0;
     let skipped = 0;
     const newSyncedIds = new Set(syncedIds);
 
-    for (const g of googleEvents) {
-      const gId: string = g.id ?? '';
-      if (!gId || syncedIds.has(gId)) {
-        skipped++;
-        continue;
-      }
+    for (const ev of parsed) {
+      if (!ev.date || ev.date < cutoff) { skipped++; continue; }
+      if (syncedIds.has(ev.uid)) { skipped++; continue; }
 
-      // Also skip if an event with the same name+date already exists
-      const mapped = mapGoogleEvent(g);
-      if (!mapped.date) { skipped++; continue; }
+      const exists = existingEvents.some(e => e.name === ev.summary && e.date === ev.date);
+      if (exists) { newSyncedIds.add(ev.uid); skipped++; continue; }
 
-      const alreadyExists = existingEvents.some(
-        e => e.name === mapped.name && e.date === mapped.date,
-      );
-      if (alreadyExists) {
-        newSyncedIds.add(gId);
-        skipped++;
-        continue;
-      }
-
-      addEvent(mapped);
-      newSyncedIds.add(gId);
+      addEvent({ name: ev.summary, desc: ev.description, date: ev.date, time: ev.time, recurring: 'none', reminderBefore: 60 });
+      newSyncedIds.add(ev.uid);
       added++;
     }
 
     await AsyncStorage.setItem(GOOGLE_SYNCED_IDS_KEY, JSON.stringify([...newSyncedIds]));
     return { added, skipped };
   } catch (e: any) {
-    return { added: 0, skipped: 0, error: e?.message ?? 'Unknown error' };
+    return { added: 0, skipped: 0, error: e?.message ?? 'Network error – check your connection' };
   }
-}
-
-/**
- * Hook that wraps expo-auth-session Google OAuth.
- * Call `promptAsync()` to open the consent screen.
- */
-export function useGoogleAuth() {
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: GOOGLE_CLIENT_ID_ANDROID,
-    iosClientId:     GOOGLE_CLIENT_ID_IOS,
-    webClientId:     GOOGLE_CLIENT_ID_WEB,
-    scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
-  });
-
-  return { request, response, promptAsync };
 }
