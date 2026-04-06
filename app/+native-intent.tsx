@@ -7,8 +7,9 @@ export function redirectSystemPath({
     // e.g. "rork-app:///tasks" → "/tasks"
     const url = new URL(path);
     const pathname = url.pathname || '/';
-    // Ensure it starts with /
-    return pathname.startsWith('/') ? pathname : `/${pathname}`;
+    const search = url.search ?? '';
+    const base = pathname.startsWith('/') ? pathname : `/${pathname}`;
+    return search ? `${base}${search}` : base;
   } catch {
     return '/';
   }

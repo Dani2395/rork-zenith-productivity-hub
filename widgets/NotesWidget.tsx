@@ -10,6 +10,7 @@ import React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
 export interface RecentNoteData {
+  id: number;
   title: string;
   date: string;
   pinned: boolean;
@@ -50,8 +51,6 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [], current
     >
       {/* ── Header ── */}
       <FlexWidget
-        clickAction="android.intent.action.VIEW"
-        clickActionData={{ uri: 'rork-app:///notes' }}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -60,10 +59,14 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [], current
           paddingTop: 14,
           paddingBottom: 12,
           paddingLeft: 16,
-          paddingRight: 16,
+          paddingRight: 8,
         }}
       >
-        <FlexWidget style={{ flexDirection: 'column' }}>
+        <FlexWidget
+          clickAction="android.intent.action.VIEW"
+          clickActionData={{ uri: 'rork-app:///notes' }}
+          style={{ flexDirection: 'column', flex: 1 }}
+        >
           <TextWidget
             text="y o u r   c o d e x"
             style={{ fontSize: 8, color: '#a16207', fontWeight: 'bold' }}
@@ -85,6 +88,24 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [], current
             text={`${totalNotes} entries`}
             style={{ fontSize: 10, color: '#4a4830' }}
           />
+          <FlexWidget
+            clickAction="android.intent.action.VIEW"
+            clickActionData={{ uri: 'rork-app:///notes?action=new' }}
+            style={{
+              width: 30,
+              height: 30,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 8,
+              backgroundColor: '#1e1c10',
+              marginLeft: 8,
+            }}
+          >
+            <TextWidget
+              text="+"
+              style={{ fontSize: 20, color: '#fbbf24', fontWeight: 'bold' }}
+            />
+          </FlexWidget>
         </FlexWidget>
       </FlexWidget>
 
@@ -109,7 +130,7 @@ export function NotesWidget({ totalNotes, pinnedCount, recentNotes = [], current
       ) : (
         <FlexWidget
           clickAction="android.intent.action.VIEW"
-          clickActionData={{ uri: 'rork-app:///notes' }}
+          clickActionData={{ uri: `rork-app:///notes?noteId=${note.id}` }}
           style={{
             flex: 1,
             width: 'match_parent',

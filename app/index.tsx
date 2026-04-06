@@ -357,6 +357,7 @@ export default function HomeScreen() {
     ];
     const latestNote = sortedNotes[0];
     const recentNotes = sortedNotes.map((n: any) => ({
+      id: n.id,
       title: n.name ?? n.title ?? 'Untitled',
       date: n.date ?? '',
       pinned: !!n.pinned,

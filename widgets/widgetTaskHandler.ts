@@ -111,6 +111,7 @@ export interface CalendarWidgetData {
 }
 
 export interface RecentNoteData {
+  id: number;
   title: string;
   date: string;
   pinned: boolean;
@@ -356,6 +357,7 @@ async function computeNotesData(indexOverride?: number): Promise<NotesWidgetData
   ];
   const latest = sorted[0];
   const recentNotes: RecentNoteData[] = sorted.map(n => ({
+    id: n.id,
     title: n.name ?? n.title ?? 'Untitled',
     date: n.date ?? '',
     pinned: !!n.pinned,
