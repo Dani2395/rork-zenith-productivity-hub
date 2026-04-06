@@ -40,44 +40,177 @@ interface ExtractedItem {
 
 // ─── Extraction Logic ─────────────────────────────────────────────────────────
 
-const ACTION_PATTERNS = [
-  /^(?:i need to|i have to|i should|i must|i want to|i gotta|i've got to|need to|have to|should|must)\s+(.+)/i,
-  /^(?:don't forget to|remember to|remind me to|make sure to)\s+(.+)/i,
-  /^(?:call|email|text|message|contact|reach out to)\s+(.+)/i,
-  /^(?:buy|get|pick up|order|purchase)\s+(.+)/i,
-  /^(?:schedule|book|plan|arrange|set up)\s+(.+)/i,
-  /^(?:fix|repair|update|upgrade|change|replace)\s+(.+)/i,
-  /^(?:finish|complete|submit|send|deliver)\s+(.+)/i,
-  /^(?:check|review|look at|look into|research|find out)\s+(.+)/i,
-  /^(?:pay|transfer|invoice)\s+(.+)/i,
-  /^(?:make|create|build|write|draft)\s+(.+)/i,
-  /^(?:talk to|speak with|meet with|ask)\s+(.+)/i,
-  /^(?:clean|organize|sort|declutter)\s+(.+)/i,
-  /^(?:exercise|workout|run|go to)\s+(.+)/i,
-  /^(?:return|exchange|cancel|renew)\s+(.+)/i,
-  /^(?:follow up|follow-up)\s+(.+)/i,
+// Sentences that mention these topics get a synthesized task name instead of
+// verbatim text. Format: [matchPattern, actionVerb, subjectNoun]
+// If subjectNoun is '', the action verb alone is used (caller handles extras).
+const TOPIC_MAP: [RegExp, string, string][] = [
+  // Health / appointments
+  [/dentist|dental|teeth|orthodontist|braces/i,                    'Schedule', 'dentist appointment'],
+  [/doctor|physician|check.?up|physical|annual exam/i,             'Schedule', 'doctor appointment'],
+  [/therapist|therapy|counseling|mental health|psychiatrist/i,     'Schedule', 'therapy appointment'],
+  [/vet|veterinarian/i,                                            'Schedule', 'vet appointment'],
+  [/hair\s*cut|barber|salon/i,                                     'Get',      'haircut'],
+  [/prescription|pharmacy|medication/i,                            'Pick up',  'prescription'],
+  [/eye\s*(doctor|exam|glass)/i,                                   'Schedule', 'eye exam'],
+
+  // Moving / housing
+  [/\bmov(e|ing|ed)\b|relocation/i,                                'Plan',     'move'],
+  [/\bpack(ing|ed|s)?\b/i,                                         'Start',    'packing'],
+  [/\bunpack/i,                                                     'Unpack',   'boxes'],
+  [/apartment\s*hunt|house\s*hunt|new\s*(place|home|apartment)/i,  'Research', 'housing options'],
+
+  // Car / transport
+  [/oil\s*change/i,                                                'Get',      'oil change'],
+  [/car\s*(service|repair|fix|noise|issue|problem|inspect)/i,      'Take car to', 'mechanic'],
+  [/tire(s)?\b/i,                                                  'Check',    'tires'],
+  [/registration|dmv/i,                                            'Renew',    'car registration'],
+  [/car\s*wash/i,                                                  'Wash',     'car'],
+
+  // Finance / admin
+  [/\btax(es|return)?\b/i,                                         'File',     'taxes'],
+  [/\bbudget\b|finances|spending plan/i,                           'Review',   'budget'],
+  [/\bbills?\b|utilities|electric|water\s*bill|internet\s*bill/i,  'Pay',      'bills'],
+  [/credit\s*card/i,                                               'Pay',      'credit card'],
+  [/invest(ment|ing)?|\b401k\b|\bira\b|savings\s*account/i,        'Review',   'investments'],
+  [/insurance/i,                                                   'Review',   'insurance'],
+  [/passport|visa\b/i,                                             'Renew',    'passport'],
+
+  // Work / career
+  [/\bresume\b|\bcv\b/i,                                           'Update',   'resume'],
+  [/\binterview\b/i,                                               'Prepare for', 'interview'],
+  [/job\s*(search|application|apply|hunting)/i,                    'Apply for', 'jobs'],
+  [/\bdeadline\b/i,                                                'Meet',     'deadline'],
+  [/\bmeeting\b/i,                                                 'Prepare for', 'meeting'],
+  [/\bpresentation\b/i,                                            'Prepare',  'presentation'],
+  [/\breport\b/i,                                                  'Write',    'report'],
+  [/follow.?up/i,                                                  'Follow up', ''],
+
+  // Home / chores
+  [/\bgroceries\b|grocery\s*store|supermarket/i,                   'Buy',      'groceries'],
+  [/\blaundry\b|washing\s*clothes/i,                               'Do',       'laundry'],
+  [/clean(ing)?\s*(house|home|apartment|room|bathroom|kitchen)/i,  'Clean',    'home'],
+  [/\bdishes\b|wash\s*the\s*sink/i,                                'Do',       'dishes'],
+  [/\bvacuum\b/i,                                                  'Vacuum',   'home'],
+  [/meal\s*prep|cook\s*(for|the)\s*week/i,                         'Meal prep', 'for the week'],
+  [/\bdeclutter\b|organiz(e|ing)\s*(closet|garage|room)/i,         'Declutter', ''],
+
+  // Health / fitness
+  [/\bgym\b|work.?out|exercise|training\s*session/i,               'Go to',    'gym'],
+  [/\b(go\s*for\s*a\s*)?run\b|jogging/i,                           'Go for',   'run'],
+  [/\bmeditat/i,                                                    'Start',    'meditation habit'],
+  [/sleep\s*(schedule|routine|better|issues)/i,                    'Fix',      'sleep schedule'],
+
+  // Social / family
+  [/\bbirthday\b/i,                                                'Plan for', 'birthday'],
+  [/\bwedding\b/i,                                                 'Plan for', 'wedding'],
+  [/\bparty\b|\bevent\b|\bcelebration\b/i,                         'Plan',     'event'],
+  [/\bgift\b|\bpresent\b/i,                                        'Buy',      'gift'],
+
+  // Personal growth
+  [/\btrip\b|\bvacation\b|\btravel\b/i,                            'Plan',     'trip'],
+  [/\bcourse\b|\bclass\b|online\s*learn/i,                         'Start',    'online course'],
+  [/\bjournal\b/i,                                                 'Start',    'journaling habit'],
 ];
+
+// Leading filler phrases to strip so we can work with the core clause
+const LEADING_FILLERS = [
+  /^i('ve)?\s+been\s+(putting\s+off|meaning\s+to|trying\s+to|avoiding|procrastinating\s+(on|about)?)\s*/i,
+  /^i('m| am)\s+(so\s+)?(stressed|worried|anxious|overwhelmed|concerned|freaking\s+out)\s*(about|over|regarding|with)?\s*/i,
+  /^i\s+(need|have|want|should|must|gotta|ought)\s+(to\s+)?/i,
+  /^i\s+(keep|always|never|constantly)\s+(forgetting|putting\s+off|avoiding)\s*(to\s+)?/i,
+  /^i('ve)?\s+(haven't|have\s+not)\s+(done|finished|started|gotten)\s*(around\s+to\s+)?/i,
+  /^(don't\s+forget\s+(to\s+)?|remember\s+(to\s+)?|remind\s+me\s+(to\s+)?|make\s+sure\s+(to\s+)?)/i,
+  /^(need\s+to|have\s+to|got\s+to|gotta)\s+/i,
+  /^(should|must|ought\s+to)\s+/i,
+  /^(really\s+should|really\s+need\s+to|definitely\s+(need|should|have)\s+(to\s+)?)/i,
+];
+
+// Trailing noise to chop off
+const TRAILING_NOISE = [
+  /\s*(because|since|as\s+it|so\s+that|in\s+order\s+to|although|even\s+though|which\s+(is|would|could|has))\s+.*/i,
+  /\s*(but\s+i|and\s+i\s+(also|just|really))\s+.*/i,
+  /\s*(for\s+the\s+(last|past)\s+\w+(\s+\w+)?)\s*$/i,
+  /\s*(it('s|\s+has\s+been)\s+(really|so|very|quite)\s+\w+)\s*$/i,
+  /,\s*(which|that|it|they)\s+.*/i,
+];
+
+function stripFiller(sentence: string): string {
+  let s = sentence.trim();
+  // Remove leading fillers (try each; stop after first match to avoid over-stripping)
+  for (const re of LEADING_FILLERS) {
+    const stripped = s.replace(re, '');
+    if (stripped.length >= 4 && stripped.length < s.length) {
+      s = stripped;
+      break;
+    }
+  }
+  // Remove trailing noise clauses
+  for (const re of TRAILING_NOISE) {
+    s = s.replace(re, '');
+  }
+  return s.trim();
+}
+
+function synthesizeTaskName(sentence: string): string | null {
+  const lower = sentence.toLowerCase();
+
+  // 1. Try topic map — gives cleanest results
+  for (const [pattern, action, subject] of TOPIC_MAP) {
+    if (pattern.test(lower)) {
+      return subject ? `${action} ${subject}` : action;
+    }
+  }
+
+  // 2. "call/email/text [Name]" — extract the name
+  const callMatch = sentence.match(/^(?:call|phone|ring|email|text|message|contact)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+  if (callMatch) {
+    const verb = /email/i.test(sentence) ? 'Email' : /text|message/i.test(sentence) ? 'Text' : 'Call';
+    return `${verb} ${callMatch[1]}`;
+  }
+  const callMatch2 = sentence.match(/(?:i need to|i should|need to)\s+(call|email|text|message)\s+([A-Za-z]+)/i);
+  if (callMatch2) {
+    const verb = /email/i.test(callMatch2[1]) ? 'Email' : /text|message/i.test(callMatch2[1]) ? 'Text' : 'Call';
+    return `${verb} ${capitalise(callMatch2[2])}`;
+  }
+
+  // 3. Strip filler and use what remains — if it's short enough to be a task
+  const core = stripFiller(sentence);
+  if (core.length >= 5 && core.length <= 45) {
+    return toTitleCase(core);
+  }
+
+  // 4. Nothing usable
+  return null;
+}
+
+function isActionable(sentence: string): boolean {
+  const s = sentence.toLowerCase();
+  return (
+    // Explicit intent signals
+    /\b(need to|have to|should|must|gotta|want to|going to)\b/.test(s) ||
+    // Stress / worry about something → implies action needed
+    /\b(stressed|worried|anxious|overwhelmed|concerned)\s+(about|over|with|regarding)\b/.test(s) ||
+    // Procrastination signals
+    /\b(keep forgetting|been putting off|haven't done|haven't gotten|meaning to|been avoiding)\b/.test(s) ||
+    // Direct imperatives (call, buy, fix, etc.)
+    /^(call|email|text|buy|get|pick up|order|schedule|fix|finish|complete|submit|pay|plan|clean|write|make|check|review|book|start|return|cancel|renew|follow up|find)\b/.test(s) ||
+    // Reminder language
+    /\b(don't forget|remember to|remind me|make sure)\b/.test(s) ||
+    // Topic map hit is automatically actionable (checked separately)
+    TOPIC_MAP.some(([p]) => p.test(s))
+  );
+}
 
 function detectTag(sentence: string): TimeTag {
   const s = sentence.toLowerCase();
-  if (/\b(today|tonight|this morning|this afternoon|this evening|asap|urgent|right away|immediately|right now)\b/.test(s)) {
-    return 'today';
-  }
-  if (/\b(tomorrow|tmrw|next day|tomorrow morning|tomorrow night)\b/.test(s)) {
-    return 'tomorrow';
-  }
-  if (/\b(this week|later this week|by friday|by the weekend|in a few days|soon|this weekend)\b/.test(s)) {
-    return 'this-week';
-  }
-  if (/\b(next week|next month|eventually|someday|one day|in the future|later|at some point|down the road|when i get a chance)\b/.test(s)) {
-    return 'future';
-  }
-  // Default: this week
+  if (/\b(today|tonight|this morning|this afternoon|this evening|asap|urgent|right away|immediately|right now)\b/.test(s)) return 'today';
+  if (/\b(tomorrow|tmrw|next day|tomorrow morning|tomorrow night)\b/.test(s)) return 'tomorrow';
+  if (/\b(this week|later this week|by friday|by the weekend|in a few days|soon|this weekend)\b/.test(s)) return 'this-week';
+  if (/\b(next week|next month|eventually|someday|one day|in the future|later|at some point|down the road|when i get a chance)\b/.test(s)) return 'future';
   return 'this-week';
 }
 
 function extractActionableItems(rawText: string): ExtractedItem[] {
-  // Split on sentence-ending punctuation or newlines
   const sentences = rawText
     .split(/[.!?\n]+/)
     .map(s => s.trim())
@@ -87,25 +220,20 @@ function extractActionableItems(rawText: string): ExtractedItem[] {
   const seen = new Set<string>();
 
   sentences.forEach((sentence, idx) => {
-    let actionText: string | null = null;
+    if (!isActionable(sentence)) return;
 
-    for (const pattern of ACTION_PATTERNS) {
-      const match = sentence.match(pattern);
-      if (match) {
-        // If pattern captures the remainder, use it; otherwise use full sentence
-        actionText = match[1] ? capitalise(match[1].trim()) : capitalise(sentence.trim());
-        break;
-      }
-    }
+    const taskName = synthesizeTaskName(sentence);
+    if (!taskName) return;
 
-    if (actionText && !seen.has(actionText.toLowerCase())) {
-      seen.add(actionText.toLowerCase());
-      items.push({
-        id: `${idx}-${Date.now()}`,
-        text: actionText,
-        tag: detectTag(sentence),
-      });
-    }
+    const key = taskName.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    items.push({
+      id: `${idx}-${Date.now()}`,
+      text: taskName,
+      tag: detectTag(sentence),
+    });
   });
 
   return items;
@@ -113,6 +241,15 @@ function extractActionableItems(rawText: string): ExtractedItem[] {
 
 function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function toTitleCase(s: string): string {
+  const SMALL = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as','is']);
+  return s
+    .toLowerCase()
+    .split(' ')
+    .map((w, i) => (i === 0 || !SMALL.has(w)) ? capitalise(w) : w)
+    .join(' ');
 }
 
 function nextTag(current: TimeTag): TimeTag {
