@@ -39,6 +39,7 @@ import {
   ChevronRight,
   Trash2,
   Settings,
+  Brain,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
@@ -57,11 +58,11 @@ const NAV_ITEMS = [
   { name: 'Habits', icon: Star, route: '/habits' },
   { name: 'Workout', icon: Dumbbell, route: '/workout' },
   { name: 'Notes', icon: FileText, route: '/notes' },
+  { name: 'Brain Dump', icon: Brain, route: '/brain-dump' },
   { name: 'Books', icon: BookOpen, route: '/books' },
   { name: 'Budget', icon: Wallet, route: '/budget' },
   { name: 'Gifts', icon: Gift, route: '/gifts' },
   { name: 'Bingo', icon: Target, route: '/bingo' },
-  { name: 'Test', icon: Star, route: '/test' },
 ];
 
 export default function HomeScreen() {
