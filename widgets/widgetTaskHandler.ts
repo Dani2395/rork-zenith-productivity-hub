@@ -521,6 +521,27 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
         break;
       }
 
+      case 'TOGGLE_GIFT': {
+        const giftId = parseInt((clickActionData as any)?.giftId ?? '0', 10);
+        const personId = parseInt((clickActionData as any)?.personId ?? '0', 10);
+        if (giftId && personId) {
+          const giftPeople: any[] = await load('giftPeople', []);
+          const personIdx = giftPeople.findIndex((p: any) => p.id === personId);
+          if (personIdx >= 0) {
+            const giftIdx = (giftPeople[personIdx].gifts ?? []).findIndex((g: any) => g.id === giftId);
+            if (giftIdx >= 0) {
+              giftPeople[personIdx].gifts[giftIdx] = {
+                ...giftPeople[personIdx].gifts[giftIdx],
+                purchased: !giftPeople[personIdx].gifts[giftIdx].purchased,
+              };
+              await AsyncStorage.setItem('giftPeople', JSON.stringify(giftPeople));
+            }
+          }
+        }
+        renderWidget(React.createElement(GiftsWidget, await computeGiftsData()));
+        break;
+      }
+
       case 'TOGGLE_PRIORITY': {
         const priorityId = parseInt((clickActionData as any)?.priorityId ?? '0', 10);
         if (priorityId) {

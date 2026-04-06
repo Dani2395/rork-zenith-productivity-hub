@@ -39,12 +39,12 @@ export interface GiftsWidgetProps {
   people?: GiftPersonData[];
 }
 
-function GiftRow({ gift }: { gift: GiftItemData }) {
+function GiftRow({ gift, personId }: { gift: GiftItemData; personId: number }) {
   "use no memo";
   return (
     <FlexWidget
-      clickAction="android.intent.action.VIEW"
-      clickActionData={{ uri: 'rork-app:///gifts' }}
+      clickAction="TOGGLE_GIFT"
+      clickActionData={{ giftId: String(gift.id), personId: String(personId) }}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -180,7 +180,7 @@ function PersonSection({ person }: { person: GiftPersonData }) {
         </FlexWidget>
       ) : null}
       {person.gifts.map((gift, i) => (
-        <GiftRow key={i} gift={gift} />
+        <GiftRow key={i} gift={gift} personId={person.id} />
       ))}
     </FlexWidget>
   );
