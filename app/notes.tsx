@@ -93,11 +93,19 @@ export default function NotesScreen() {
     const weekStartStr = weekStart.toISOString().split('T')[0];
     const newThisWeek = notes.filter(n => (n.createdDate ?? n.date ?? '') >= weekStartStr).length;
 
+    const recentNotes = sorted.map(n => ({
+      title: n.name ?? n.title ?? 'Untitled',
+      date: n.date ?? '',
+      pinned: !!n.pinned,
+      preview: typeof (n.content ?? n.text) === 'string' && (n.content ?? n.text) ? (n.content ?? n.text).replace(/\n/g, ' ').slice(0, 120) : undefined,
+    }));
     updateNotesWidget({
       totalNotes: notes.length,
       pinnedCount: pinnedNotes.length,
       latestNoteTitle: latest?.name ?? '',
       latestNoteDate: latest?.date ?? '',
+      recentNotes,
+      currentIndex: 0,
     });
 
     schedulePinnedNotesReminder(pinnedNotes.length);
