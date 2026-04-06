@@ -12,12 +12,14 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Brain, X, ChevronDown, Check, Trash2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import { updateBrainDumpWidget, BRAIN_DUMP_WIDGET_DATA_KEY } from '@/widgets/widgetTaskHandler';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -201,6 +203,24 @@ export default function BrainDumpScreen() {
         category: '',
         createdDate: today,
       } as any);
+    });
+
+    // Update the home-screen widget
+    AsyncStorage.getItem(BRAIN_DUMP_WIDGET_DATA_KEY).then(raw => {
+      const prev = raw ? JSON.parse(raw) : { totalDumps: 0 };
+      updateBrainDumpWidget({
+        lastDumpDate: today,
+        lastDumpPreview: rawText.replace(/\n/g, ' ').slice(0, 100),
+        lastDumpTaskCount: items.length,
+        totalDumps: (prev.totalDumps ?? 0) + 1,
+      });
+    }).catch(() => {
+      updateBrainDumpWidget({
+        lastDumpDate: today,
+        lastDumpPreview: rawText.replace(/\n/g, ' ').slice(0, 100),
+        lastDumpTaskCount: items.length,
+        totalDumps: 1,
+      });
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
