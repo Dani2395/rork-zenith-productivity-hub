@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2, Bell } from 'lucide-react-native';
+import { useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateNotesWidget } from '@/widgets/widgetTaskHandler';
@@ -48,6 +49,8 @@ const IMAGE_URLS = [
 
 export default function NotesScreen() {
   const { notes, addNote, updateNote, deleteNote, noteCategories, addNoteCategory, updateNoteCategory, deleteNoteCategory } = useData();
+  const params = useLocalSearchParams<{ noteId?: string; action?: string }>();
+  const handledParamRef = useRef<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingNote, setEditingNote] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +86,22 @@ export default function NotesScreen() {
     ...noteCategories,
   ];
 
+  // Deep-link handler: open a specific note or new-note modal from widget
+  useEffect(() => {
+    const paramKey = `${params.noteId ?? ''}-${params.action ?? ''}`;
+    if (!paramKey || paramKey === '-' || handledParamRef.current === paramKey) return;
+    if (params.action === 'new') {
+      handledParamRef.current = paramKey;
+      setModalVisible(true);
+    } else if (params.noteId) {
+      const noteId = parseInt(params.noteId, 10);
+      if (!isNaN(noteId) && notes.length > 0) {
+        handledParamRef.current = paramKey;
+        handleEditNote(noteId);
+      }
+    }
+  }, [params.noteId, params.action, notes]);
+
   // Widget data + smart notifications
   useEffect(() => {
     const pinnedNotes = notes.filter(n => n.pinned);
@@ -93,11 +112,20 @@ export default function NotesScreen() {
     const weekStartStr = weekStart.toISOString().split('T')[0];
     const newThisWeek = notes.filter(n => (n.createdDate ?? n.date ?? '') >= weekStartStr).length;
 
+    const recentNotes = sorted.map(n => ({
+      id: n.id,
+      title: n.name ?? n.title ?? 'Untitled',
+      date: n.date ?? '',
+      pinned: !!n.pinned,
+      preview: typeof (n.content ?? n.text) === 'string' && (n.content ?? n.text) ? (n.content ?? n.text).replace(/\n/g, ' ').slice(0, 120) : undefined,
+    }));
     updateNotesWidget({
       totalNotes: notes.length,
       pinnedCount: pinnedNotes.length,
       latestNoteTitle: latest?.name ?? '',
       latestNoteDate: latest?.date ?? '',
+      recentNotes,
+      currentIndex: 0,
     });
 
     schedulePinnedNotesReminder(pinnedNotes.length);

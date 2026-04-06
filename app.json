@@ -217,6 +217,19 @@
               "updatePeriodMillis": 1800000,
               "resizeMode": "horizontal|vertical",
               "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "BrainDumpWidget",
+              "label": "Brain Dump",
+              "description": "One-tap launcher to clear your head — shows last dump stats and a quick open button",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
             }
           ]
         }

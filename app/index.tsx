@@ -39,6 +39,7 @@ import {
   ChevronRight,
   Trash2,
   Settings,
+  Brain,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
@@ -57,11 +58,11 @@ const NAV_ITEMS = [
   { name: 'Habits', icon: Star, route: '/habits' },
   { name: 'Workout', icon: Dumbbell, route: '/workout' },
   { name: 'Notes', icon: FileText, route: '/notes' },
+  { name: 'Brain Dump', icon: Brain, route: '/brain-dump' },
   { name: 'Books', icon: BookOpen, route: '/books' },
   { name: 'Budget', icon: Wallet, route: '/budget' },
   { name: 'Gifts', icon: Gift, route: '/gifts' },
   { name: 'Bingo', icon: Target, route: '/bingo' },
-  { name: 'Test', icon: Star, route: '/test' },
 ];
 
 export default function HomeScreen() {
@@ -351,8 +352,19 @@ export default function HomeScreen() {
 
     // Notes widget
     const pinnedNotes = notes.filter((n: any) => n.pinned);
-    const latestNote = [...notes].sort((a: any, b: any) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
-    updateNotesWidget({ totalNotes: notes.length, pinnedCount: pinnedNotes.length, latestNoteTitle: latestNote?.name ?? '', latestNoteDate: latestNote?.date ?? '' });
+    const sortedNotes = [
+      ...pinnedNotes.sort((a: any, b: any) => (b.date ?? '').localeCompare(a.date ?? '')),
+      ...notes.filter((n: any) => !n.pinned).sort((a: any, b: any) => (b.date ?? '').localeCompare(a.date ?? '')),
+    ];
+    const latestNote = sortedNotes[0];
+    const recentNotes = sortedNotes.map((n: any) => ({
+      id: n.id,
+      title: n.name ?? n.title ?? 'Untitled',
+      date: n.date ?? '',
+      pinned: !!n.pinned,
+      preview: typeof (n.content ?? n.text) === 'string' && (n.content ?? n.text) ? (n.content ?? n.text).replace(/\n/g, ' ').slice(0, 120) : undefined,
+    }));
+    updateNotesWidget({ totalNotes: notes.length, pinnedCount: pinnedNotes.length, latestNoteTitle: latestNote?.name ?? '', latestNoteDate: latestNote?.date ?? '', recentNotes, currentIndex: 0 });
 
     // Gifts widget
     const allGifts = giftPeople.flatMap((p: any) => p.gifts);

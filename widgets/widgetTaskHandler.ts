@@ -29,6 +29,7 @@ import { NotesWidget }    from './NotesWidget';
 import { PrioritiesWidget } from './PrioritiesWidget';
 import { GiftsWidget }    from './GiftsWidget';
 import { BingoWidget }    from './BingoWidget';
+import { BrainDumpWidget } from './BrainDumpWidget';
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -39,7 +40,8 @@ export const CALENDAR_WIDGET_DATA_KEY  = 'calendarWidgetData';
 export const NOTES_WIDGET_DATA_KEY     = 'notesWidgetData';
 export const PRIORITIES_WIDGET_DATA_KEY = 'prioritiesWidgetData';
 export const GIFTS_WIDGET_DATA_KEY     = 'giftsWidgetData';
-export const BINGO_WIDGET_DATA_KEY     = 'bingoWidgetData';
+export const BINGO_WIDGET_DATA_KEY      = 'bingoWidgetData';
+export const BRAIN_DUMP_WIDGET_DATA_KEY = 'brainDumpWidgetData';
 
 // ─── Shared data interfaces ───────────────────────────────────────────────────
 
@@ -111,6 +113,7 @@ export interface CalendarWidgetData {
 }
 
 export interface RecentNoteData {
+  id: number;
   title: string;
   date: string;
   pinned: boolean;
@@ -165,6 +168,13 @@ export interface BingoWidgetData {
   recentGoal: string;
 }
 
+export interface BrainDumpWidgetData {
+  lastDumpDate: string;
+  lastDumpPreview: string;
+  lastDumpTaskCount: number;
+  totalDumps: number;
+}
+
 // ─── Save helpers (called from each screen) ───────────────────────────────────
 
 export async function saveWidgetData(data: WidgetData) {
@@ -197,6 +207,10 @@ export async function saveGiftsWidgetData(data: GiftsWidgetData) {
 
 export async function saveBingoWidgetData(data: BingoWidgetData) {
   try { await AsyncStorage.setItem(BINGO_WIDGET_DATA_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+}
+
+export async function saveBrainDumpWidgetData(data: BrainDumpWidgetData) {
+  try { await AsyncStorage.setItem(BRAIN_DUMP_WIDGET_DATA_KEY, JSON.stringify(data)); } catch { /* ignore */ }
 }
 
 // ─── Update helpers (save to AsyncStorage + push to widget immediately) ───────
@@ -239,6 +253,11 @@ export async function updateGiftsWidget(data: GiftsWidgetData) {
 export async function updateBingoWidget(data: BingoWidgetData) {
   await saveBingoWidgetData(data);
   requestWidgetUpdate({ widgetName: 'BingoWidget', renderWidget: () => React.createElement(BingoWidget, data), widgetNotFound: () => {} });
+}
+
+export async function updateBrainDumpWidget(data: BrainDumpWidgetData) {
+  await saveBrainDumpWidgetData(data);
+  requestWidgetUpdate({ widgetName: 'BrainDumpWidget', renderWidget: () => React.createElement(BrainDumpWidget, data), widgetNotFound: () => {} });
 }
 
 // ─── Load helpers ─────────────────────────────────────────────────────────────
@@ -356,6 +375,7 @@ async function computeNotesData(indexOverride?: number): Promise<NotesWidgetData
   ];
   const latest = sorted[0];
   const recentNotes: RecentNoteData[] = sorted.map(n => ({
+    id: n.id,
     title: n.name ?? n.title ?? 'Untitled',
     date: n.date ?? '',
     pinned: !!n.pinned,
@@ -450,6 +470,14 @@ async function computeBudgetData(): Promise<WidgetData> {
   return { monthLabel, income, expenses, cashflow: income - expenses };
 }
 
+async function computeBrainDumpData(): Promise<BrainDumpWidgetData> {
+  const stored = await AsyncStorage.getItem(BRAIN_DUMP_WIDGET_DATA_KEY);
+  if (stored) {
+    try { return JSON.parse(stored) as BrainDumpWidgetData; } catch { /* fall through */ }
+  }
+  return { lastDumpDate: '', lastDumpPreview: '', lastDumpTaskCount: 0, totalDumps: 0 };
+}
+
 // ─── Widget task handler ──────────────────────────────────────────────────────
 
 async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
@@ -519,6 +547,27 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
         break;
       }
 
+      case 'TOGGLE_GIFT': {
+        const giftId = parseInt((clickActionData as any)?.giftId ?? '0', 10);
+        const personId = parseInt((clickActionData as any)?.personId ?? '0', 10);
+        if (giftId && personId) {
+          const giftPeople: any[] = await load('giftPeople', []);
+          const personIdx = giftPeople.findIndex((p: any) => p.id === personId);
+          if (personIdx >= 0) {
+            const giftIdx = (giftPeople[personIdx].gifts ?? []).findIndex((g: any) => g.id === giftId);
+            if (giftIdx >= 0) {
+              giftPeople[personIdx].gifts[giftIdx] = {
+                ...giftPeople[personIdx].gifts[giftIdx],
+                purchased: !giftPeople[personIdx].gifts[giftIdx].purchased,
+              };
+              await AsyncStorage.setItem('giftPeople', JSON.stringify(giftPeople));
+            }
+          }
+        }
+        renderWidget(React.createElement(GiftsWidget, await computeGiftsData()));
+        break;
+      }
+
       case 'TOGGLE_PRIORITY': {
         const priorityId = parseInt((clickActionData as any)?.priorityId ?? '0', 10);
         if (priorityId) {
@@ -567,6 +616,9 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
 
       } else if (widgetName === 'BudgetWidget') {
         renderWidget(React.createElement(BudgetWidget, await computeBudgetData()));
+
+      } else if (widgetName === 'BrainDumpWidget') {
+        renderWidget(React.createElement(BrainDumpWidget, await computeBrainDumpData()));
       }
       break;
     }
