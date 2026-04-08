@@ -2,6 +2,8 @@ import { StyleSheet, Dimensions } from 'react-native';
 import Colors from '@/constants/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const isTablet = SCREEN_WIDTH >= 768;
+const SIDEBAR_WIDTH = isTablet ? Math.min(320, SCREEN_WIDTH * 0.4) : SCREEN_WIDTH * 0.8;
 
 export default StyleSheet.create({
   container: {
@@ -13,7 +15,7 @@ export default StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: SCREEN_WIDTH * 0.8,
+    width: SIDEBAR_WIDTH,
     backgroundColor: Colors.card,
     zIndex: 100,
     elevation: 10,
