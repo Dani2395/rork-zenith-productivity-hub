@@ -40,6 +40,7 @@ import {
   Trash2,
   Settings,
   Brain,
+  Mic,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
@@ -1835,6 +1836,18 @@ export default function HomeScreen() {
                 <FileText size={24} color={Colors.success} />
               </View>
               <Text style={styles.quickAccessText}>Add Note</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickAccessOption}
+              onPress={() => {
+                setQuickAccessVisible(false);
+                router.push('/voice-add' as any);
+              }}
+            >
+              <View style={[styles.quickAccessIconContainer, { backgroundColor: Colors.warning + '22' }]}>
+                <Mic size={24} color={Colors.warning} />
+              </View>
+              <Text style={styles.quickAccessText}>Voice Command</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
