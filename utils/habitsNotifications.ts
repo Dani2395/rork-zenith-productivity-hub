@@ -19,13 +19,15 @@ function getNotifications() {
 
 async function ensureHabitsChannel() {
   const N = getNotifications();
-  if (!N || Platform.OS !== 'android') return;
-  await N.setNotificationChannelAsync('habits', {
-    name: 'Habit Reminders',
-    description: 'Daily habit reminders and streak updates',
-    importance: N.AndroidImportance.DEFAULT,
-    lightColor: '#10b981',
-  });
+  if (!N) return;
+  if (Platform.OS === 'android') {
+    await N.setNotificationChannelAsync('habits', {
+      name: 'Habit Reminders',
+      description: 'Daily habit reminders and streak updates',
+      importance: N.AndroidImportance.DEFAULT,
+      lightColor: '#10b981',
+    });
+  }
 }
 
 const STORAGE_KEY = 'habitsNotificationIds';

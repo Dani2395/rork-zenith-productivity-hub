@@ -19,13 +19,15 @@ function getNotifications() {
 
 async function ensureNotesChannel() {
   const N = getNotifications();
-  if (!N || Platform.OS !== 'android') return;
-  await N.setNotificationChannelAsync('notes', {
-    name: 'Notes Reminders',
-    description: 'Pinned note reminders and writing prompts',
-    importance: N.AndroidImportance.DEFAULT,
-    lightColor: '#fbbf24',
-  });
+  if (!N) return;
+  if (Platform.OS === 'android') {
+    await N.setNotificationChannelAsync('notes', {
+      name: 'Notes Reminders',
+      description: 'Pinned note reminders and writing prompts',
+      importance: N.AndroidImportance.DEFAULT,
+      lightColor: '#fbbf24',
+    });
+  }
 }
 
 const STORAGE_KEY = 'notesNotificationIds';

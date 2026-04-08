@@ -19,13 +19,15 @@ function getNotifications() {
 
 async function ensurePrioritiesChannel() {
   const N = getNotifications();
-  if (!N || Platform.OS !== 'android') return;
-  await N.setNotificationChannelAsync('priorities', {
-    name: 'Priority Reminders',
-    description: 'Daily priority briefs and completion check-ins',
-    importance: N.AndroidImportance.HIGH,
-    lightColor: '#f59e0b',
-  });
+  if (!N) return;
+  if (Platform.OS === 'android') {
+    await N.setNotificationChannelAsync('priorities', {
+      name: 'Priority Reminders',
+      description: 'Daily priority briefs and completion check-ins',
+      importance: N.AndroidImportance.HIGH,
+      lightColor: '#f59e0b',
+    });
+  }
 }
 
 const STORAGE_KEY = 'prioritiesNotificationIds';

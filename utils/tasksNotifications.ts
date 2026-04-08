@@ -19,14 +19,16 @@ function getNotifications() {
 
 async function ensureTasksChannel() {
   const N = getNotifications();
-  if (!N || Platform.OS !== 'android') return;
-  await N.setNotificationChannelAsync('tasks', {
-    name: 'Task Reminders',
-    description: 'Daily task summaries, overdue alerts, and weekly digests',
-    importance: N.AndroidImportance.HIGH,
-    vibrationPattern: [0, 200, 100, 200],
-    lightColor: '#6366f1',
-  });
+  if (!N) return;
+  if (Platform.OS === 'android') {
+    await N.setNotificationChannelAsync('tasks', {
+      name: 'Task Reminders',
+      description: 'Daily task summaries, overdue alerts, and weekly digests',
+      importance: N.AndroidImportance.HIGH,
+      vibrationPattern: [0, 200, 100, 200],
+      lightColor: '#6366f1',
+    });
+  }
 }
 
 const STORAGE_KEY = 'tasksNotificationIds';

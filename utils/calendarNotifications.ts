@@ -19,14 +19,16 @@ function getNotifications() {
 
 async function ensureCalendarChannel() {
   const N = getNotifications();
-  if (!N || Platform.OS !== 'android') return;
-  await N.setNotificationChannelAsync('calendar', {
-    name: 'Calendar Reminders',
-    description: 'Daily agenda summaries and event reminders',
-    importance: N.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250, 100, 250],
-    lightColor: '#818cf8',
-  });
+  if (!N) return;
+  if (Platform.OS === 'android') {
+    await N.setNotificationChannelAsync('calendar', {
+      name: 'Calendar Reminders',
+      description: 'Daily agenda summaries and event reminders',
+      importance: N.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 100, 250],
+      lightColor: '#818cf8',
+    });
+  }
 }
 
 const STORAGE_KEY = 'calendarNotificationIds';

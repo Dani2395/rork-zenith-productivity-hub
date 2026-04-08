@@ -19,14 +19,16 @@ function getNotifications() {
 
 async function ensureGiftsChannel() {
   const N = getNotifications();
-  if (!N || Platform.OS !== 'android') return;
-  await N.setNotificationChannelAsync('gifts', {
-    name: 'Gift Reminders',
-    description: 'Upcoming event alerts and gift planning reminders',
-    importance: N.AndroidImportance.HIGH,
-    vibrationPattern: [0, 200, 100, 200],
-    lightColor: '#ec4899',
-  });
+  if (!N) return;
+  if (Platform.OS === 'android') {
+    await N.setNotificationChannelAsync('gifts', {
+      name: 'Gift Reminders',
+      description: 'Upcoming event alerts and gift planning reminders',
+      importance: N.AndroidImportance.HIGH,
+      vibrationPattern: [0, 200, 100, 200],
+      lightColor: '#ec4899',
+    });
+  }
 }
 
 const STORAGE_KEY = 'giftsNotificationIds';

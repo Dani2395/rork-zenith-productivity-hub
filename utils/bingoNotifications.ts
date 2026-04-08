@@ -19,14 +19,16 @@ function getNotifications() {
 
 async function ensureBingoChannel() {
   const N = getNotifications();
-  if (!N || Platform.OS !== 'android') return;
-  await N.setNotificationChannelAsync('bingo', {
-    name: 'Bingo Goal Alerts',
-    description: 'Goal completion milestones and progress updates',
-    importance: N.AndroidImportance.HIGH,
-    vibrationPattern: [0, 300, 100, 300, 100, 300],
-    lightColor: '#a855f7',
-  });
+  if (!N) return;
+  if (Platform.OS === 'android') {
+    await N.setNotificationChannelAsync('bingo', {
+      name: 'Bingo Goal Alerts',
+      description: 'Goal completion milestones and progress updates',
+      importance: N.AndroidImportance.HIGH,
+      vibrationPattern: [0, 300, 100, 300, 100, 300],
+      lightColor: '#a855f7',
+    });
+  }
 }
 
 const STORAGE_KEY = 'bingoNotificationIds';
