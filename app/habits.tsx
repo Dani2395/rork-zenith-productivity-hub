@@ -8,20 +8,36 @@ import {
   TextInput,
   Modal,
   Switch,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Check, Bell } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { Plus, Trash2, Check, Bell, Edit2, ImageIcon } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateHabitsWidget } from '@/widgets/widgetTaskHandler';
-import { scheduleHabitsMorningReminder, cancelHabitsMorningReminder, scheduleHabitsEveningCheckIn, cancelHabitsEveningCheckIn, scheduleHabitsWeeklyDigest, cancelAllHabitsNotifications } from '@/utils/habitsNotifications';
+import { scheduleHabitsMorningReminder, cancelHabitsMorningReminder, scheduleHabitsEveningCheckIn, cancelHabitsEveningCheckIn, scheduleHabitsWeeklyDigest } from '@/utils/habitsNotifications';
+
+const HABIT_EMOJIS = [
+  '🏃', '🧘', '💪', '📚', '🥗', '💧', '🛌', '🧹',
+  '🌿', '🎨', '🎯', '📝', '🚴', '🏊', '🍎', '☕',
+  '🧠', '❤️', '🙏', '🌅', '💊', '🏋️', '🎸', '🌙',
+  '⭐', '🔥', '💎', '🌟', '🐕', '🌸', '🎵', '✈️',
+];
 
 export default function HabitsScreen() {
-  const { habits, habitCompletions, addHabit, deleteHabit, toggleHabitCompletion } = useData();
+  const { habits, habitCompletions, addHabit, updateHabit, deleteHabit, toggleHabitCompletion } = useData();
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingHabitId, setEditingHabitId] = useState<number | null>(null);
   const [habitName, setHabitName] = useState('');
+  const [habitIcon, setHabitIcon] = useState('');
+  const [habitImage, setHabitImage] = useState('');
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
   const [morningReminderEnabled, setMorningReminderEnabled] = useState(false);
   const [eveningCheckInEnabled, setEveningCheckInEnabled] = useState(false);
@@ -32,7 +48,6 @@ export default function HabitsScreen() {
   useEffect(() => {
     const doneTodayCount = habits.filter(h => habitCompletions[`${h.id}-${today}`]).length;
 
-    // Find best streak
     let bestStreakName = '';
     let bestStreakDays = 0;
     for (const habit of habits) {
@@ -62,7 +77,6 @@ export default function HabitsScreen() {
       })(),
     }));
 
-    // Weekly heatmap data
     const now = new Date();
     const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     const weekDays = [];
@@ -77,7 +91,6 @@ export default function HabitsScreen() {
     }
     const weeklyPct = Math.round(weeklySum / 7);
 
-    // Monthly progress
     const daysElapsed = now.getDate();
     let monthlyCompletions = 0;
     for (let day = 1; day <= daysElapsed; day++) {
@@ -95,77 +108,109 @@ export default function HabitsScreen() {
     scheduleHabitsWeeklyDigest(bestStreakDays, bestStreakName);
   }, [habits, habitCompletions, today]);
 
+  const resetForm = () => {
+    setHabitName('');
+    setHabitIcon('');
+    setHabitImage('');
+    setEditingHabitId(null);
+  };
+
   const handleSaveHabit = () => {
-    if (habitName.trim()) {
-      addHabit(habitName.trim());
-      setHabitName('');
-      setModalVisible(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (!habitName.trim()) return;
+    if (editingHabitId !== null) {
+      updateHabit(editingHabitId, {
+        name: habitName.trim(),
+        icon: habitIcon || undefined,
+        image: habitImage || undefined,
+      });
+    } else {
+      addHabit(habitName.trim(), habitIcon || undefined, habitImage || undefined);
+    }
+    resetForm();
+    setModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleEditHabit = (habitId: number) => {
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+    setEditingHabitId(habitId);
+    setHabitName(habit.name);
+    setHabitIcon(habit.icon || '');
+    setHabitImage(habit.image || '');
+    setModalVisible(true);
+  };
+
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow access to your photo library to set a habit image.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      try {
+        const sourceUri = result.assets[0].uri;
+        const filename = `habit_${Date.now()}.jpg`;
+        const destUri = `${FileSystem.documentDirectory}${filename}`;
+        await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+        setHabitImage(destUri);
+        setHabitIcon('');
+      } catch {
+        Alert.alert('Error', 'Could not save image. Please try again.');
+      }
     }
   };
 
   const getHabitStats = (habitId: number) => {
     const todayDate = new Date();
     let completed = 0;
-    let total = 30;
-
+    const total = 30;
     for (let i = 0; i < 30; i++) {
       const date = new Date(todayDate);
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const key = `${habitId}-${dateStr}`;
+      const key = `${habitId}-${date.toISOString().split('T')[0]}`;
       if (habitCompletions[key]) completed++;
     }
-
-    return {
-      percentage: Math.round((completed / total) * 100),
-      completed,
-      total,
-    };
+    return { percentage: Math.round((completed / total) * 100), completed, total };
   };
 
   const getStreak = (habitId: number) => {
     let streak = 0;
     const todayDate = new Date();
-
     for (let i = 0; i < 365; i++) {
       const date = new Date(todayDate);
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const key = `${habitId}-${dateStr}`;
-      if (habitCompletions[key]) {
-        streak++;
-      } else if (i > 0) {
-        break;
-      }
+      const key = `${habitId}-${date.toISOString().split('T')[0]}`;
+      if (habitCompletions[key]) { streak++; } else if (i > 0) { break; }
     }
-
     return streak;
   };
+
+  const previewHasContent = habitIcon || habitImage;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>⭐ Habits</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity
-          style={{ padding: 8 }}
-          onPress={() => setWidgetModalVisible(true)}
-        >
-          <Bell size={22} color={Colors.primary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <LinearGradient
-            colors={[Colors.primary, Colors.secondary]}
-            style={styles.addButtonGradient}
+          <TouchableOpacity style={{ padding: 8 }} onPress={() => setWidgetModalVisible(true)}>
+            <Bell size={22} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => { resetForm(); setModalVisible(true); }}
           >
-            <Plus size={20} color="white" />
-            <Text style={styles.addButtonText}>Add Habit</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.addButtonGradient}>
+              <Plus size={20} color="white" />
+              <Text style={styles.addButtonText}>Add Habit</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -177,52 +222,67 @@ export default function HabitsScreen() {
             const stats = getHabitStats(habit.id);
             const streak = getStreak(habit.id);
             const todayCompleted = habitCompletions[`${habit.id}-${today}`];
+            const hasCustomIcon = !!(habit.icon || habit.image);
 
             return (
               <View key={habit.id} style={styles.habitCard}>
                 <View style={styles.habitHeader}>
-                  <View style={styles.progressPie}>
-                    <View
-                      style={[
-                        styles.progressPieInner,
-                        {
-                          backgroundColor: Colors.card,
-                        },
-                      ]}
-                    >
-                      <Text style={styles.progressText}>{stats.percentage}%</Text>
+                  {/* Left: custom icon/image or progress ring */}
+                  {hasCustomIcon ? (
+                    <View style={styles.habitIconSlot}>
+                      {habit.image ? (
+                        <Image source={{ uri: habit.image }} style={styles.habitIconImage} />
+                      ) : (
+                        <LinearGradient
+                          colors={[Colors.primary + '33', Colors.secondary + '33']}
+                          style={styles.habitIconEmojiBg}
+                        >
+                          <Text style={styles.habitIconEmoji}>{habit.icon}</Text>
+                        </LinearGradient>
+                      )}
+                      <View style={styles.habitIconBadge}>
+                        <Text style={styles.habitIconBadgeText}>{stats.percentage}%</Text>
+                      </View>
                     </View>
-                    <View
-                      style={[
-                        StyleSheet.absoluteFill,
-                        styles.progressCircle,
-                        {
-                          borderColor: Colors.success,
-                          borderTopColor: stats.percentage >= 25 ? Colors.success : 'transparent',
-                          borderRightColor: stats.percentage >= 50 ? Colors.success : 'transparent',
-                          borderBottomColor: stats.percentage >= 75 ? Colors.success : 'transparent',
-                          borderLeftColor: stats.percentage >= 100 ? Colors.success : 'transparent',
-                        },
-                      ]}
-                    />
-                  </View>
+                  ) : (
+                    <View style={styles.progressPie}>
+                      <View style={[styles.progressPieInner, { backgroundColor: Colors.card }]}>
+                        <Text style={styles.progressText}>{stats.percentage}%</Text>
+                      </View>
+                      <View
+                        style={[
+                          StyleSheet.absoluteFill,
+                          styles.progressCircle,
+                          {
+                            borderColor: Colors.success,
+                            borderTopColor: stats.percentage >= 25 ? Colors.success : 'transparent',
+                            borderRightColor: stats.percentage >= 50 ? Colors.success : 'transparent',
+                            borderBottomColor: stats.percentage >= 75 ? Colors.success : 'transparent',
+                            borderLeftColor: stats.percentage >= 100 ? Colors.success : 'transparent',
+                          },
+                        ]}
+                      />
+                    </View>
+                  )}
+
                   <View style={styles.habitInfo}>
                     <Text style={styles.habitName}>{habit.name}</Text>
-                    <Text style={styles.habitStats}>
-                      {stats.completed}/{stats.total} days completed
-                    </Text>
-                    {streak > 0 && (
-                      <Text style={styles.streakText}>🔥 {streak} day streak!</Text>
-                    )}
+                    <Text style={styles.habitStats}>{stats.completed}/{stats.total} days completed</Text>
+                    {streak > 0 && <Text style={styles.streakText}>🔥 {streak} day streak!</Text>}
                   </View>
+
+                  {/* Edit button */}
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => handleEditHabit(habit.id)}
+                  >
+                    <Edit2 size={15} color={Colors.textDim} />
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.habitActions}>
                   <TouchableOpacity
-                    style={[
-                      styles.completeButton,
-                      todayCompleted && styles.completeButtonDone,
-                    ]}
+                    style={[styles.completeButton, todayCompleted && styles.completeButtonDone]}
                     onPress={() => {
                       toggleHabitCompletion(habit.id, today);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -252,19 +312,12 @@ export default function HabitsScreen() {
                     const dateStr = date.toISOString().split('T')[0];
                     const isCompleted = habitCompletions[`${habit.id}-${dateStr}`];
                     const isToday = dateStr === today;
-
                     return (
                       <View key={i} style={styles.weekDay}>
                         <Text style={styles.weekDayLabel}>
                           {date.toLocaleDateString('en-US', { weekday: 'narrow' })}
                         </Text>
-                        <View
-                          style={[
-                            styles.weekDayDot,
-                            isCompleted && styles.weekDayDotCompleted,
-                            isToday && styles.weekDayDotToday,
-                          ]}
-                        >
+                        <View style={[styles.weekDayDot, isCompleted && styles.weekDayDotCompleted, isToday && styles.weekDayDotToday]}>
                           {isCompleted && <Check size={12} color="white" />}
                         </View>
                       </View>
@@ -277,44 +330,84 @@ export default function HabitsScreen() {
         )}
       </ScrollView>
 
+      {/* Add / Edit Habit Modal */}
       <Modal
         visible={modalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => { resetForm(); setModalVisible(false); }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Habit</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Habit name *"
-              placeholderTextColor={Colors.textDim}
-              value={habitName}
-              onChangeText={setHabitName}
-              autoFocus
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalButtonSecondary}
-                onPress={() => {
-                  setHabitName('');
-                  setModalVisible(false);
-                }}
-              >
-                <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{editingHabitId ? '✏️ Edit Habit' : 'Add Habit'}</Text>
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Habit name *"
+                placeholderTextColor={Colors.textDim}
+                value={habitName}
+                onChangeText={setHabitName}
+                autoFocus={!editingHabitId}
+              />
+
+              {/* Icon preview */}
+              {previewHasContent && (
+                <View style={styles.iconPreviewRow}>
+                  <View style={styles.iconPreview}>
+                    {habitImage ? (
+                      <Image source={{ uri: habitImage }} style={styles.iconPreviewImage} />
+                    ) : (
+                      <Text style={styles.iconPreviewEmoji}>{habitIcon}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.clearIconButton}
+                    onPress={() => { setHabitIcon(''); setHabitImage(''); }}
+                  >
+                    <Text style={styles.clearIconText}>Clear icon</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Emoji grid */}
+              <Text style={styles.sectionLabel}>Choose an icon</Text>
+              <View style={styles.emojiGrid}>
+                {HABIT_EMOJIS.map(emoji => (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={[styles.emojiCell, habitIcon === emoji && !habitImage && styles.emojiCellSelected]}
+                    onPress={() => { setHabitIcon(emoji); setHabitImage(''); }}
+                  >
+                    <Text style={styles.emojiCellText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Upload photo */}
+              <TouchableOpacity style={styles.uploadButton} onPress={handlePickImage}>
+                <ImageIcon size={18} color={Colors.primary} />
+                <Text style={styles.uploadButtonText}>
+                  {habitImage ? 'Change photo' : 'Upload your own photo'}
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleSaveHabit}>
-                <LinearGradient
-                  colors={[Colors.primary, Colors.secondary]}
-                  style={styles.modalButtonGradient}
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalButtonSecondary}
+                  onPress={() => { resetForm(); setModalVisible(false); }}
                 >
-                  <Text style={styles.modalButtonText}>Save Habit</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                  <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleSaveHabit}>
+                  <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.modalButtonGradient}>
+                    <Text style={styles.modalButtonText}>Save Habit</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Widget & Notification Settings Modal */}
@@ -432,8 +525,46 @@ const styles = StyleSheet.create({
   habitHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
+  // Custom icon/image slot
+  habitIconSlot: {
+    width: 60,
+    height: 60,
+    position: 'relative',
+  },
+  habitIconImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  habitIconEmojiBg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  habitIconEmoji: {
+    fontSize: 28,
+  },
+  habitIconBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: Colors.success,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    minWidth: 28,
+    alignItems: 'center',
+  },
+  habitIconBadgeText: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: 'white',
+  },
+  // Default progress circle
   progressPie: {
     width: 60,
     height: 60,
@@ -476,6 +607,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.warning,
     marginTop: 4,
+  },
+  editButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   habitActions: {
     flexDirection: 'row',
@@ -539,6 +680,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.primary,
   },
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -549,6 +691,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
+    maxHeight: '90%',
   },
   modalTitle: {
     fontSize: 20,
@@ -565,6 +708,93 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 14,
     marginBottom: 16,
+  },
+  // Icon preview
+  iconPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  iconPreview: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: Colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  iconPreviewImage: {
+    width: 56,
+    height: 56,
+  },
+  iconPreviewEmoji: {
+    fontSize: 28,
+  },
+  clearIconButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  clearIconText: {
+    fontSize: 12,
+    color: Colors.textDim,
+  },
+  // Emoji grid
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textDim,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  emojiCell: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiCellSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '22',
+  },
+  emojiCellText: {
+    fontSize: 22,
+  },
+  // Upload button
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    marginBottom: 20,
+  },
+  uploadButtonText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '500' as const,
   },
   modalButtons: {
     flexDirection: 'row',

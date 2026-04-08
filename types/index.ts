@@ -55,6 +55,8 @@ export interface Event {
 export interface Habit {
   id: number;
   name: string;
+  icon?: string;
+  image?: string;
 }
 
 export interface HabitCompletions {
