@@ -27,7 +27,7 @@ type FilterType = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
 
 
 export default function TasksScreen() {
-  const { tasks, taskLists, addTask, updateTask, deleteTask, toggleTask, taskCategories, addTaskCategory, updateTaskCategory, deleteTaskCategory } = useData();
+  const { tasks, taskLists, addTask, updateTask, deleteTask, toggleTask, taskCategories, addTaskCategory, updateTaskCategory, deleteTaskCategory, addPriority } = useData();
 
   const [filter, setFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +49,7 @@ export default function TasksScreen() {
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
   const [dailySummaryEnabled, setDailySummaryEnabled] = useState(false);
   const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
+  const [makeTopPriority, setMakeTopPriority] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -118,6 +119,7 @@ export default function TasksScreen() {
     setTaskListId(null);
     setTaskCategory('');
     setEditingTask(null);
+    setMakeTopPriority(false);
   };
 
   const handleSaveTask = () => {
@@ -145,6 +147,9 @@ export default function TasksScreen() {
         listId: taskListId,
         category: taskCategory,
       });
+      if (makeTopPriority) {
+        addPriority(today, taskName.trim(), taskDate || undefined, taskTime || undefined);
+      }
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -553,6 +558,24 @@ export default function TasksScreen() {
                 ))}
               </ScrollView>
             </View>
+
+            {!editingTask && (
+              <View style={styles.topPriorityToggle}>
+                <View style={styles.topPriorityToggleLeft}>
+                  <Text style={styles.topPriorityToggleIcon}>🔥</Text>
+                  <View>
+                    <Text style={styles.topPriorityToggleLabel}>Top Priority</Text>
+                    <Text style={styles.topPriorityToggleSubtitle}>Add to today's top 5 priorities</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={makeTopPriority}
+                  onValueChange={setMakeTopPriority}
+                  trackColor={{ false: Colors.surface, true: Colors.primary }}
+                  thumbColor={makeTopPriority ? '#fff' : Colors.textDim}
+                />
+              </View>
+            )}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -1021,6 +1044,36 @@ const styles = StyleSheet.create({
   listOptionText: {
     fontSize: 13,
     color: Colors.text,
+  },
+  topPriorityToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  topPriorityToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  topPriorityToggleIcon: {
+    fontSize: 22,
+  },
+  topPriorityToggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  topPriorityToggleSubtitle: {
+    fontSize: 12,
+    color: Colors.textDim,
+    marginTop: 2,
   },
   modalButtons: {
     flexDirection: 'row',
