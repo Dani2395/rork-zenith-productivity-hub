@@ -26,6 +26,11 @@ import {
   ChevronUp,
   Calendar,
   Bell,
+  Lightbulb,
+  AlertTriangle,
+  AlertCircle,
+  Info,
+  X,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/budgetStyles';
@@ -33,7 +38,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
-import { processCSVData } from '@/utils/budgetHelpers';
+import { processCSVData, analyzeExpenses, ExpenseInsight } from '@/utils/budgetHelpers';
 import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
 import {
   scheduleDailySummary,
@@ -100,6 +105,9 @@ export default function BudgetScreen() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [_isUploading, setIsUploading] = useState(false);
+
+  const [insightsModalVisible, setInsightsModalVisible] = useState(false);
+  const [expenseInsights, setExpenseInsights] = useState<ExpenseInsight[]>([]);
 
   // Widget / notification settings
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
@@ -572,7 +580,13 @@ export default function BudgetScreen() {
 
 
 
-  const finishImport = (imported: number, skipped: number, dupCount: number, errors: string[]) => {
+  const finishImport = (
+    imported: number,
+    skipped: number,
+    dupCount: number,
+    errors: string[],
+    newTxs: Array<{ amount: number; description: string; date: string; type: 'income' | 'expense'; budgetId?: number }>,
+  ) => {
     const parts: string[] = [`Imported ${imported} transaction${imported !== 1 ? 's' : ''}`];
     if (dupCount > 0) parts.push(`${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped`);
     if (skipped > 0) parts.push(`${skipped} row${skipped !== 1 ? 's' : ''} skipped`);
@@ -588,10 +602,24 @@ export default function BudgetScreen() {
         );
       }, 500);
     }
-    setTimeout(() => {
-      setUploadModalVisible(false);
-      setUploadStatus('');
-    }, 2500);
+    // Run advisor analysis on combined transactions (existing + newly imported)
+    if (imported > 0) {
+      const combined = [...transactions, ...newTxs];
+      const insights = analyzeExpenses(combined, budgets);
+      setExpenseInsights(insights);
+      setTimeout(() => {
+        setUploadModalVisible(false);
+        setUploadStatus('');
+        if (insights.length > 0) {
+          setInsightsModalVisible(true);
+        }
+      }, 2000);
+    } else {
+      setTimeout(() => {
+        setUploadModalVisible(false);
+        setUploadStatus('');
+      }, 2500);
+    }
   };
 
   const processCSVText = (text: string) => {
@@ -640,7 +668,7 @@ export default function BudgetScreen() {
         addTransaction(t);
       }
 
-      finishImport(newTransactions.length, result.skipped, dupCount, result.errors);
+      finishImport(newTransactions.length, result.skipped, dupCount, result.errors, newTransactions);
     } catch (err) {
       console.log('processCSVText error:', err);
       setUploadStatus(`Error processing CSV: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -956,6 +984,22 @@ export default function BudgetScreen() {
           >
             <Bell size={16} color={Colors.primary} />
             <Text style={[styles.clearButtonText, { color: Colors.primary }]}>Widgets</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.advisorButton, expenseInsights.length > 0 && styles.advisorButtonActive]}
+            onPress={() => {
+              const combined = [...transactions];
+              const insights = analyzeExpenses(combined, budgets);
+              setExpenseInsights(insights);
+              setInsightsModalVisible(true);
+            }}
+          >
+            <Lightbulb size={16} color={expenseInsights.length > 0 ? '#f59e0b' : Colors.textDim} />
+            {expenseInsights.length > 0 && (
+              <View style={styles.advisorBadge}>
+                <Text style={styles.advisorBadgeText}>{expenseInsights.length}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.clearButton}
@@ -1695,6 +1739,95 @@ export default function BudgetScreen() {
                 <Text style={styles.modalButtonTextSecondary}>Close</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Financial Advisor Insights Modal */}
+      <Modal
+        visible={insightsModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setInsightsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={styles.advisorModalHeader}>
+              <View style={styles.advisorModalTitleRow}>
+                <Lightbulb size={22} color="#f59e0b" />
+                <Text style={styles.advisorModalTitle}>Financial Advisor</Text>
+              </View>
+              <TouchableOpacity onPress={() => setInsightsModalVisible(false)}>
+                <X size={22} color={Colors.textDim} />
+              </TouchableOpacity>
+            </View>
+
+            {expenseInsights.length === 0 ? (
+              <View style={styles.advisorEmptyState}>
+                <Text style={styles.advisorEmptyIcon}>🎉</Text>
+                <Text style={styles.advisorEmptyTitle}>Looking Good!</Text>
+                <Text style={styles.advisorEmptyText}>
+                  No major spending issues detected. Keep it up!
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.advisorSummaryRow}>
+                  <Text style={styles.advisorSummaryText}>
+                    {expenseInsights.length} issue{expenseInsights.length !== 1 ? 's' : ''} found
+                  </Text>
+                  <Text style={styles.advisorSavingsText}>
+                    ~${expenseInsights.reduce((s, i) => s + i.potentialSavings, 0).toFixed(0)}/mo potential savings
+                  </Text>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
+                  {expenseInsights.map((insight) => {
+                    const severityColor =
+                      insight.severity === 'high' ? Colors.danger :
+                      insight.severity === 'medium' ? Colors.warning :
+                      Colors.textDim;
+                    const SeverityIcon =
+                      insight.severity === 'high' ? AlertTriangle :
+                      insight.severity === 'medium' ? AlertCircle :
+                      Info;
+                    return (
+                      <View key={insight.id} style={[styles.insightCard, { borderLeftColor: severityColor }]}>
+                        <View style={styles.insightHeader}>
+                          <Text style={styles.insightEmoji}>{insight.emoji}</Text>
+                          <View style={styles.insightTitleBlock}>
+                            <Text style={styles.insightTitle}>{insight.title}</Text>
+                            <View style={[styles.insightBadge, { backgroundColor: `${severityColor}22` }]}>
+                              <SeverityIcon size={10} color={severityColor} />
+                              <Text style={[styles.insightBadgeText, { color: severityColor }]}>
+                                {insight.severity.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          {insight.potentialSavings > 0 && (
+                            <Text style={styles.insightSavings}>
+                              Save ${insight.potentialSavings.toFixed(0)}/mo
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={styles.insightDescription}>{insight.description}</Text>
+                        <View style={styles.insightRecommendationBox}>
+                          <Text style={styles.insightRecommendationLabel}>Advisor tip:</Text>
+                          <Text style={styles.insightRecommendation}>{insight.recommendation}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  <View style={{ height: 16 }} />
+                </ScrollView>
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[styles.modalButtonSecondary, { marginTop: 12 }]}
+              onPress={() => setInsightsModalVisible(false)}
+            >
+              <Text style={styles.modalButtonTextSecondary}>Got it</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

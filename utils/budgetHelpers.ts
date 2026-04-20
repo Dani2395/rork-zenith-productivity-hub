@@ -781,3 +781,275 @@ export const processCSVData = (
   console.log('processCSVData: final import count:', imported.length, 'skipped:', skipped);
   return { imported, skipped, errors };
 };
+
+// ── Expense Analysis / Financial Advisor ─────────────────────────────────────
+
+export interface ExpenseInsight {
+  id: string;
+  severity: 'high' | 'medium' | 'low';
+  emoji: string;
+  title: string;
+  description: string;
+  monthlyCost: number;
+  potentialSavings: number;
+  recommendation: string;
+}
+
+type AnalyzableTx = { amount: number; description?: string; date: string; type: 'income' | 'expense'; budgetId?: number };
+type AnalyzableBudget = { id: number; name: string; amount: number };
+
+const matchesAny = (desc: string, keywords: string[]): boolean => {
+  const lower = desc.toLowerCase();
+  return keywords.some(k => lower.includes(k));
+};
+
+const STREAMING_KEYWORDS = ['netflix', 'hulu', 'disney', 'hbo', 'peacock', 'paramount', 'apple tv', 'appletv', 'showtime', 'starz', 'crunchyroll', 'fubo', 'sling tv'];
+const MUSIC_KEYWORDS = ['spotify', 'apple music', 'tidal', 'amazon music', 'youtube music', 'pandora', 'deezer', 'audible'];
+const FOOD_DELIVERY_KEYWORDS = ['doordash', 'door dash', 'uber eats', 'ubereats', 'grubhub', 'postmates', 'seamless', 'gopuff'];
+const COFFEE_KEYWORDS = ['starbucks', 'dunkin', 'dutch bros', "peet's", 'peets', 'caribou coffee', 'coffee bean'];
+const FAST_FOOD_KEYWORDS = ['mcdonald', 'burger king', 'taco bell', 'wendy', 'subway', 'pizza hut', 'domino', 'popeyes', 'sonic', 'jack in the box', 'arby', 'chick-fil-a', 'chickfila', 'five guys', 'whataburger', 'wingstop', 'raising cane', 'zaxby', 'panda express', 'ihop', "denny's", 'dennys', 'applebee', 'olive garden', 'red lobster'];
+const GYM_KEYWORDS = ['planet fitness', 'la fitness', 'anytime fitness', 'equinox', 'crossfit', 'ymca', "gold's gym", 'golds gym', 'crunch fitness', 'lifetime fitness', 'blink fitness'];
+
+const detectKeyword = (desc: string, keywords: string[]): string | null => {
+  const lower = desc.toLowerCase();
+  for (const k of keywords) {
+    if (lower.includes(k)) return k;
+  }
+  return null;
+};
+
+export const analyzeExpenses = (
+  transactions: AnalyzableTx[],
+  budgets: AnalyzableBudget[],
+): ExpenseInsight[] => {
+  const insights: ExpenseInsight[] = [];
+
+  const expenseTxs = transactions.filter(t => t.type === 'expense');
+  if (expenseTxs.length === 0) return insights;
+
+  // Find most recent month with data
+  const monthCounts: Record<string, number> = {};
+  for (const t of expenseTxs) {
+    const ym = t.date.substring(0, 7);
+    monthCounts[ym] = (monthCounts[ym] ?? 0) + 1;
+  }
+  const recentMonth = Object.keys(monthCounts).sort().reverse()[0];
+
+  const monthlyExpenses = expenseTxs.filter(t => t.date.startsWith(recentMonth));
+  const totalMonthlyExpenses = monthlyExpenses.reduce((s, t) => s + t.amount, 0);
+
+  // Compute income for the same month
+  const monthlyIncome = transactions
+    .filter(t => t.type === 'income' && t.date.startsWith(recentMonth))
+    .reduce((s, t) => s + t.amount, 0);
+
+  // 1. Streaming subscription stacking
+  const seenStreamingKeys = new Set<string>();
+  const streamingTxs = monthlyExpenses.filter(t => {
+    const key = detectKeyword(t.description ?? '', STREAMING_KEYWORDS);
+    if (key) { seenStreamingKeys.add(key); return true; }
+    return false;
+  });
+  if (seenStreamingKeys.size >= 3) {
+    const totalCost = streamingTxs.reduce((s, t) => s + t.amount, 0);
+    const savings = Math.max(0, totalCost - 22);
+    insights.push({
+      id: 'streaming-stacking',
+      severity: 'high',
+      emoji: '📺',
+      title: 'Streaming Subscription Overload',
+      description: `${seenStreamingKeys.size} streaming services totaling $${totalCost.toFixed(2)}/mo`,
+      monthlyCost: totalCost,
+      potentialSavings: savings,
+      recommendation: `Cancel unused services and rotate them quarterly. Keeping 2 saves ~$${savings.toFixed(0)}/mo.`,
+    });
+  } else if (seenStreamingKeys.size === 2) {
+    const totalCost = streamingTxs.reduce((s, t) => s + t.amount, 0);
+    if (totalCost > 28) {
+      insights.push({
+        id: 'streaming-double',
+        severity: 'low',
+        emoji: '📺',
+        title: 'Multiple Streaming Services',
+        description: `2 streaming services costing $${totalCost.toFixed(2)}/mo`,
+        monthlyCost: totalCost,
+        potentialSavings: totalCost / 2,
+        recommendation: 'Binge one service at a time and pause the other to cut costs in half.',
+      });
+    }
+  }
+
+  // 2. Duplicate music subscriptions
+  const seenMusicKeys = new Set<string>();
+  const musicTxs = monthlyExpenses.filter(t => {
+    const key = detectKeyword(t.description ?? '', MUSIC_KEYWORDS);
+    if (key) { seenMusicKeys.add(key); return true; }
+    return false;
+  });
+  if (seenMusicKeys.size >= 2) {
+    const totalCost = musicTxs.reduce((s, t) => s + t.amount, 0);
+    insights.push({
+      id: 'music-duplicate',
+      severity: 'medium',
+      emoji: '🎵',
+      title: 'Redundant Music Subscriptions',
+      description: `${seenMusicKeys.size} music services ($${totalCost.toFixed(2)}/mo) — you can only listen to one`,
+      monthlyCost: totalCost,
+      potentialSavings: totalCost - 11,
+      recommendation: `Pick one music service. Cancel the rest and save ~$${(totalCost - 11).toFixed(0)}/mo.`,
+    });
+  }
+
+  // 3. Food delivery spending
+  const deliveryTxs = monthlyExpenses.filter(t => matchesAny(t.description ?? '', FOOD_DELIVERY_KEYWORDS));
+  if (deliveryTxs.length > 0) {
+    const totalDelivery = deliveryTxs.reduce((s, t) => s + t.amount, 0);
+    if (totalDelivery > 150) {
+      insights.push({
+        id: 'food-delivery-high',
+        severity: 'high',
+        emoji: '🛵',
+        title: 'Heavy Food Delivery Spending',
+        description: `${deliveryTxs.length} delivery orders totaling $${totalDelivery.toFixed(2)} this month`,
+        monthlyCost: totalDelivery,
+        potentialSavings: Math.round(totalDelivery * 0.65),
+        recommendation: `Cooking the same meals at home costs ~65% less. That's $${Math.round(totalDelivery * 0.65)} back per month.`,
+      });
+    } else if (deliveryTxs.length >= 4) {
+      insights.push({
+        id: 'food-delivery-frequent',
+        severity: 'medium',
+        emoji: '🛵',
+        title: 'Frequent Food Delivery Orders',
+        description: `${deliveryTxs.length} delivery orders ($${totalDelivery.toFixed(2)}) this month`,
+        monthlyCost: totalDelivery,
+        potentialSavings: Math.round(totalDelivery * 0.5),
+        recommendation: 'Try batch cooking on Sundays. One grocery run replaces 4+ deliveries.',
+      });
+    }
+  }
+
+  // 4. Daily coffee habit
+  const coffeeTxs = monthlyExpenses.filter(t => matchesAny(t.description ?? '', COFFEE_KEYWORDS));
+  if (coffeeTxs.length >= 6) {
+    const totalCoffee = coffeeTxs.reduce((s, t) => s + t.amount, 0);
+    insights.push({
+      id: 'coffee-habit',
+      severity: coffeeTxs.length >= 15 ? 'high' : 'medium',
+      emoji: '☕',
+      title: coffeeTxs.length >= 15 ? 'Daily Coffee Shop Habit' : 'Frequent Coffee Shop Visits',
+      description: `${coffeeTxs.length} coffee shop visits — $${totalCoffee.toFixed(2)} this month`,
+      monthlyCost: totalCoffee,
+      potentialSavings: Math.round(totalCoffee * 0.8),
+      recommendation: `A home espresso machine pays for itself in 2–3 months. Save ~$${Math.round(totalCoffee * 0.8)}/mo brewing at home.`,
+    });
+  }
+
+  // 5. Excessive fast food
+  const fastFoodTxs = monthlyExpenses.filter(t => matchesAny(t.description ?? '', FAST_FOOD_KEYWORDS));
+  if (fastFoodTxs.length > 0) {
+    const totalFastFood = fastFoodTxs.reduce((s, t) => s + t.amount, 0);
+    if (totalFastFood > 200) {
+      insights.push({
+        id: 'fast-food-high',
+        severity: 'high',
+        emoji: '🍔',
+        title: 'High Fast Food Spending',
+        description: `${fastFoodTxs.length} fast food orders totaling $${totalFastFood.toFixed(2)} this month`,
+        monthlyCost: totalFastFood,
+        potentialSavings: Math.round(totalFastFood * 0.6),
+        recommendation: `Meal prepping replaces most fast food runs. Save ~$${Math.round(totalFastFood * 0.6)}/mo.`,
+      });
+    } else if (totalFastFood > 80) {
+      insights.push({
+        id: 'fast-food-moderate',
+        severity: 'medium',
+        emoji: '🍔',
+        title: 'Moderate Fast Food Spending',
+        description: `$${totalFastFood.toFixed(2)} on ${fastFoodTxs.length} fast food visits this month`,
+        monthlyCost: totalFastFood,
+        potentialSavings: Math.round(totalFastFood * 0.5),
+        recommendation: `Swapping half your fast food for home cooking saves ~$${Math.round(totalFastFood * 0.5)}/mo.`,
+      });
+    }
+  }
+
+  // 6. Multiple gym memberships
+  const seenGymKeys = new Set<string>();
+  const gymTxs = monthlyExpenses.filter(t => {
+    const key = detectKeyword(t.description ?? '', GYM_KEYWORDS);
+    if (key) { seenGymKeys.add(key); return true; }
+    return false;
+  });
+  if (seenGymKeys.size >= 2) {
+    const totalGym = gymTxs.reduce((s, t) => s + t.amount, 0);
+    insights.push({
+      id: 'gym-duplicate',
+      severity: 'medium',
+      emoji: '💪',
+      title: 'Multiple Gym Memberships',
+      description: `${seenGymKeys.size} gym/fitness memberships ($${totalGym.toFixed(2)}/mo)`,
+      monthlyCost: totalGym,
+      potentialSavings: Math.round(totalGym / 2),
+      recommendation: `Pick the gym you actually go to and cancel the rest. Save ~$${Math.round(totalGym / 2)}/mo.`,
+    });
+  }
+
+  // 7. Over-budget categories (>20% over limit)
+  if (budgets.length > 0) {
+    const budgetSpending: Record<number, number> = {};
+    for (const t of monthlyExpenses) {
+      if (t.budgetId != null) {
+        budgetSpending[t.budgetId] = (budgetSpending[t.budgetId] ?? 0) + t.amount;
+      }
+    }
+    for (const budget of budgets) {
+      const spent = budgetSpending[budget.id] ?? 0;
+      if (budget.amount > 0 && spent > budget.amount * 1.2) {
+        const overage = spent - budget.amount;
+        const pct = Math.round((spent / budget.amount - 1) * 100);
+        insights.push({
+          id: `overbudget-${budget.id}`,
+          severity: pct >= 50 ? 'high' : 'medium',
+          emoji: '⚠️',
+          title: `Over Budget: ${budget.name}`,
+          description: `Spent $${spent.toFixed(2)} vs $${budget.amount.toFixed(0)} limit (${pct}% over)`,
+          monthlyCost: spent,
+          potentialSavings: Math.round(overage),
+          recommendation: `Try the envelope method — set aside exactly $${budget.amount.toFixed(0)} in cash for ${budget.name}. When it's gone, it's gone.`,
+        });
+      }
+    }
+  }
+
+  // 8. Spending nearly all income (no savings room)
+  if (monthlyIncome > 0) {
+    const expenseRatio = totalMonthlyExpenses / monthlyIncome;
+    if (expenseRatio > 0.95) {
+      insights.push({
+        id: 'no-savings',
+        severity: 'high',
+        emoji: '💸',
+        title: 'Almost No Savings Room',
+        description: `Expenses are ${Math.round(expenseRatio * 100)}% of income — barely anything left over`,
+        monthlyCost: totalMonthlyExpenses,
+        potentialSavings: Math.round(monthlyIncome * 0.2),
+        recommendation: `Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings. Auto-transfer $${Math.round(monthlyIncome * 0.1)} to savings on payday.`,
+      });
+    } else if (expenseRatio > 0.85) {
+      insights.push({
+        id: 'low-savings',
+        severity: 'medium',
+        emoji: '💰',
+        title: 'Low Savings Rate',
+        description: `Saving only ${Math.round(100 - expenseRatio * 100)}% of income — aim for at least 20%`,
+        monthlyCost: totalMonthlyExpenses,
+        potentialSavings: Math.round(monthlyIncome * 0.1),
+        recommendation: `Automate a $${Math.round(monthlyIncome * 0.1)} transfer to savings on payday before you can spend it.`,
+      });
+    }
+  }
+
+  const severityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  return insights.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+};
