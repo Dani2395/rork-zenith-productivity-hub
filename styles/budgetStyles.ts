@@ -125,4 +125,36 @@ export default StyleSheet.create({
   archiveYearLeft: { flex: 1 },
   archiveYearTitle: { fontSize: 14, fontWeight: '700' as const, color: Colors.text },
   archiveYearSub: { fontSize: 11, color: Colors.textDim, marginTop: 2 },
+
+  // Financial Advisor button
+  advisorButton: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(255, 255, 255, 0.04)', borderWidth: 1, borderColor: Colors.border, borderRadius: 12 },
+  advisorButtonActive: { borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)' },
+  advisorBadge: { position: 'absolute' as const, top: 4, right: 4, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.danger, alignItems: 'center' as const, justifyContent: 'center' as const },
+  advisorBadgeText: { fontSize: 9, fontWeight: '700' as const, color: 'white' },
+
+  // Financial Advisor modal
+  advisorModalHeader: { flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  advisorModalTitleRow: { flexDirection: 'row' as const, alignItems: 'center', gap: 8 },
+  advisorModalTitle: { fontSize: 20, fontWeight: '700' as const, color: Colors.text },
+  advisorSummaryRow: { flexDirection: 'row' as const, justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
+  advisorSummaryText: { fontSize: 13, color: Colors.textDim },
+  advisorSavingsText: { fontSize: 13, fontWeight: '700' as const, color: Colors.success },
+  advisorEmptyState: { alignItems: 'center' as const, paddingVertical: 32 },
+  advisorEmptyIcon: { fontSize: 48, marginBottom: 12 },
+  advisorEmptyTitle: { fontSize: 18, fontWeight: '700' as const, color: Colors.text, marginBottom: 8 },
+  advisorEmptyText: { fontSize: 14, color: Colors.textDim, textAlign: 'center' as const },
+
+  // Insight cards
+  insightCard: { backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: 12, padding: 14, marginBottom: 10, borderLeftWidth: 3 },
+  insightHeader: { flexDirection: 'row' as const, alignItems: 'flex-start', marginBottom: 8, gap: 10 },
+  insightEmoji: { fontSize: 24, lineHeight: 28 },
+  insightTitleBlock: { flex: 1, gap: 4 },
+  insightTitle: { fontSize: 14, fontWeight: '700' as const, color: Colors.text },
+  insightBadge: { flexDirection: 'row' as const, alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' as const },
+  insightBadgeText: { fontSize: 9, fontWeight: '700' as const, letterSpacing: 0.5 },
+  insightSavings: { fontSize: 12, fontWeight: '700' as const, color: Colors.success, textAlign: 'right' as const },
+  insightDescription: { fontSize: 13, color: Colors.textDim, marginBottom: 10, lineHeight: 18 },
+  insightRecommendationBox: { backgroundColor: 'rgba(99, 102, 241, 0.08)', borderRadius: 8, padding: 10, borderLeftWidth: 2, borderLeftColor: Colors.primary },
+  insightRecommendationLabel: { fontSize: 10, fontWeight: '700' as const, color: Colors.primary, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  insightRecommendation: { fontSize: 12, color: Colors.text, lineHeight: 18 },
 });
