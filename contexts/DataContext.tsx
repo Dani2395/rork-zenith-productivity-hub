@@ -354,8 +354,8 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
-  const addHabit = useCallback((name: string) => {
-    const newHabit: Habit = { id: uniqueId(), name };
+  const addHabit = useCallback((name: string, icon?: string, image?: string) => {
+    const newHabit: Habit = { id: uniqueId(), name, icon, image };
     setHabits(prev => {
       const updated = [...prev, newHabit];
       saveData('habits', updated);
@@ -363,9 +363,9 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
-  const updateHabit = useCallback((id: number, name: string) => {
+  const updateHabit = useCallback((id: number, updates: Partial<Pick<Habit, 'name' | 'icon' | 'image'>>) => {
     setHabits(prev => {
-      const updated = prev.map(h => h.id === id ? { ...h, name } : h);
+      const updated = prev.map(h => h.id === id ? { ...h, ...updates } : h);
       saveData('habits', updated);
       return updated;
     });
