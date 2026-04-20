@@ -21,6 +21,19 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen
+        name="onboarding"
+        options={{ headerShown: false, gestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="settings"
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.text,
+          title: 'Settings',
+        }}
+      />
       <Stack.Screen 
         name="tasks" 
         options={{ 

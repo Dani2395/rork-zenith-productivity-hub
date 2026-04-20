@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
 import {
   Task,
   TaskList,
@@ -124,6 +124,7 @@ export const [DataProvider, useData] = createContextHook(() => {
   const [noteCategories, setNoteCategories] = useState<Category[]>(DEFAULT_NOTE_CATEGORIES);
   const [taskCategories, setTaskCategories] = useState<Category[]>(DEFAULT_TASK_CATEGORIES);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasOnboarded, setHasOnboarded] = useState(false);
 
   useEffect(() => {
     loadAllData();
@@ -153,6 +154,7 @@ export const [DataProvider, useData] = createContextHook(() => {
         holidaysData,
         noteCategoriesData,
         taskCategoriesData,
+        hasOnboardedData,
       ] = await Promise.all([
         AsyncStorage.getItem('tasks'),
         AsyncStorage.getItem('taskLists'),
@@ -175,6 +177,7 @@ export const [DataProvider, useData] = createContextHook(() => {
         AsyncStorage.getItem('holidays'),
         AsyncStorage.getItem('noteCategories'),
         AsyncStorage.getItem('taskCategories'),
+        AsyncStorage.getItem('hasOnboarded'),
       ]);
 
       if (tasksData) setTasks(JSON.parse(tasksData));
@@ -206,6 +209,7 @@ export const [DataProvider, useData] = createContextHook(() => {
       if (holidaysData) setHolidays(JSON.parse(holidaysData));
       if (noteCategoriesData) setNoteCategories(JSON.parse(noteCategoriesData));
       if (taskCategoriesData) setTaskCategories(JSON.parse(taskCategoriesData));
+      if (hasOnboardedData) setHasOnboarded(JSON.parse(hasOnboardedData));
     } catch (error) {
       console.log('Error loading data:', error);
     } finally {
@@ -836,8 +840,77 @@ export const [DataProvider, useData] = createContextHook(() => {
     });
   }, [saveData]);
 
+  const completeOnboarding = useCallback(async () => {
+    setHasOnboarded(true);
+    await AsyncStorage.setItem('hasOnboarded', JSON.stringify(true));
+  }, []);
+
+  const exportData = useCallback(() => {
+    return JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tasks,
+      taskLists,
+      notes,
+      events,
+      habits,
+      habitCompletions,
+      priorities,
+      moods,
+      workouts,
+      workoutTemplates,
+      books,
+      budgets,
+      transactions,
+      debts,
+      savings,
+      giftPeople,
+      bingoData,
+      bingoPrize,
+      holidays,
+      noteCategories,
+      taskCategories,
+    }, null, 2);
+  }, [tasks, taskLists, notes, events, habits, habitCompletions, priorities, moods, workouts, workoutTemplates, books, budgets, transactions, debts, savings, giftPeople, bingoData, bingoPrize, holidays, noteCategories, taskCategories]);
+
+  const importData = useCallback(async (json: string) => {
+    const data = JSON.parse(json);
+    if (!data.version) throw new Error('Invalid backup file');
+    const saves: Promise<void>[] = [];
+    const set = <T,>(setter: Dispatch<SetStateAction<T>>, key: string, value: T) => {
+      setter(value);
+      saves.push(saveData(key, value));
+    };
+    if (data.tasks) set(setTasks, 'tasks', data.tasks);
+    if (data.taskLists) set(setTaskLists, 'taskLists', data.taskLists);
+    if (data.notes) set(setNotes, 'notes', data.notes);
+    if (data.events) set(setEvents, 'events', data.events);
+    if (data.habits) set(setHabits, 'habits', data.habits);
+    if (data.habitCompletions) set(setHabitCompletions, 'habitCompletions', data.habitCompletions);
+    if (data.priorities) set(setPriorities, 'priorities', data.priorities);
+    if (data.moods) set(setMoods, 'moods', data.moods);
+    if (data.workouts) set(setWorkouts, 'workouts', data.workouts);
+    if (data.workoutTemplates) set(setWorkoutTemplates, 'workoutTemplates', data.workoutTemplates);
+    if (data.books) set(setBooks, 'books', data.books);
+    if (data.budgets) set(setBudgets, 'budgets', data.budgets);
+    if (data.transactions) set(setTransactions, 'transactions', data.transactions);
+    if (data.debts) set(setDebts, 'debts', data.debts);
+    if (data.savings) set(setSavings, 'savings', data.savings);
+    if (data.giftPeople) set(setGiftPeople, 'giftPeople', data.giftPeople);
+    if (data.bingoData) set(setBingoData, 'bingoData', data.bingoData);
+    if (data.bingoPrize) set(setBingoPrize, 'bingoPrize', data.bingoPrize);
+    if (data.holidays) set(setHolidays, 'holidays', data.holidays);
+    if (data.noteCategories) set(setNoteCategories, 'noteCategories', data.noteCategories);
+    if (data.taskCategories) set(setTaskCategories, 'taskCategories', data.taskCategories);
+    await Promise.all(saves);
+  }, [saveData]);
+
   return {
     isLoading,
+    hasOnboarded,
+    completeOnboarding,
+    exportData,
+    importData,
     tasks,
     taskLists,
     notes,
