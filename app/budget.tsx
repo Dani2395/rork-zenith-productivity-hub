@@ -27,7 +27,7 @@ import {
   Calendar,
   Bell,
   Lightbulb,
-  AlertTriangle,
+  TriangleAlert,
   AlertCircle,
   Info,
   X,
@@ -1787,7 +1787,7 @@ export default function BudgetScreen() {
                       insight.severity === 'medium' ? Colors.warning :
                       Colors.textDim;
                     const SeverityIcon =
-                      insight.severity === 'high' ? AlertTriangle :
+                      insight.severity === 'high' ? TriangleAlert :
                       insight.severity === 'medium' ? AlertCircle :
                       Info;
                     return (
