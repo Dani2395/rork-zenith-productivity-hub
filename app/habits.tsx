@@ -12,17 +12,23 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import { Plus, Trash2, Check, Bell, Edit2, ImageIcon } from 'lucide-react-native';
+import { Plus, Trash2, Check, Bell, Edit2, ImageIcon, BarChart2, List } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateHabitsWidget } from '@/widgets/widgetTaskHandler';
 import { scheduleHabitsMorningReminder, cancelHabitsMorningReminder, scheduleHabitsEveningCheckIn, cancelHabitsEveningCheckIn, scheduleHabitsWeeklyDigest } from '@/utils/habitsNotifications';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HEATMAP_WEEKS = 15;
+const HEATMAP_DAYS = HEATMAP_WEEKS * 7;
+const CELL = Math.floor((SCREEN_WIDTH - 48) / HEATMAP_WEEKS) - 2;
 
 const HABIT_EMOJIS = [
   '🏃', '🧘', '💪', '📚', '🥗', '💧', '🛌', '🧹',
@@ -41,6 +47,7 @@ export default function HabitsScreen() {
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
   const [morningReminderEnabled, setMorningReminderEnabled] = useState(false);
   const [eveningCheckInEnabled, setEveningCheckInEnabled] = useState(false);
+  const [activeTab, setActiveTab] = useState<'habits' | 'analytics'>('habits');
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -192,6 +199,77 @@ export default function HabitsScreen() {
     return streak;
   };
 
+  // Analytics helpers
+  const getLongestStreak = (habitId: number) => {
+    let longest = 0;
+    let current = 0;
+    for (let i = HEATMAP_DAYS; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = `${habitId}-${d.toISOString().split('T')[0]}`;
+      if (habitCompletions[key]) { current++; longest = Math.max(longest, current); }
+      else { current = 0; }
+    }
+    return longest;
+  };
+
+  const getDayOfWeekStats = (habitId: number) => {
+    const counts = [0, 0, 0, 0, 0, 0, 0];
+    const totals = [0, 0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < HEATMAP_DAYS; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dow = d.getDay();
+      totals[dow]++;
+      if (habitCompletions[`${habitId}-${d.toISOString().split('T')[0]}`]) counts[dow]++;
+    }
+    return counts.map((c, i) => (totals[i] > 0 ? Math.round((c / totals[i]) * 100) : 0));
+  };
+
+  const getHeatmapData = () => {
+    const cells: { date: string; pct: number }[] = [];
+    for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().split('T')[0];
+      const done = habits.filter(h => habitCompletions[`${h.id}-${ds}`]).length;
+      const pct = habits.length > 0 ? done / habits.length : 0;
+      cells.push({ date: ds, pct });
+    }
+    return cells;
+  };
+
+  const heatmapColor = (pct: number) => {
+    if (pct === 0) return 'rgba(255,255,255,0.06)';
+    if (pct < 0.34) return Colors.primary + '55';
+    if (pct < 0.67) return Colors.primary + 'aa';
+    return Colors.primary;
+  };
+
+  const getTotalCompletions = () => {
+    return Object.values(habitCompletions).filter(Boolean).length;
+  };
+
+  const getThisWeekVsLast = () => {
+    let thisWeek = 0;
+    let lastWeek = 0;
+    const possible = habits.length * 7;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      habits.forEach(h => { if (habitCompletions[`${h.id}-${d.toISOString().split('T')[0]}`]) thisWeek++; });
+    }
+    for (let i = 7; i < 14; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      habits.forEach(h => { if (habitCompletions[`${h.id}-${d.toISOString().split('T')[0]}`]) lastWeek++; });
+    }
+    return {
+      thisWeek: possible > 0 ? Math.round((thisWeek / possible) * 100) : 0,
+      lastWeek: possible > 0 ? Math.round((lastWeek / possible) * 100) : 0,
+    };
+  };
+
+  const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   const previewHasContent = habitIcon || habitImage;
 
   return (
@@ -214,6 +292,139 @@ export default function HabitsScreen() {
         </View>
       </View>
 
+      {/* Tab toggle */}
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'habits' && styles.tabActive]}
+          onPress={() => { setActiveTab('habits'); Haptics.selectionAsync(); }}
+        >
+          <List size={15} color={activeTab === 'habits' ? Colors.primary : Colors.textDim} />
+          <Text style={[styles.tabText, activeTab === 'habits' && styles.tabTextActive]}>Habits</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'analytics' && styles.tabActive]}
+          onPress={() => { setActiveTab('analytics'); Haptics.selectionAsync(); }}
+        >
+          <BarChart2 size={15} color={activeTab === 'analytics' ? Colors.primary : Colors.textDim} />
+          <Text style={[styles.tabText, activeTab === 'analytics' && styles.tabTextActive]}>Analytics</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'analytics' && habits.length > 0 ? (
+        <ScrollView style={styles.habitList} showsVerticalScrollIndicator={false}>
+          {/* Summary stats */}
+          {(() => {
+            const { thisWeek, lastWeek } = getThisWeekVsLast();
+            const trend = thisWeek - lastWeek;
+            const allStreaks = habits.map(h => getStreak(h.id));
+            const bestStreak = Math.max(...allStreaks, 0);
+            const bestHabit = habits[allStreaks.indexOf(bestStreak)];
+            return (
+              <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{getTotalCompletions()}</Text>
+                  <Text style={styles.statLabel}>Total completions</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{bestStreak}🔥</Text>
+                  <Text style={styles.statLabel}>{bestHabit?.name ?? '—'} streak</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={[styles.statValue, { color: trend >= 0 ? Colors.success : Colors.danger }]}>
+                    {trend >= 0 ? '+' : ''}{trend}%
+                  </Text>
+                  <Text style={styles.statLabel}>vs last week</Text>
+                </View>
+              </View>
+            );
+          })()}
+
+          {/* 15-week completion heatmap */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionTitle}>15-Week Heatmap</Text>
+            <Text style={styles.sectionSub}>Each cell = one day, color = % of habits completed</Text>
+            <View style={styles.heatmapGrid}>
+              {getHeatmapData().reduce<{ date: string; pct: number }[][]>((cols, cell, i) => {
+                const col = Math.floor(i / 7);
+                if (!cols[col]) cols[col] = [];
+                cols[col].push(cell);
+                return cols;
+              }, []).map((col, ci) => (
+                <View key={ci} style={styles.heatmapCol}>
+                  {col.map((cell, di) => (
+                    <View
+                      key={di}
+                      style={[styles.heatmapCell, { width: CELL, height: CELL, backgroundColor: heatmapColor(cell.pct) }]}
+                    />
+                  ))}
+                </View>
+              ))}
+            </View>
+            <View style={styles.heatmapLegend}>
+              <Text style={styles.legendLabel}>Less</Text>
+              {[0, 0.2, 0.5, 0.8, 1].map(p => (
+                <View key={p} style={[styles.legendCell, { backgroundColor: heatmapColor(p) }]} />
+              ))}
+              <Text style={styles.legendLabel}>More</Text>
+            </View>
+          </View>
+
+          {/* Day-of-week breakdown */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionTitle}>Best Days of the Week</Text>
+            <Text style={styles.sectionSub}>Average completion rate across all habits</Text>
+            {habits.length > 0 && (() => {
+              const combined = [0, 0, 0, 0, 0, 0, 0];
+              habits.forEach(h => {
+                const stats = getDayOfWeekStats(h.id);
+                stats.forEach((v, i) => { combined[i] += v; });
+              });
+              const avg = combined.map(v => Math.round(v / habits.length));
+              const maxVal = Math.max(...avg, 1);
+              return (
+                <View style={styles.dowGrid}>
+                  {DOW_LABELS.map((label, i) => (
+                    <View key={i} style={styles.dowCol}>
+                      <Text style={styles.dowPct}>{avg[i]}%</Text>
+                      <View style={styles.dowBarBg}>
+                        <View style={[styles.dowBar, { height: `${Math.round((avg[i] / maxVal) * 100)}%`, backgroundColor: avg[i] >= 70 ? Colors.success : avg[i] >= 40 ? Colors.primary : Colors.textDim }]} />
+                      </View>
+                      <Text style={styles.dowLabel}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+          </View>
+
+          {/* Per-habit streaks */}
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionTitle}>Habit Streaks</Text>
+            {habits.map(h => {
+              const current = getStreak(h.id);
+              const longest = getLongestStreak(h.id);
+              const pct = longest > 0 ? current / longest : 0;
+              return (
+                <View key={h.id} style={styles.streakRow}>
+                  <Text style={styles.streakHabitName}>{h.icon || '⭐'} {h.name}</Text>
+                  <View style={styles.streakBars}>
+                    <View style={styles.streakBarBg}>
+                      <View style={[styles.streakBarFill, { width: `${Math.round(pct * 100)}%` }]} />
+                    </View>
+                    <Text style={styles.streakMeta}>{current} now / {longest} best</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      ) : activeTab === 'analytics' && habits.length === 0 ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: Colors.textDim, fontSize: 14 }}>Add habits to see analytics</Text>
+        </View>
+      ) : null}
+
+      {activeTab === 'habits' && (
       <ScrollView style={styles.habitList} showsVerticalScrollIndicator={false}>
         {habits.length === 0 ? (
           <Text style={styles.emptyText}>No habits created yet</Text>
@@ -409,6 +620,8 @@ export default function HabitsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      )}
 
       {/* Widget & Notification Settings Modal */}
       <Modal
@@ -827,5 +1040,173 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: 'white',
+  },
+  // Tab toggle
+  tabRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 9,
+  },
+  tabActive: {
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    borderWidth: 1,
+    borderColor: Colors.primary + '44',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textDim,
+  },
+  tabTextActive: {
+    color: Colors.primary,
+  },
+  // Analytics
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textDim,
+    textAlign: 'center',
+  },
+  sectionBlock: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  sectionSub: {
+    fontSize: 12,
+    color: Colors.textDim,
+    marginBottom: 14,
+  },
+  // Heatmap
+  heatmapGrid: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  heatmapCol: {
+    gap: 2,
+  },
+  heatmapCell: {
+    borderRadius: 3,
+  },
+  heatmapLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
+  },
+  legendLabel: {
+    fontSize: 10,
+    color: Colors.textDim,
+  },
+  legendCell: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+  },
+  // Day of week
+  dowGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 120,
+  },
+  dowCol: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  dowPct: {
+    fontSize: 9,
+    color: Colors.textDim,
+    fontWeight: '600' as const,
+  },
+  dowBarBg: {
+    width: 22,
+    height: 70,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  dowBar: {
+    width: '100%',
+    borderRadius: 4,
+  },
+  dowLabel: {
+    fontSize: 10,
+    color: Colors.textDim,
+  },
+  // Per-habit streaks
+  streakRow: {
+    marginBottom: 14,
+  },
+  streakHabitName: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  streakBars: {
+    gap: 4,
+  },
+  streakBarBg: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  streakBarFill: {
+    height: '100%',
+    backgroundColor: Colors.warning,
+    borderRadius: 4,
+  },
+  streakMeta: {
+    fontSize: 11,
+    color: Colors.textDim,
   },
 });

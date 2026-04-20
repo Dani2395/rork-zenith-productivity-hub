@@ -64,6 +64,7 @@ const NAV_ITEMS = [
   { name: 'Budget', icon: Wallet, route: '/budget' },
   { name: 'Gifts', icon: Gift, route: '/gifts' },
   { name: 'Bingo', icon: Target, route: '/bingo' },
+  { name: 'Settings', icon: Settings, route: '/settings' },
 ];
 
 export default function HomeScreen() {
@@ -99,7 +100,16 @@ export default function HomeScreen() {
     deleteWorkout,
     giftPeople,
     bingoData,
+    hasOnboarded,
+    isLoading,
   } = useData();
+
+  // Redirect to onboarding on first launch
+  useEffect(() => {
+    if (!isLoading && !hasOnboarded) {
+      router.replace('/onboarding');
+    }
+  }, [isLoading, hasOnboarded]);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
