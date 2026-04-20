@@ -26,9 +26,12 @@ export default StyleSheet.create({
   actionButtonText: { fontSize: 14, fontWeight: '600' as const, color: 'white' },
   actionButtonSecondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 6, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1, borderColor: Colors.border, borderRadius: 12 },
   actionButtonTextSecondary: { fontSize: 14, fontWeight: '600' as const, color: Colors.text },
-  uploadRow: { flexDirection: 'row' as const, gap: 10, marginBottom: 20 },
-  uploadButton: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 12, gap: 8, backgroundColor: 'rgba(99, 102, 241, 0.1)', borderWidth: 1, borderColor: Colors.primary, borderRadius: 12 },
-  uploadButtonText: { fontSize: 13, fontWeight: '600' as const, color: Colors.primary },
+  uploadArea: { marginBottom: 20, gap: 8 },
+  uploadButton: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, gap: 8, backgroundColor: 'rgba(99, 102, 241, 0.1)', borderWidth: 1, borderColor: Colors.primary, borderRadius: 12 },
+  uploadButtonText: { fontSize: 14, fontWeight: '600' as const, color: Colors.primary },
+  uploadSecondaryRow: { flexDirection: 'row' as const, gap: 8 },
+  uploadSecondaryButton: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 10, gap: 6, backgroundColor: 'rgba(255, 255, 255, 0.04)', borderWidth: 1, borderColor: Colors.border, borderRadius: 10 },
+  uploadSecondaryText: { fontSize: 12, fontWeight: '600' as const, color: Colors.textDim },
   clearButton: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 12, paddingHorizontal: 16, gap: 6, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)', borderRadius: 12 },
   clearButtonText: { fontSize: 13, fontWeight: '600' as const, color: Colors.danger },
   uploadInstructions: { fontSize: 13, color: Colors.textDim, lineHeight: 20, marginBottom: 20, backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: 12, borderRadius: 8 },
@@ -126,11 +129,8 @@ export default StyleSheet.create({
   archiveYearTitle: { fontSize: 14, fontWeight: '700' as const, color: Colors.text },
   archiveYearSub: { fontSize: 11, color: Colors.textDim, marginTop: 2 },
 
-  // Financial Advisor button
-  advisorButton: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: 'rgba(255, 255, 255, 0.04)', borderWidth: 1, borderColor: Colors.border, borderRadius: 12 },
+  // Financial Advisor button active state (shared with uploadSecondaryButton)
   advisorButtonActive: { borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)' },
-  advisorBadge: { position: 'absolute' as const, top: 4, right: 4, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.danger, alignItems: 'center' as const, justifyContent: 'center' as const },
-  advisorBadgeText: { fontSize: 9, fontWeight: '700' as const, color: 'white' },
 
   // Financial Advisor modal
   advisorModalHeader: { flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },

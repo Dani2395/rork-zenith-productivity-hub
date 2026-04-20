@@ -27,7 +27,7 @@ import {
   Calendar,
   Bell,
   Lightbulb,
-  AlertTriangle,
+  TriangleAlert,
   AlertCircle,
   Info,
   X,
@@ -970,60 +970,60 @@ export default function BudgetScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.uploadRow}>
+        <View style={styles.uploadArea}>
           <TouchableOpacity
             style={styles.uploadButton}
             onPress={handleUploadStatement}
           >
             <Upload size={18} color={Colors.primary} />
-            <Text style={styles.uploadButtonText}>Upload Statement</Text>
+            <Text style={styles.uploadButtonText}>Upload Bank Statement</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.clearButton, { borderColor: Colors.primary, marginRight: 6 }]}
-            onPress={() => setWidgetModalVisible(true)}
-          >
-            <Bell size={16} color={Colors.primary} />
-            <Text style={[styles.clearButtonText, { color: Colors.primary }]}>Widgets</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.advisorButton, expenseInsights.length > 0 && styles.advisorButtonActive]}
-            onPress={() => {
-              const combined = [...transactions];
-              const insights = analyzeExpenses(combined, budgets);
-              setExpenseInsights(insights);
-              setInsightsModalVisible(true);
-            }}
-          >
-            <Lightbulb size={16} color={expenseInsights.length > 0 ? '#f59e0b' : Colors.textDim} />
-            {expenseInsights.length > 0 && (
-              <View style={styles.advisorBadge}>
-                <Text style={styles.advisorBadgeText}>{expenseInsights.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={() => {
-              Alert.alert(
-                'Clear All Data',
-                'This will delete all transactions and reset budget spending to $0. This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Clear All',
-                    style: 'destructive',
-                    onPress: () => {
-                      clearAllTransactions();
-                      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          <View style={styles.uploadSecondaryRow}>
+            <TouchableOpacity
+              style={[styles.uploadSecondaryButton, { borderColor: Colors.primary }]}
+              onPress={() => setWidgetModalVisible(true)}
+            >
+              <Bell size={15} color={Colors.primary} />
+              <Text style={[styles.uploadSecondaryText, { color: Colors.primary }]}>Widgets</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.uploadSecondaryButton, expenseInsights.length > 0 && styles.advisorButtonActive]}
+              onPress={() => {
+                const combined = [...transactions];
+                const insights = analyzeExpenses(combined, budgets);
+                setExpenseInsights(insights);
+                setInsightsModalVisible(true);
+              }}
+            >
+              <Lightbulb size={15} color={expenseInsights.length > 0 ? '#f59e0b' : Colors.textDim} />
+              <Text style={[styles.uploadSecondaryText, expenseInsights.length > 0 && { color: '#f59e0b' }]}>
+                {expenseInsights.length > 0 ? `Advisor (${expenseInsights.length})` : 'Advisor'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.uploadSecondaryButton, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+              onPress={() => {
+                Alert.alert(
+                  'Clear All Data',
+                  'This will delete all transactions and reset budget spending to $0. This cannot be undone.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Clear All',
+                      style: 'destructive',
+                      onPress: () => {
+                        clearAllTransactions();
+                        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      },
                     },
-                  },
-                ]
-              );
-            }}
-          >
-            <RotateCcw size={16} color={Colors.danger} />
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
+                  ]
+                );
+              }}
+            >
+              <RotateCcw size={15} color={Colors.danger} />
+              <Text style={[styles.uploadSecondaryText, { color: Colors.danger }]}>Clear</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -1787,7 +1787,7 @@ export default function BudgetScreen() {
                       insight.severity === 'medium' ? Colors.warning :
                       Colors.textDim;
                     const SeverityIcon =
-                      insight.severity === 'high' ? AlertTriangle :
+                      insight.severity === 'high' ? TriangleAlert :
                       insight.severity === 'medium' ? AlertCircle :
                       Info;
                     return (
