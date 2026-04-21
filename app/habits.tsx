@@ -540,6 +540,7 @@ export default function HabitsScreen() {
           })
         )}
       </ScrollView>
+      )}
 
       {/* Add / Edit Habit Modal */}
       <Modal
@@ -620,8 +621,6 @@ export default function HabitsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      )}
 
       {/* Widget & Notification Settings Modal */}
       <Modal
