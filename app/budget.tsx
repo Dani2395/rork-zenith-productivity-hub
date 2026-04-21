@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Plus,
   TrendingUp,
@@ -31,6 +32,8 @@ import {
   AlertCircle,
   Info,
   X,
+  CheckCircle,
+  DollarSign,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import styles from '@/styles/budgetStyles';
@@ -123,6 +126,19 @@ export default function BudgetScreen() {
     return new Set([`${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`]);
   });
   const [expandedArchiveYears, setExpandedArchiveYears] = useState<Set<number>>(new Set());
+  const [monthlyIncomeGoal, setMonthlyIncomeGoal] = useState<string>('');
+  const [incomeGoalEditing, setIncomeGoalEditing] = useState(false);
+  const [incomeGoalDraft, setIncomeGoalDraft] = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem('monthlyIncomeGoal').then(v => { if (v) setMonthlyIncomeGoal(v); });
+  }, []);
+
+  const saveIncomeGoal = async (value: string) => {
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    setMonthlyIncomeGoal(cleaned);
+    await AsyncStorage.setItem('monthlyIncomeGoal', cleaned);
+  };
 
   const MONTH_NAMES = useMemo(() => [
     'January','February','March','April','May','June',
@@ -926,6 +942,116 @@ export default function BudgetScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Zero-Based Budget Assignment Panel */}
+        {(() => {
+          const goal = parseFloat(monthlyIncomeGoal) || 0;
+          const totalBudgeted = budgets.reduce((s, b) => s + b.amount, 0);
+          const unassigned = goal - totalBudgeted;
+          const pct = goal > 0 ? Math.min(1, totalBudgeted / goal) : 0;
+          const isFullyAssigned = goal > 0 && Math.abs(unassigned) < 0.01;
+          const isOverAssigned = unassigned < -0.01;
+          const barColor = isOverAssigned ? Colors.danger : isFullyAssigned ? Colors.success : Colors.primary;
+
+          return (
+            <View style={zbStyles.card}>
+              <View style={zbStyles.cardHeader}>
+                <View style={zbStyles.cardHeaderLeft}>
+                  <DollarSign size={16} color={Colors.primary} />
+                  <Text style={zbStyles.cardTitle}>Assign Every Dollar</Text>
+                </View>
+                {isFullyAssigned && <CheckCircle size={16} color={Colors.success} />}
+              </View>
+
+              <Text style={zbStyles.cardSubtitle}>
+                Set your monthly income, then assign every dollar to a budget category. When nothing is left unassigned, your budget is complete.
+              </Text>
+
+              {/* Income goal row */}
+              <View style={zbStyles.incomeRow}>
+                <Text style={zbStyles.incomeLabel}>Monthly income goal</Text>
+                {incomeGoalEditing ? (
+                  <View style={zbStyles.incomeInputRow}>
+                    <Text style={zbStyles.currencyPrefix}>$</Text>
+                    <TextInput
+                      style={zbStyles.incomeInput}
+                      value={incomeGoalDraft}
+                      onChangeText={setIncomeGoalDraft}
+                      keyboardType="decimal-pad"
+                      autoFocus
+                      selectTextOnFocus
+                      placeholder="0"
+                      placeholderTextColor={Colors.textDim}
+                    />
+                    <TouchableOpacity
+                      style={zbStyles.incomeConfirm}
+                      onPress={() => {
+                        saveIncomeGoal(incomeGoalDraft);
+                        setIncomeGoalEditing(false);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                    >
+                      <Text style={zbStyles.incomeConfirmText}>Set</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={zbStyles.incomeValueBtn}
+                    onPress={() => { setIncomeGoalDraft(monthlyIncomeGoal); setIncomeGoalEditing(true); }}
+                  >
+                    <Text style={[zbStyles.incomeValue, !monthlyIncomeGoal && { color: Colors.textDim }]}>
+                      {monthlyIncomeGoal ? `$${parseFloat(monthlyIncomeGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Tap to set'}
+                    </Text>
+                    <Edit2 size={12} color={Colors.textDim} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {goal > 0 && (
+                <>
+                  {/* Assignment bar */}
+                  <View style={zbStyles.barBg}>
+                    <View style={[zbStyles.barFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: barColor }]} />
+                  </View>
+
+                  {/* Stats row */}
+                  <View style={zbStyles.statsRow}>
+                    <View style={zbStyles.statItem}>
+                      <Text style={[zbStyles.statValue, { color: Colors.primary }]}>${totalBudgeted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                      <Text style={zbStyles.statLabel}>Budgeted</Text>
+                    </View>
+                    <View style={zbStyles.statDivider} />
+                    <View style={zbStyles.statItem}>
+                      <Text style={[zbStyles.statValue, { color: barColor }]}>
+                        {isOverAssigned ? '-' : ''}${Math.abs(unassigned).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                      <Text style={zbStyles.statLabel}>{isOverAssigned ? 'Over budget' : isFullyAssigned ? 'Fully assigned!' : 'Left to assign'}</Text>
+                    </View>
+                    <View style={zbStyles.statDivider} />
+                    <View style={zbStyles.statItem}>
+                      <Text style={[zbStyles.statValue, { color: Colors.text }]}>{Math.round(pct * 100)}%</Text>
+                      <Text style={zbStyles.statLabel}>Assigned</Text>
+                    </View>
+                  </View>
+
+                  {isOverAssigned && (
+                    <View style={zbStyles.warningBanner}>
+                      <TriangleAlert size={14} color={Colors.danger} />
+                      <Text style={zbStyles.warningText}>You've budgeted ${Math.abs(unassigned).toFixed(2)} more than your income goal. Reduce a category or raise your income.</Text>
+                    </View>
+                  )}
+
+                  {isFullyAssigned && (
+                    <View style={zbStyles.successBanner}>
+                      <CheckCircle size={14} color={Colors.success} />
+                      <Text style={zbStyles.successText}>Every dollar is assigned. Your zero-based budget is complete.</Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          );
+        })()}
 
         <View style={styles.metricsCard}>
           <Text style={styles.sectionTitle}>📈 Monthly Metrics</Text>
@@ -2217,3 +2343,160 @@ export default function BudgetScreen() {
   );
 }
 
+import { StyleSheet } from 'react-native';
+
+const zbStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: 'rgba(99,102,241,0.06)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.25)',
+    padding: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: Colors.textDim,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  incomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  incomeLabel: {
+    fontSize: 13,
+    color: Colors.textDim,
+    fontWeight: '500' as const,
+  },
+  incomeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  currencyPrefix: {
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '600' as const,
+  },
+  incomeInput: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700' as const,
+    minWidth: 90,
+    textAlign: 'right',
+  },
+  incomeConfirm: {
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  incomeConfirmText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  incomeValueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  incomeValue: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  barBg: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: Colors.border,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textDim,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.25)',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.danger,
+    lineHeight: 17,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: 'rgba(16,185,129,0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.25)',
+  },
+  successText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.success,
+    lineHeight: 17,
+  },
+});
