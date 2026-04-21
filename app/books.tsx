@@ -16,7 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { Plus, Star, Pencil, Trash2, BookOpen, Quote, Image as ImageIcon } from 'lucide-react-native';
+import { Plus, Star, Pencil, Trash2, BookOpen, Quote, Image as ImageIcon, Share2 } from 'lucide-react-native';
+import { Share } from 'react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import type { Book } from '@/types';
@@ -373,10 +374,32 @@ export default function BooksScreen() {
     );
   };
 
+  const shareBookList = async () => {
+    const statusLabel = { reading: '📖 Reading', finished: '✅ Finished', want: '📋 Want to Read' };
+    const groups: Record<string, Book[]> = { reading: [], finished: [], want: [] };
+    books.forEach(b => groups[b.status].push(b));
+    const lines: string[] = ['📚 My Reading List'];
+    (['reading', 'finished', 'want'] as const).forEach(status => {
+      if (groups[status].length === 0) return;
+      lines.push('', `${statusLabel[status]}:`);
+      groups[status].forEach(b => {
+        const rating = b.rating > 0 ? ` ${'★'.repeat(b.rating)}` : '';
+        lines.push(`• ${b.title} — ${b.author}${rating}`);
+      });
+    });
+    await Share.share({ message: lines.join('\n'), title: 'My Reading List' });
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>📚 My Books</Text>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        {books.length > 0 && (
+          <TouchableOpacity style={{ padding: 8 }} onPress={shareBookList}>
+            <Share2 size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => {
@@ -392,6 +415,7 @@ export default function BooksScreen() {
             <Text style={styles.addButtonText}>Add Book</Text>
           </LinearGradient>
         </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.goalCard}>

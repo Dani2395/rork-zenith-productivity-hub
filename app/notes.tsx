@@ -16,7 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2, Bell } from 'lucide-react-native';
+import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2, Bell, Eye, EyeOff } from 'lucide-react-native';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
@@ -80,6 +81,7 @@ export default function NotesScreen() {
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
   const [pinnedReminderEnabled, setPinnedReminderEnabled] = useState(false);
   const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
+  const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
 
   const CATEGORIES = [
     { id: 0, value: '', label: 'All', type: 'note' as const },
@@ -592,14 +594,34 @@ export default function NotesScreen() {
                 onChangeText={setNoteName}
               />
 
-              <TextInput
-                style={[styles.modalInput, styles.modalTextarea]}
-                placeholder="Note content *"
-                placeholderTextColor={Colors.textDim}
-                value={noteText}
-                onChangeText={setNoteText}
-                multiline
-              />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 12, color: Colors.textDim, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Content {showMarkdownPreview ? '(preview)' : '(supports **bold**, *italic*, # headers)'}
+                </Text>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: showMarkdownPreview ? Colors.primary + '22' : 'rgba(255,255,255,0.06)', borderRadius: 8, borderWidth: 1, borderColor: showMarkdownPreview ? Colors.primary + '44' : Colors.border }}
+                  onPress={() => setShowMarkdownPreview(v => !v)}
+                >
+                  {showMarkdownPreview ? <EyeOff size={13} color={Colors.primary} /> : <Eye size={13} color={Colors.textDim} />}
+                  <Text style={{ fontSize: 12, color: showMarkdownPreview ? Colors.primary : Colors.textDim, fontWeight: '600' }}>
+                    {showMarkdownPreview ? 'Edit' : 'Preview'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {showMarkdownPreview ? (
+                <View style={[styles.modalInput, styles.modalTextarea, { paddingTop: 12 }]}>
+                  {noteText ? <MarkdownRenderer content={noteText} /> : <Text style={{ color: Colors.textDim, fontSize: 14 }}>Nothing to preview yet…</Text>}
+                </View>
+              ) : (
+                <TextInput
+                  style={[styles.modalInput, styles.modalTextarea]}
+                  placeholder="Note content — supports markdown formatting"
+                  placeholderTextColor={Colors.textDim}
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  multiline
+                />
+              )}
 
               <DateTimePicker
                 label="Schedule (Optional)"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   Alert,
   Share,
   Platform,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,13 +21,28 @@ import {
   Upload,
   Trash2,
   ChevronRight,
-  Database,
   Shield,
   Info,
   CheckCircle,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  Copy,
+  X,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
+import {
+  loadSyncCreds,
+  saveSyncCreds,
+  clearSyncCreds,
+  pushToCloud,
+  pullFromCloud,
+  getLastSyncTime,
+  getDeviceIdPublic,
+  SETUP_SQL,
+  SyncCreds,
+} from '@/utils/cloudSync';
 
 export default function SettingsScreen() {
   const {
@@ -46,6 +63,91 @@ export default function SettingsScreen() {
   } = useData();
 
   const [importSuccess, setImportSuccess] = useState(false);
+
+  // Cloud sync state
+  const [syncCreds, setSyncCreds] = useState<SyncCreds | null>(null);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [urlDraft, setUrlDraft] = useState('');
+  const [keyDraft, setKeyDraft] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState('');
+  const [showSetupSQL, setShowSetupSQL] = useState(false);
+
+  useEffect(() => {
+    loadSyncCreds().then(c => { if (c) setSyncCreds(c); });
+    getLastSyncTime().then(t => setLastSynced(t));
+    getDeviceIdPublic().then(id => setDeviceId(id));
+  }, []);
+
+  const handleSaveSyncCreds = async () => {
+    if (!urlDraft.trim() || !keyDraft.trim()) return;
+    const creds = { url: urlDraft.trim(), anonKey: keyDraft.trim() };
+    await saveSyncCreds(creds);
+    setSyncCreds(creds);
+    setSyncModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handlePush = async () => {
+    try {
+      setSyncing(true);
+      const json = exportData();
+      await pushToCloud(json);
+      const t = await getLastSyncTime();
+      setLastSynced(t);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Synced', 'Your data has been backed up to the cloud.');
+    } catch (e: any) {
+      Alert.alert('Sync failed', e.message ?? 'Could not reach your Supabase project. Check your URL and key.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handlePull = async () => {
+    Alert.alert(
+      'Restore from Cloud',
+      'This will overwrite your local data with the version saved in the cloud. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setSyncing(true);
+              const json = await pullFromCloud();
+              if (!json) { Alert.alert('Nothing found', 'No cloud backup found for this device.'); return; }
+              await importData(json);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Restored', 'Your data has been restored from the cloud.');
+            } catch (e: any) {
+              Alert.alert('Restore failed', e.message ?? 'Could not reach your Supabase project.');
+            } finally {
+              setSyncing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDisconnect = async () => {
+    Alert.alert('Disconnect', 'Remove your Supabase credentials from this device? Your cloud data will remain safe.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disconnect',
+        style: 'destructive',
+        onPress: async () => { await clearSyncCreds(); setSyncCreds(null); setLastSynced(null); },
+      },
+    ]);
+  };
+
+  const formatSyncTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
 
   const totalHabitCompletions = Object.values(habitCompletions).filter(Boolean).length;
   const totalGifts = giftPeople.reduce((s, p) => s + p.gifts.length, 0);
@@ -171,8 +273,93 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView showsVerticalScrollIndicator={false}>
 
+        {/* Cloud sync */}
+        <Text style={styles.groupLabel}>CLOUD SYNC</Text>
+        <View style={styles.group}>
+          {syncCreds ? (
+            <>
+              <View style={styles.row}>
+                <View style={[styles.rowIcon, { backgroundColor: Colors.success + '22' }]}>
+                  <Cloud size={18} color={Colors.success} />
+                </View>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowTitle}>Connected to Supabase</Text>
+                  <Text style={styles.rowSub}>
+                    {lastSynced ? `Last synced ${formatSyncTime(lastSynced)}` : 'Never synced yet'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.divider} />
+              <TouchableOpacity style={styles.row} onPress={handlePush} disabled={syncing}>
+                <View style={[styles.rowIcon, { backgroundColor: Colors.primary + '22' }]}>
+                  <Upload size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowTitle}>{syncing ? 'Syncing…' : 'Backup to Cloud'}</Text>
+                  <Text style={styles.rowSub}>Push your current data to Supabase</Text>
+                </View>
+                <ChevronRight size={16} color={Colors.textDim} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity style={styles.row} onPress={handlePull} disabled={syncing}>
+                <View style={[styles.rowIcon, { backgroundColor: Colors.warning + '22' }]}>
+                  <Download size={18} color={Colors.warning} />
+                </View>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowTitle}>Restore from Cloud</Text>
+                  <Text style={styles.rowSub}>Pull your last backup from Supabase</Text>
+                </View>
+                <ChevronRight size={16} color={Colors.textDim} />
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity style={styles.row} onPress={handleDisconnect}>
+                <View style={[styles.rowIcon, { backgroundColor: Colors.danger + '22' }]}>
+                  <CloudOff size={18} color={Colors.danger} />
+                </View>
+                <View style={styles.rowContent}>
+                  <Text style={[styles.rowTitle, { color: Colors.danger }]}>Disconnect</Text>
+                  <Text style={styles.rowSub}>Remove credentials from this device</Text>
+                </View>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity style={styles.row} onPress={() => { setUrlDraft(''); setKeyDraft(''); setSyncModalVisible(true); }}>
+              <View style={[styles.rowIcon, { backgroundColor: Colors.primary + '22' }]}>
+                <Cloud size={18} color={Colors.primary} />
+              </View>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTitle}>Connect Supabase</Text>
+                <Text style={styles.rowSub}>Sync your data across devices using your free Supabase project</Text>
+              </View>
+              <ChevronRight size={16} color={Colors.textDim} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Setup SQL hint */}
+        <TouchableOpacity
+          style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 4 }}
+          onPress={() => setShowSetupSQL(v => !v)}
+        >
+          <Text style={{ fontSize: 12, color: Colors.primary }}>
+            {showSetupSQL ? 'Hide' : 'Show'} Supabase setup instructions
+          </Text>
+        </TouchableOpacity>
+        {showSetupSQL && (
+          <View style={styles.sqlBox}>
+            <Text style={styles.sqlTitle}>1. Create a free project at supabase.com</Text>
+            <Text style={styles.sqlTitle}>2. Go to SQL Editor and run:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <Text style={styles.sqlCode}>{SETUP_SQL}</Text>
+            </ScrollView>
+            <Text style={styles.sqlTitle}>3. Copy your project URL + anon key from Project Settings → API</Text>
+            <Text style={[styles.sqlTitle, { marginTop: 6 }]}>Your Device ID (use same ID on other devices to share data):</Text>
+            <Text style={styles.sqlCode} selectable>{deviceId}</Text>
+          </View>
+        )}
+
         {/* Data backup */}
-        <Text style={styles.groupLabel}>DATA BACKUP</Text>
+        <Text style={styles.groupLabel}>LOCAL BACKUP</Text>
         <View style={styles.group}>
           <TouchableOpacity style={styles.row} onPress={handleExport}>
             <View style={[styles.rowIcon, { backgroundColor: Colors.primary + '22' }]}>
@@ -265,6 +452,51 @@ export default function SettingsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Supabase credentials modal */}
+      <Modal visible={syncModalVisible} transparent animationType="slide" onRequestClose={() => setSyncModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.modalTitle}>Connect Supabase</Text>
+              <TouchableOpacity onPress={() => setSyncModalVisible(false)}>
+                <X size={20} color={Colors.textDim} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSub}>Enter your Supabase project URL and anon/public key. Tap "Show setup instructions" on the settings page if you haven't created the table yet.</Text>
+            <Text style={styles.inputLabel}>Project URL</Text>
+            <TextInput
+              style={styles.input}
+              value={urlDraft}
+              onChangeText={setUrlDraft}
+              placeholder="https://xxxx.supabase.co"
+              placeholderTextColor={Colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={styles.inputLabel}>Anon / Public Key</Text>
+            <TextInput
+              style={styles.input}
+              value={keyDraft}
+              onChangeText={setKeyDraft}
+              placeholder="eyJhbGci..."
+              placeholderTextColor={Colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+            <TouchableOpacity
+              style={[styles.connectBtn, (!urlDraft.trim() || !keyDraft.trim()) && { opacity: 0.4 }]}
+              onPress={handleSaveSyncCreds}
+              disabled={!urlDraft.trim() || !keyDraft.trim()}
+            >
+              <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.connectBtnGradient}>
+                <Text style={styles.connectBtnText}>Save & Connect</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -369,5 +601,80 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textDim,
     textAlign: 'center',
+  },
+  sqlBox: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    gap: 8,
+  },
+  sqlTitle: {
+    fontSize: 12,
+    color: Colors.textDim,
+    lineHeight: 18,
+  },
+  sqlCode: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  modalSub: {
+    fontSize: 13,
+    color: Colors.textDim,
+    lineHeight: 19,
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.textDim,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 12,
+    color: Colors.text,
+    fontSize: 14,
+    marginBottom: 14,
+  },
+  connectBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  connectBtnGradient: {
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  connectBtnText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: 'white',
   },
 });

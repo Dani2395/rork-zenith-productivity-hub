@@ -18,7 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Plus, Trash2, ChevronRight, Check, ExternalLink, Lock, Unlock, Image as ImageIcon, Bell } from 'lucide-react-native';
+import { Plus, Trash2, ChevronRight, Check, ExternalLink, Lock, Unlock, Image as ImageIcon, Bell, Share2 } from 'lucide-react-native';
+import { Share } from 'react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateGiftsWidget } from '@/widgets/widgetTaskHandler';
@@ -266,6 +267,24 @@ export default function GiftsScreen() {
     }
   };
 
+  const shareGiftList = async (personId: number) => {
+    const person = giftPeople.find(p => p.id === personId);
+    if (!person) return;
+    const lines = [`🎁 Gift ideas for ${person.name}:`];
+    if (person.gifts.length === 0) {
+      lines.push('No gift ideas yet.');
+    } else {
+      person.gifts.forEach(g => {
+        const status = g.purchased ? '✅' : '☐';
+        const price = g.price ? ` — $${g.price}` : '';
+        const event = g.event ? ` (${g.event})` : '';
+        lines.push(`${status} ${g.name}${price}${event}`);
+        if (g.notes) lines.push(`   Note: ${g.notes}`);
+      });
+    }
+    await Share.share({ message: lines.join('\n'), title: `Gift list for ${person.name}` });
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
@@ -342,6 +361,12 @@ export default function GiftsScreen() {
                     </View>
                   </View>
                   <View style={styles.personActions}>
+                    <TouchableOpacity
+                      style={styles.addGiftButton}
+                      onPress={(e) => { e.stopPropagation(); shareGiftList(person.id); }}
+                    >
+                      <Share2 size={16} color={Colors.primary} />
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.addGiftButton}
                       onPress={(e) => {
