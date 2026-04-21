@@ -27,8 +27,8 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
-  Copy,
   X,
+  AlertCircle,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
@@ -48,6 +48,8 @@ export default function SettingsScreen() {
   const {
     exportData,
     importData,
+    syncStatus,
+    lastSyncedAt,
     tasks,
     notes,
     habits,
@@ -283,11 +285,17 @@ export default function SettingsScreen() {
                   <Cloud size={18} color={Colors.success} />
                 </View>
                 <View style={styles.rowContent}>
-                  <Text style={styles.rowTitle}>Connected to Supabase</Text>
+                  <Text style={styles.rowTitle}>Connected · Auto-sync on</Text>
                   <Text style={styles.rowSub}>
-                    {lastSynced ? `Last synced ${formatSyncTime(lastSynced)}` : 'Never synced yet'}
+                    {syncStatus === 'syncing' && '⏳ Syncing…'}
+                    {syncStatus === 'synced' && `✅ Synced ${lastSyncedAt ? formatSyncTime(lastSyncedAt) : 'just now'}`}
+                    {syncStatus === 'error' && '⚠️ Last sync failed — will retry on next change'}
+                    {syncStatus === 'idle' && (lastSyncedAt ? `Last synced ${formatSyncTime(lastSyncedAt)}` : 'Waiting for first change…')}
                   </Text>
                 </View>
+                {syncStatus === 'syncing' && <RefreshCw size={16} color={Colors.primary} />}
+                {syncStatus === 'synced' && <CheckCircle size={16} color={Colors.success} />}
+                {syncStatus === 'error' && <AlertCircle size={16} color={Colors.danger} />}
               </View>
               <View style={styles.divider} />
               <TouchableOpacity style={styles.row} onPress={handlePush} disabled={syncing}>

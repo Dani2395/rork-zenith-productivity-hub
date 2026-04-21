@@ -75,6 +75,11 @@ export const getLastSyncTime = async (): Promise<string | null> => {
   return AsyncStorage.getItem(LAST_SYNC_KEY);
 };
 
+export const hasSyncCreds = async (): Promise<boolean> => {
+  const creds = await loadSyncCreds();
+  return !!(creds?.url && creds?.anonKey);
+};
+
 export const getDeviceIdPublic = getDeviceId;
 
 // SQL to run in Supabase SQL editor to create the required table:

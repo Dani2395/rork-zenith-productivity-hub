@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
-import React, { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Dispatch, SetStateAction } from 'react';
+import { hasSyncCreds, pushToCloud } from '@/utils/cloudSync';
 import {
   Task,
   TaskList,
@@ -125,10 +126,46 @@ export const [DataProvider, useData] = createContextHook(() => {
   const [taskCategories, setTaskCategories] = useState<Category[]>(DEFAULT_TASK_CATEGORIES);
   const [isLoading, setIsLoading] = useState(true);
   const [hasOnboarded, setHasOnboarded] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const autoSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadAllData();
   }, []);
+
+  // Auto-sync: debounce 5s after any data change, skip during initial load
+  useEffect(() => {
+    if (isLoading) return;
+    if (autoSyncTimer.current) clearTimeout(autoSyncTimer.current);
+    autoSyncTimer.current = setTimeout(async () => {
+      const enabled = await hasSyncCreds();
+      if (!enabled) return;
+      setSyncStatus('syncing');
+      try {
+        const json = JSON.stringify({
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          tasks, taskLists, notes, events, habits, habitCompletions,
+          priorities, moods, workouts, workoutTemplates, books,
+          budgets, transactions, debts, savings, giftPeople,
+          bingoData, bingoPrize, holidays, noteCategories, taskCategories,
+        });
+        await pushToCloud(json);
+        const now = new Date().toISOString();
+        setLastSyncedAt(now);
+        setSyncStatus('synced');
+      } catch {
+        setSyncStatus('error');
+      }
+    }, 5000);
+    return () => { if (autoSyncTimer.current) clearTimeout(autoSyncTimer.current); };
+  }, [
+    isLoading, tasks, taskLists, notes, events, habits, habitCompletions,
+    priorities, moods, workouts, workoutTemplates, books,
+    budgets, transactions, debts, savings, giftPeople,
+    bingoData, bingoPrize, holidays, noteCategories, taskCategories,
+  ]);
 
   const loadAllData = async () => {
     try {
@@ -908,6 +945,8 @@ export const [DataProvider, useData] = createContextHook(() => {
   return {
     isLoading,
     hasOnboarded,
+    syncStatus,
+    lastSyncedAt,
     completeOnboarding,
     exportData,
     importData,
