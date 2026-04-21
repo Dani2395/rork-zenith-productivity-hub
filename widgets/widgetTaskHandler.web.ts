@@ -1,0 +1,30 @@
+// Web stub — Android widgets are not available in browsers.
+export const WIDGET_DATA_KEY            = 'budgetWidgetData';
+export const TASKS_WIDGET_DATA_KEY      = 'tasksWidgetData';
+export const HABITS_WIDGET_DATA_KEY     = 'habitsWidgetData';
+export const CALENDAR_WIDGET_DATA_KEY   = 'calendarWidgetData';
+export const NOTES_WIDGET_DATA_KEY      = 'notesWidgetData';
+export const PRIORITIES_WIDGET_DATA_KEY = 'prioritiesWidgetData';
+export const GIFTS_WIDGET_DATA_KEY      = 'giftsWidgetData';
+export const BINGO_WIDGET_DATA_KEY      = 'bingoWidgetData';
+export const BRAIN_DUMP_WIDGET_DATA_KEY = 'brainDumpWidgetData';
+
+export async function saveWidgetData()           {}
+export async function saveTasksWidgetData()      {}
+export async function saveHabitsWidgetData()     {}
+export async function saveCalendarWidgetData()   {}
+export async function saveNotesWidgetData()      {}
+export async function savePrioritiesWidgetData() {}
+export async function saveGiftsWidgetData()      {}
+export async function saveBingoWidgetData()      {}
+export async function saveBrainDumpWidgetData()  {}
+
+export async function updateBudgetWidget()       {}
+export async function updateTasksWidget()        {}
+export async function updateHabitsWidget()       {}
+export async function updateCalendarWidget()     {}
+export async function updateNotesWidget()        {}
+export async function updatePrioritiesWidget()   {}
+export async function updateGiftsWidget()        {}
+export async function updateBingoWidget()        {}
+export async function updateBrainDumpWidget()    {}
