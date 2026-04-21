@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Share,
   Platform,
   TextInput,
   Modal,
@@ -16,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import {
   Download,
   Upload,
@@ -178,14 +178,32 @@ export default function SettingsScreen() {
       const filename = `zenith-backup-${new Date().toISOString().split('T')[0]}.json`;
 
       if (Platform.OS === 'web') {
-        await Share.share({ message: json, title: filename });
+        // Web: trigger a download via a temporary anchor element
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
         return;
       }
 
-      const path = `${FileSystem.Paths.cache.uri}${filename}`;
+      // iOS + Android: write to cache then share via expo-sharing
+      // expo-sharing handles the content URI conversion Android requires
       const file = new FileSystem.File(FileSystem.Paths.cache, filename);
       await file.write(json);
-      await Share.share({ url: path, title: filename, message: 'Zenith data backup' });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert('Sharing not available', 'Your device does not support file sharing.');
+        return;
+      }
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'application/json',
+        dialogTitle: 'Save Zenith Backup',
+        UTI: 'public.json',
+      });
     } catch (err) {
       Alert.alert('Export failed', 'Could not export your data. Please try again.');
     }
