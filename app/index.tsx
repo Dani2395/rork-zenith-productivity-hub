@@ -141,6 +141,7 @@ export default function HomeScreen() {
     icon: string;
   } | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState(false);
   const weatherAnimValue = useRef(new Animated.Value(0)).current;
   const [quickAccessVisible, setQuickAccessVisible] = useState(false);
   const [scheduleItemModalVisible, setScheduleItemModalVisible] = useState(false);
@@ -187,72 +188,64 @@ export default function HomeScreen() {
       return '☀️';
     };
 
-    const getWeatherData = async (lat: number, lon: number) => {
-      try {
-        const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph`
-        );
-        const data = await response.json();
-        
-        const weatherCode = data.current.weather_code;
-        const condition = getWeatherCondition(weatherCode);
-        const icon = getWeatherIcon(weatherCode);
-        
-        const geoResponse = await fetch(
-          `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}`
-        );
-        const geoData = await geoResponse.json();
-        const locationName = geoData.results?.[0]?.name || 'Unknown';
-        
-        setWeather({
-          temp: Math.round(data.current.temperature_2m),
-          condition,
-          humidity: data.current.relative_humidity_2m,
-          windSpeed: Math.round(data.current.wind_speed_10m),
-          location: locationName,
-          icon,
-        });
-      } catch (error) {
-        console.log('Error fetching weather data:', error);
-      } finally {
-        setWeatherLoading(false);
-      }
+    const fetchWithTimeout = (url: string, ms = 8000) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), ms);
+      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
     };
 
-    if (Platform.OS === 'web') {
-      try {
-        setWeatherLoading(true);
-        if ('geolocation' in navigator) {
+    const getWeatherData = async (lat: number, lon: number) => {
+      const weatherRes = await fetchWithTimeout(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph`
+      );
+      if (!weatherRes.ok) throw new Error(`Weather API ${weatherRes.status}`);
+      const data = await weatherRes.json();
+      if (!data?.current?.weather_code == null) throw new Error('Unexpected weather response');
+
+      const weatherCode = data.current.weather_code;
+      const geoRes = await fetchWithTimeout(
+        `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}`
+      );
+      const geoData = geoRes.ok ? await geoRes.json() : null;
+      const locationName = geoData?.results?.[0]?.name || 'Your Location';
+
+      setWeather({
+        temp: Math.round(data.current.temperature_2m),
+        condition: getWeatherCondition(weatherCode),
+        humidity: data.current.relative_humidity_2m,
+        windSpeed: Math.round(data.current.wind_speed_10m),
+        location: locationName,
+        icon: getWeatherIcon(weatherCode),
+      });
+      setWeatherError(false);
+    };
+
+    setWeatherLoading(true);
+    setWeatherError(false);
+
+    try {
+      if (Platform.OS === 'web') {
+        if (!('geolocation' in navigator)) throw new Error('Geolocation unavailable');
+        await new Promise<void>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const { latitude, longitude } = position.coords;
-              await getWeatherData(latitude, longitude);
+            async ({ coords }) => {
+              try { await getWeatherData(coords.latitude, coords.longitude); resolve(); }
+              catch (e) { reject(e); }
             },
-            (error) => {
-              console.log('Error getting location:', error);
-              setWeatherLoading(false);
-            }
+            (e) => reject(e),
+            { timeout: 8000 }
           );
-        }
-      } catch (error) {
-        console.log('Error fetching weather:', error);
-        setWeatherLoading(false);
-      }
-    } else {
-      try {
-        setWeatherLoading(true);
+        });
+      } else {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('Permission denied');
-          setWeatherLoading(false);
-          return;
-        }
-        const location = await Location.getCurrentPositionAsync({});
-        await getWeatherData(location.coords.latitude, location.coords.longitude);
-      } catch (error) {
-        console.log('Error fetching weather:', error);
-        setWeatherLoading(false);
+        if (status !== 'granted') throw new Error('Location permission denied');
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        await getWeatherData(loc.coords.latitude, loc.coords.longitude);
       }
+    } catch {
+      setWeatherError(true);
+    } finally {
+      setWeatherLoading(false);
     }
   }, []);
 
@@ -1067,6 +1060,15 @@ export default function HomeScreen() {
               <View style={styles.headerWeatherIcon}>
                 <ActivityIndicator size="small" color={Colors.primary} />
               </View>
+            )}
+            {weatherError && !weatherLoading && (
+              <TouchableOpacity
+                style={styles.headerWeatherIcon}
+                onPress={() => { setWeatherError(false); fetchWeather(); }}
+              >
+                <Text style={{ fontSize: 18 }}>🌡️</Text>
+                <Text style={{ fontSize: 9, color: Colors.textDim }}>Retry</Text>
+              </TouchableOpacity>
             )}
             <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
               {sidebarOpen ? (
