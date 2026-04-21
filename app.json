@@ -77,7 +77,6 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-sharing",
       [
         "expo-image-picker",
         {
