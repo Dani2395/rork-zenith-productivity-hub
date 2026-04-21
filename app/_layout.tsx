@@ -1,12 +1,31 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, Component } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
+import { View, Text, ScrollView } from "react-native";
 import { DataProvider } from "@/contexts/DataContext";
 import Colors from "@/constants/colors";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      const err = this.state.error as Error;
+      return (
+        <ScrollView style={{ flex: 1, backgroundColor: '#0f0f0f', padding: 20 }}>
+          <Text style={{ color: '#ff4444', fontSize: 18, fontWeight: 'bold', marginTop: 40 }}>App Error</Text>
+          <Text style={{ color: '#ffffff', marginTop: 12, fontSize: 14 }}>{err.message}</Text>
+          <Text style={{ color: '#888', marginTop: 12, fontSize: 11 }}>{err.stack}</Text>
+        </ScrollView>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -140,13 +159,15 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <DataProvider>
-          <StatusBar style="light" />
-          <RootLayoutNav />
-        </DataProvider>
-      </GestureHandlerRootView>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <DataProvider>
+            <StatusBar style="light" />
+            <RootLayoutNav />
+          </DataProvider>
+        </GestureHandlerRootView>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
