@@ -182,8 +182,9 @@ export default function SettingsScreen() {
         return;
       }
 
-      const path = `${FileSystem.cacheDirectory}${filename}`;
-      await FileSystem.writeAsStringAsync(path, json, { encoding: FileSystem.EncodingType.UTF8 });
+      const path = `${FileSystem.Paths.cache.uri}${filename}`;
+      const file = new FileSystem.File(FileSystem.Paths.cache, filename);
+      await file.write(json);
       await Share.share({ url: path, title: filename, message: 'Zenith data backup' });
     } catch (err) {
       Alert.alert('Export failed', 'Could not export your data. Please try again.');
@@ -199,7 +200,8 @@ export default function SettingsScreen() {
       if (result.canceled) return;
 
       const asset = result.assets[0];
-      const json = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const file = new FileSystem.File(asset.uri);
+      const json = await file.text();
 
       Alert.alert(
         'Restore Backup',
