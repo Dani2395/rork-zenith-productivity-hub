@@ -250,9 +250,14 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    rolloverPriorities();
     fetchWeather();
-  }, [rolloverPriorities, fetchWeather]);
+  }, [fetchWeather]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      rolloverPriorities();
+    }
+  }, [isLoading, rolloverPriorities]);
 
   // Priorities widget data + smart notifications
   useEffect(() => {
