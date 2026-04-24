@@ -45,7 +45,7 @@ import {
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
 import { useData } from '@/contexts/DataContext';
-import { updatePrioritiesWidget, updateTasksWidget, updateHabitsWidget, updateCalendarWidget, updateNotesWidget, updateGiftsWidget, updateBingoWidget } from '@/widgets/widgetTaskHandler';
+import { updatePrioritiesWidget, updateTasksWidget, updateHabitsWidget, updateCalendarWidget, updateNotesWidget, updateGiftsWidget, updateBingoWidget, updateLockScreenPrioritiesWidget } from '@/widgets/widgetTaskHandler';
 import { schedulePrioritiesMorningBrief, schedulePrioritiesEveningCheck, schedulePrioritiesWeeklyDigest } from '@/utils/prioritiesNotifications';
 import { SubTask, Holiday, Task, Event, Workout, Note, MoodEntry } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
@@ -280,6 +280,19 @@ export default function HomeScreen() {
         overdue: p.overdue ?? false,
         subtaskTotal: p.subtasks?.length ?? 0,
         subtaskDone: p.subtasks?.filter((s: any) => s.completed).length ?? 0,
+      })),
+    });
+
+    const lockScreenDateLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dateObj.getDay()]} ${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+    updateLockScreenPrioritiesWidget({
+      dateLabel: lockScreenDateLabel,
+      completedCount,
+      totalCount: todayPriorities.length,
+      priorities: todayPriorities.map((p: any) => ({
+        id: p.id,
+        task: p.task,
+        completed: p.completed,
+        overdue: p.overdue ?? false,
       })),
     });
 

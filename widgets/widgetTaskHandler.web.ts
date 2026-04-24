@@ -8,6 +8,7 @@ export const PRIORITIES_WIDGET_DATA_KEY = 'prioritiesWidgetData';
 export const GIFTS_WIDGET_DATA_KEY      = 'giftsWidgetData';
 export const BINGO_WIDGET_DATA_KEY      = 'bingoWidgetData';
 export const BRAIN_DUMP_WIDGET_DATA_KEY = 'brainDumpWidgetData';
+export const LOCK_SCREEN_PRIORITIES_WIDGET_DATA_KEY = 'lockScreenPrioritiesWidgetData';
 
 export async function saveWidgetData()           {}
 export async function saveTasksWidgetData()      {}
@@ -18,6 +19,7 @@ export async function savePrioritiesWidgetData() {}
 export async function saveGiftsWidgetData()      {}
 export async function saveBingoWidgetData()      {}
 export async function saveBrainDumpWidgetData()  {}
+export async function saveLockScreenPrioritiesWidgetData() {}
 
 export async function updateBudgetWidget()       {}
 export async function updateTasksWidget()        {}
@@ -28,3 +30,4 @@ export async function updatePrioritiesWidget()   {}
 export async function updateGiftsWidget()        {}
 export async function updateBingoWidget()        {}
 export async function updateBrainDumpWidget()    {}
+export async function updateLockScreenPrioritiesWidget() {}
