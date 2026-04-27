@@ -23,7 +23,6 @@ import { Plus, Trash2, Check, Bell, Edit2, ImageIcon, BarChart2, List } from 'lu
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateHabitsWidget } from '@/widgets/widgetTaskHandler';
-import { scheduleHabitsMorningReminder, cancelHabitsMorningReminder, scheduleHabitsEveningCheckIn, cancelHabitsEveningCheckIn, scheduleHabitsWeeklyDigest } from '@/utils/habitsNotifications';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HEATMAP_WEEKS = 15;
@@ -45,8 +44,6 @@ export default function HabitsScreen() {
   const [habitIcon, setHabitIcon] = useState('');
   const [habitImage, setHabitImage] = useState('');
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [morningReminderEnabled, setMorningReminderEnabled] = useState(false);
-  const [eveningCheckInEnabled, setEveningCheckInEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<'habits' | 'analytics'>('habits');
 
   const today = new Date().toISOString().split('T')[0];
@@ -110,9 +107,6 @@ export default function HabitsScreen() {
       : 0;
 
     updateHabitsWidget({ habits: habitItems as any, doneTodayCount, totalHabits: habits.length, bestStreakName, bestStreakDays, weeklyPct, monthlyPct, weekDays: weekDays as any });
-    scheduleHabitsMorningReminder(habits.length);
-    scheduleHabitsEveningCheckIn(doneTodayCount, habits.length);
-    scheduleHabitsWeeklyDigest(bestStreakDays, bestStreakName);
   }, [habits, habitCompletions, today]);
 
   const resetForm = () => {
@@ -636,39 +630,6 @@ export default function HabitsScreen() {
               <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
                 Add a "Habits Today" widget: Long-press your Android home screen → Widgets → Zenith → Habits Today. Shows completion count, best streak, and today's progress.
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Morning Reminder</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>8 AM prompt to complete your habits today</Text>
-                </View>
-                <Switch
-                  value={morningReminderEnabled}
-                  onValueChange={async (v) => {
-                    setMorningReminderEnabled(v);
-                    if (v) { await scheduleHabitsMorningReminder(habits.length); }
-                    else { await cancelHabitsMorningReminder(); }
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={morningReminderEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Evening Check-In</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>9 PM reminder to log any remaining habits</Text>
-                </View>
-                <Switch
-                  value={eveningCheckInEnabled}
-                  onValueChange={async (v) => {
-                    setEveningCheckInEnabled(v);
-                    const doneTodayCount = habits.filter(h => habitCompletions[`${h.id}-${today}`]).length;
-                    if (v) { await scheduleHabitsEveningCheckIn(doneTodayCount, habits.length); }
-                    else { await cancelHabitsEveningCheckIn(); }
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={eveningCheckInEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
             </ScrollView>
             <TouchableOpacity
               style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}

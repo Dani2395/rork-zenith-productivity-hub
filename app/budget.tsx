@@ -43,14 +43,6 @@ import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
 import { processCSVData, analyzeExpenses, ExpenseInsight } from '@/utils/budgetHelpers';
 import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
-import {
-  scheduleDailySummary,
-  cancelDailySummary,
-  scheduleWeeklyDigest,
-  cancelWeeklyDigest,
-  fireBudgetAlert,
-  cancelAllBudgetNotifications,
-} from '@/utils/budgetNotifications';
 import { updateBudgetWidget } from '@/widgets/widgetTaskHandler';
 
 export default function BudgetScreen() {
@@ -302,40 +294,16 @@ export default function BudgetScreen() {
     for (const budget of budgets) {
       const spent = monthlySpentByBudgetId[budget.id] ?? 0;
       if (budget.amount > 0) {
-        fireBudgetAlert(budget.name, spent, budget.amount);
       }
     }
   }, [transactions, budgets]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDailyNotifToggle = async (value: boolean) => {
+  const handleDailyNotifToggle = (value: boolean) => {
     setDailyNotifEnabled(value);
-    if (value) {
-      await scheduleDailySummary(thisMonth, totalIncome, totalExpenses);
-    } else {
-      await cancelDailySummary();
-    }
   };
 
-  const handleWeeklyNotifToggle = async (value: boolean) => {
+  const handleWeeklyNotifToggle = (value: boolean) => {
     setWeeklyNotifEnabled(value);
-    if (value) {
-      // Compute this week's totals from thisMonthData transactions
-      const weekStart = new Date();
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      weekStart.setHours(0, 0, 0, 0);
-      let weekIncome = 0;
-      let weekExpenses = 0;
-      for (const t of (thisMonthData?.transactions ?? [])) {
-        const d = new Date(t.date);
-        if (d >= weekStart) {
-          if (t.type === 'income') weekIncome += t.amount;
-          else weekExpenses += t.amount;
-        }
-      }
-      await scheduleWeeklyDigest(weekIncome, weekExpenses);
-    } else {
-      await cancelWeeklyDigest();
-    }
   };
 
   const toggleQuarter = (key: string) => {

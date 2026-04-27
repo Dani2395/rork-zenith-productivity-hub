@@ -19,7 +19,7 @@ import { Plus, Trash2, Circle, CheckCircle2, Settings, Edit2, Bell } from 'lucid
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateTasksWidget } from '@/widgets/widgetTaskHandler';
-import { scheduleTasksDailySummary, scheduleTasksWeeklyDigest, cancelTasksDailySummary, cancelTasksWeeklyDigest } from '@/utils/tasksNotifications';
+import { scheduleTaskDueReminder, cancelAllTaskDueReminders, fireOverdueAlert } from '@/utils/tasksNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
 type FilterType = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
@@ -47,8 +47,6 @@ export default function TasksScreen() {
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [dailySummaryEnabled, setDailySummaryEnabled] = useState(false);
-  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
   const [makeTopPriority, setMakeTopPriority] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
@@ -72,15 +70,18 @@ export default function TasksScreen() {
       nextTask,
     });
 
-    // Week stats for digest
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    const weekStartStr = weekStart.toISOString().split('T')[0];
-    const weekCompleted = tasks.filter(t => t.completed && t.completedDate && t.completedDate >= weekStartStr).length;
-    const weekTotal = tasks.filter(t => t.date && t.date >= weekStartStr).length;
-
-    scheduleTasksDailySummary(todayTasks.length, overdueTasks.length);
-    scheduleTasksWeeklyDigest(weekCompleted, weekTotal);
+    // Schedule individual due reminders — cancel all first, then reschedule active tasks
+    cancelAllTaskDueReminders().then(() => {
+      for (const task of tasks) {
+        if (!task.completed && task.date) {
+          if (task.date < today || (task.date === today && task.time && `${task.date}T${task.time}:00` < new Date().toISOString())) {
+            fireOverdueAlert(task.name, task.id, task.priority);
+          } else {
+            scheduleTaskDueReminder(task.id, task.name, task.priority, task.date, task.time, task.reminderBefore ?? 0);
+          }
+        }
+      }
+    });
   }, [tasks, today]);
 
   const isPast = (dateStr: string) => {
@@ -713,44 +714,14 @@ export default function TasksScreen() {
                   Add a "Tasks Today" widget: Long-press your Android home screen → Widgets → Zenith → Tasks Today. Shows today's task count, done count, overdue, and your next task.
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Task Summary</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>8 AM notification with today's tasks & overdue count</Text>
-                </View>
-                <Switch
-                  value={dailySummaryEnabled}
-                  onValueChange={async (v) => {
-                    setDailySummaryEnabled(v);
-                    const todayTasks = tasks.filter(t => !t.completed && t.date === today);
-                    const overdueTasks = tasks.filter(t => !t.completed && t.date && t.date < today);
-                    if (v) { await scheduleTasksDailySummary(todayTasks.length, overdueTasks.length); }
-                    else { await cancelTasksDailySummary(); }
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={dailySummaryEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday recap of tasks completed vs total this week</Text>
-                </View>
-                <Switch
-                  value={weeklyDigestEnabled}
-                  onValueChange={async (v) => {
-                    setWeeklyDigestEnabled(v);
-                    const weekStart = new Date();
-                    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-                    const weekStartStr = weekStart.toISOString().split('T')[0];
-                    const weekCompleted = tasks.filter(t => t.completed && t.completedDate && t.completedDate >= weekStartStr).length;
-                    const weekTotal = tasks.filter(t => t.date && t.date >= weekStartStr).length;
-                    if (v) { await scheduleTasksWeeklyDigest(weekCompleted, weekTotal); }
-                    else { await cancelTasksWeeklyDigest(); }
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
-                />
+              <View style={{ backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: 12, padding: 14, marginBottom: 8 }}>
+                <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600', marginBottom: 6 }}>🔔 Smart Task Reminders</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20 }}>
+                  You'll automatically get notified at the exact due time for each task. High-priority tasks show a 🔴 badge. Tasks that are past due fire an instant overdue alert.
+                </Text>
+                <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginTop: 6 }}>
+                  Set a "Remind before" time when creating or editing a task to get an early heads-up.
+                </Text>
               </View>
             </ScrollView>
             <TouchableOpacity

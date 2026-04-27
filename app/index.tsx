@@ -46,7 +46,6 @@ import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
 import { useData } from '@/contexts/DataContext';
 import { updatePrioritiesWidget, updateTasksWidget, updateHabitsWidget, updateCalendarWidget, updateNotesWidget, updateGiftsWidget, updateBingoWidget, updateLockScreenPrioritiesWidget } from '@/widgets/widgetTaskHandler';
-import { schedulePrioritiesMorningBrief, schedulePrioritiesEveningCheck, schedulePrioritiesWeeklyDigest } from '@/utils/prioritiesNotifications';
 import { SubTask, Holiday, Task, Event, Workout, Note, MoodEntry } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -308,9 +307,6 @@ export default function HomeScreen() {
       }
     }
 
-    schedulePrioritiesMorningBrief(todayPriorities.length, todayPriorities[0]?.task ?? '');
-    schedulePrioritiesEveningCheck(completedCount, todayPriorities.length);
-    schedulePrioritiesWeeklyDigest(weekCompleted, weekTotal);
   }, [todayPriorities, priorities]);
 
   // Save all other widget data on startup so widgets populate without needing to visit each screen

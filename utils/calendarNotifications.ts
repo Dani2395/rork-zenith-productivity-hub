@@ -1,9 +1,6 @@
 /**
- * Calendar smart notifications.
- *
- * 1. Daily agenda       – 8 AM daily: "You have X events today"
- * 2. Upcoming event alert – fires ~1 hour before an event (by event ID)
- * 3. Weekly preview     – Sunday 7 PM: events coming up next week
+ * Calendar notifications.
+ * Fires a reminder before each upcoming event (default 15 minutes before).
  */
 
 import { Platform } from 'react-native';
@@ -23,7 +20,7 @@ async function ensureCalendarChannel() {
   if (Platform.OS === 'android') {
     await N.setNotificationChannelAsync('calendar', {
       name: 'Calendar Reminders',
-      description: 'Daily agenda summaries and event reminders',
+      description: 'Reminders for upcoming calendar events',
       importance: N.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 100, 250],
       lightColor: '#818cf8',
@@ -55,56 +52,22 @@ async function cancelById(key: string) {
   }
 }
 
-// ─── 1. Daily agenda ──────────────────────────────────────────────────────────
-
-export async function scheduleCalendarDailyAgenda(
-  eventCount: number,
-  firstEventName: string,
-) {
-  const N = getNotifications();
-  if (!N) return;
-  await ensureCalendarChannel();
-  await cancelById('daily');
-
-  const body = eventCount === 0
-    ? 'No events scheduled today'
-    : eventCount === 1
-      ? `1 event today: ${firstEventName}`
-      : `${eventCount} events today — starting with: ${firstEventName}`;
-
-  try {
-    const id = await N.scheduleNotificationAsync({
-      content: {
-        title: '📅 Today\'s Agenda',
-        body,
-        data: { type: 'calendar_daily_agenda' },
-        channelId: 'calendar',
-      },
-      trigger: {
-        type: N.SchedulableTriggerInputTypes?.DAILY ?? 'daily',
-        hour: 8,
-        minute: 0,
-      },
-    });
-    const ids = await loadIds();
-    ids.daily = id;
-    await saveIds(ids);
-  } catch (e) {
-    console.log('scheduleCalendarDailyAgenda error', e);
-  }
+function formatTime(time: string) {
+  if (!time) return '';
+  const [h, m] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-export async function cancelCalendarDailyAgenda() {
-  await cancelById('daily');
-}
-
-// ─── 2. Upcoming event alert (1 hour before) ──────────────────────────────────
+// ─── Per-event reminder ───────────────────────────────────────────────────────
 
 export async function scheduleEventReminder(
   eventId: number,
   eventName: string,
-  eventDate: string,  // ISO date string
+  eventDate: string,  // YYYY-MM-DD
   eventTime: string,  // "HH:MM"
+  minutesBefore = 15,
 ) {
   const N = getNotifications();
   if (!N || !eventTime) return;
@@ -113,22 +76,28 @@ export async function scheduleEventReminder(
   const key = `event_${eventId}`;
   await cancelById(key);
 
-  const [hour, minute] = eventTime.split(':').map(Number);
-  if (isNaN(hour) || isNaN(minute)) return;
-
-  // Schedule 60 minutes before
   const eventMs = new Date(`${eventDate}T${eventTime}:00`).getTime();
-  const reminderMs = eventMs - 60 * 60 * 1000;
+  const reminderMs = eventMs - minutesBefore * 60 * 1000;
   if (reminderMs <= Date.now()) return; // already past
+
+  const timeDisplay = formatTime(eventTime);
+
+  const title = minutesBefore > 0
+    ? `📅 Starting in ${minutesBefore} min`
+    : `📅 Event Starting Now`;
+
+  const body = minutesBefore > 0
+    ? `"${eventName}" starts at ${timeDisplay}`
+    : `"${eventName}" is starting now`;
 
   try {
     const id = await N.scheduleNotificationAsync({
       content: {
-        title: '⏰ Event starting soon',
-        body: `"${eventName}" starts in 1 hour`,
+        title,
+        body,
         data: { type: 'event_reminder', eventId },
         channelId: 'calendar',
-        priority: 'high',
+        sound: true,
       },
       trigger: { date: new Date(reminderMs) },
     });
@@ -144,40 +113,7 @@ export async function cancelEventReminder(eventId: number) {
   await cancelById(`event_${eventId}`);
 }
 
-// ─── 3. Weekly preview ────────────────────────────────────────────────────────
-
-export async function scheduleCalendarWeeklyPreview(nextWeekCount: number) {
-  const N = getNotifications();
-  if (!N) return;
-  await ensureCalendarChannel();
-  await cancelById('weekly');
-
-  const body = nextWeekCount === 0
-    ? 'No events scheduled for next week'
-    : `${nextWeekCount} event${nextWeekCount !== 1 ? 's' : ''} coming up next week`;
-
-  try {
-    const id = await N.scheduleNotificationAsync({
-      content: {
-        title: '📅 Weekly Preview',
-        body,
-        data: { type: 'calendar_weekly_preview' },
-        channelId: 'calendar',
-      },
-      trigger: {
-        type: N.SchedulableTriggerInputTypes?.WEEKLY ?? 'weekly',
-        weekday: 1,
-        hour: 19,
-        minute: 0,
-      },
-    });
-    const ids = await loadIds();
-    ids.weekly = id;
-    await saveIds(ids);
-  } catch (e) {
-    console.log('scheduleCalendarWeeklyPreview error', e);
-  }
-}
+// ─── Cancel everything ────────────────────────────────────────────────────────
 
 export async function cancelAllCalendarNotifications() {
   const ids = await loadIds();

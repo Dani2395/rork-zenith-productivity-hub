@@ -23,7 +23,6 @@ import { Share } from 'react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateGiftsWidget } from '@/widgets/widgetTaskHandler';
-import { fireUpcomingGiftAlert, scheduleGiftsMonthlyReminder, cancelGiftsMonthlyReminder, scheduleGiftsWeeklyDigest, cancelAllGiftsNotifications } from '@/utils/giftsNotifications';
 
 const TAG_EMOJIS: Record<string, string> = {
   family: '👨‍👩‍👧',
@@ -62,22 +61,6 @@ export default function GiftsScreen() {
       nextEventLabel: '', // events are per-gift item without dates in this model
     });
 
-    scheduleGiftsMonthlyReminder(allGifts.length - purchasedCount);
-    scheduleGiftsWeeklyDigest(allGifts.length, purchasedCount);
-
-    // Fire upcoming-event alerts for gift items with recognized event types
-    const today = new Date();
-    for (const person of giftPeople) {
-      const unpurchasedForPerson = person.gifts.filter(g => !g.purchased).length;
-      const events = person.gifts.map(g => g.event).filter(Boolean);
-      for (const eventType of [...new Set(events)]) {
-        // Without actual event dates in the data model, alert when person has unpurchased gifts
-        if (unpurchasedForPerson > 0) {
-          fireUpcomingGiftAlert(person.name, eventType, 7, unpurchasedForPerson);
-          break; // one alert per person
-        }
-      }
-    }
   }, [giftPeople]);
 
   const loadLockState = async () => {
@@ -724,8 +707,7 @@ export default function GiftsScreen() {
                     setMonthlyReminderEnabled(v);
                     const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
                     const unpurchasedTotal = allGifts.filter((g: any) => !g.purchased).length;
-                    if (v) { await scheduleGiftsMonthlyReminder(unpurchasedTotal); }
-                    else { await cancelGiftsMonthlyReminder(); }
+                    // notifications disabled
                   }}
                   trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
                   thumbColor={monthlyReminderEnabled ? '#ffffff' : Colors.textDim}
@@ -741,8 +723,7 @@ export default function GiftsScreen() {
                   onValueChange={async (v) => {
                     setWeeklyDigestEnabled(v);
                     const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
-                    if (v) { await scheduleGiftsWeeklyDigest(allGifts.length, allGifts.filter((g: any) => g.purchased).length); }
-                    else { await cancelAllGiftsNotifications(); }
+                    // notifications disabled
                   }}
                   trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
                   thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
