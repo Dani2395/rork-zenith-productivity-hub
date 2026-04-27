@@ -230,6 +230,19 @@
               "updatePeriodMillis": 1800000,
               "resizeMode": "horizontal|vertical",
               "widgetFeatures": "reconfigurable|configuration_optional"
+            },
+            {
+              "name": "LockScreenPrioritiesWidget",
+              "label": "Lock Screen Priorities",
+              "description": "Compact top-5 priority list designed for lock screen placement — tap any item to toggle completion",
+              "previewImage": "./assets/images/adaptive-icon.png",
+              "minWidth": "180dp",
+              "minHeight": "160dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 3,
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable|configuration_optional"
             }
           ]
         }
