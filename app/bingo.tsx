@@ -18,7 +18,6 @@ import { Image as ImageIcon, Bell } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateBingoWidget } from '@/widgets/widgetTaskHandler';
-import { fireBingoMilestone, fireBingoComplete, scheduleBingoWeeklyCheckIn, scheduleBingoMonthlyMotivation, cancelAllBingoNotifications } from '@/utils/bingoNotifications';
 
 const BACKGROUND_COLORS = [
   '#2a2a2a', '#8b5cf6', '#6366f1', '#ec4899', '#f59e0b',
@@ -105,26 +104,6 @@ export default function BingoScreen() {
     }));
     updateBingoWidget({ cells: cells as any, completedCount, hasBingo, recentGoal });
 
-    scheduleBingoWeeklyCheckIn(completedCount);
-    scheduleBingoMonthlyMotivation(completedCount);
-
-    if (completedCount === 25) {
-      fireBingoComplete();
-    }
-
-    // Check each row, column, diagonal for new completions
-    for (let r = 0; r < 5; r++) {
-      const rowComplete = [0,1,2,3,4].every(c => bingoData[r * 5 + c].d);
-      if (rowComplete) fireBingoMilestone(`row_${r}`, completedCount);
-    }
-    for (let c = 0; c < 5; c++) {
-      const colComplete = [0,1,2,3,4].every(r => bingoData[r * 5 + c].d);
-      if (colComplete) fireBingoMilestone(`col_${c}`, completedCount);
-    }
-    const diagMain = [0,6,12,18,24].every(i => bingoData[i].d);
-    if (diagMain) fireBingoMilestone('diag_main', completedCount);
-    const diagAnti = [4,8,12,16,20].every(i => bingoData[i].d);
-    if (diagAnti) fireBingoMilestone('diag_anti', completedCount);
   }, [bingoData, completedCount, hasBingo]);
 
   const handleCellPress = (index: number) => {
@@ -489,8 +468,7 @@ export default function BingoScreen() {
                   value={weeklyCheckInEnabled}
                   onValueChange={async (v) => {
                     setWeeklyCheckInEnabled(v);
-                    if (v) { await scheduleBingoWeeklyCheckIn(completedCount); }
-                    else { await cancelAllBingoNotifications(); }
+                    // notifications disabled
                   }}
                   trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
                   thumbColor={weeklyCheckInEnabled ? '#ffffff' : Colors.textDim}
@@ -505,8 +483,7 @@ export default function BingoScreen() {
                   value={monthlyMotivationEnabled}
                   onValueChange={async (v) => {
                     setMonthlyMotivationEnabled(v);
-                    if (v) { await scheduleBingoMonthlyMotivation(completedCount); }
-                    else { await cancelAllBingoNotifications(); }
+                    // notifications disabled
                   }}
                   trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
                   thumbColor={monthlyMotivationEnabled ? '#ffffff' : Colors.textDim}

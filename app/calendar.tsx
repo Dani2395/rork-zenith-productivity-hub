@@ -22,7 +22,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Sparkles, Bell, Refresh
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateCalendarWidget } from '@/widgets/widgetTaskHandler';
-import { scheduleCalendarDailyAgenda, cancelCalendarDailyAgenda, scheduleCalendarWeeklyPreview, cancelAllCalendarNotifications } from '@/utils/calendarNotifications';
+import { scheduleEventReminder, cancelAllCalendarNotifications } from '@/utils/calendarNotifications';
 import { Holiday } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 import { syncFromICalUrl, signOut as icalSignOut, getStoredICalUrl, saveICalUrl } from '@/utils/googleCalendarSync';
@@ -42,8 +42,6 @@ export default function CalendarScreen() {
   const [eventTime, setEventTime] = useState('');
   const [holidayModalVisible, setHolidayModalVisible] = useState(false);
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [dailyAgendaEnabled, setDailyAgendaEnabled] = useState(false);
-  const [weeklyPreviewEnabled, setWeeklyPreviewEnabled] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<Holiday | null>(null);
   const [holidayName, setHolidayName] = useState('');
   const [holidayEmoji, setHolidayEmoji] = useState('');
@@ -298,17 +296,15 @@ export default function CalendarScreen() {
       nextEventTime: nextEvent?.time ?? '',
     });
 
-    // Next week event count for weekly preview
-    const nextWeekStart = new Date(todayDate);
-    nextWeekStart.setDate(nextWeekStart.getDate() + 1);
-    const nextWeekEnd = new Date(nextWeekStart);
-    nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
-    const nextWeekStartStr = nextWeekStart.toISOString().split('T')[0];
-    const nextWeekEndStr = nextWeekEnd.toISOString().split('T')[0];
-    const nextWeekCount = events.filter(e => e.date > nextWeekStartStr && e.date <= nextWeekEndStr).length;
-
-    scheduleCalendarDailyAgenda(todayEvents.length, nextEvent?.name ?? '');
-    scheduleCalendarWeeklyPreview(nextWeekCount);
+    // Schedule individual event reminders (15 min before each future event)
+    for (const event of events) {
+      if (event.date && event.time) {
+        const eventMs = new Date(`${event.date}T${event.time}:00`).getTime();
+        if (eventMs > Date.now()) {
+          scheduleEventReminder(event.id, event.name, event.date, event.time, 15);
+        }
+      }
+    }
   }, [events, todayString]);
 
   const handleAddEvent = () => {
@@ -921,45 +917,11 @@ export default function CalendarScreen() {
               <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
                 Add a "Calendar Agenda" widget: Long-press your Android home screen → Widgets → Zenith → Calendar Agenda. Shows today's event count and your next upcoming event.
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Agenda</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>8 AM summary of today's events</Text>
-                </View>
-                <Switch
-                  value={dailyAgendaEnabled}
-                  onValueChange={async (v) => {
-                    setDailyAgendaEnabled(v);
-                    const todayEvents = events.filter(e => e.date === todayString);
-                    const nextEvent = todayEvents[0];
-                    if (v) { await scheduleCalendarDailyAgenda(todayEvents.length, nextEvent?.name ?? ''); }
-                    else { await cancelCalendarDailyAgenda(); }
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={dailyAgendaEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Preview</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday evening preview of next week's events</Text>
-                </View>
-                <Switch
-                  value={weeklyPreviewEnabled}
-                  onValueChange={async (v) => {
-                    setWeeklyPreviewEnabled(v);
-                    if (v) {
-                      const nextWeekStart = new Date();
-                      nextWeekStart.setDate(nextWeekStart.getDate() + (7 - nextWeekStart.getDay()));
-                      const nextWeekEnd = new Date(nextWeekStart);
-                      nextWeekEnd.setDate(nextWeekEnd.getDate() + 6);
-                      const nextWeekCount = events.filter(e => e.date >= nextWeekStart.toISOString().split('T')[0] && e.date <= nextWeekEnd.toISOString().split('T')[0]).length;
-                      await scheduleCalendarWeeklyPreview(nextWeekCount);
-                    } else { await cancelAllCalendarNotifications(); }
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={weeklyPreviewEnabled ? '#ffffff' : Colors.textDim}
-                />
+              <View style={{ backgroundColor: 'rgba(129,140,248,0.08)', borderRadius: 12, padding: 14, marginBottom: 8 }}>
+                <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600', marginBottom: 6 }}>🔔 Smart Event Reminders</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20 }}>
+                  You'll automatically get a notification 15 minutes before each event that has a set time. No extra setup needed — just add an event with a time and you're covered.
+                </Text>
               </View>
             </ScrollView>
             <TouchableOpacity

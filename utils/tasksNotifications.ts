@@ -1,9 +1,6 @@
 /**
- * Tasks smart notifications.
- *
- * 1. Daily morning summary  – 8 AM every day: "You have X tasks due today"
- * 2. Overdue alert          – immediate when a task becomes overdue
- * 3. Weekly digest         – Sunday 7 PM: tasks completed this week
+ * Tasks notifications.
+ * Fires only for tasks due at their scheduled time and overdue alerts.
  */
 
 import { Platform } from 'react-native';
@@ -23,7 +20,7 @@ async function ensureTasksChannel() {
   if (Platform.OS === 'android') {
     await N.setNotificationChannelAsync('tasks', {
       name: 'Task Reminders',
-      description: 'Daily task summaries, overdue alerts, and weekly digests',
+      description: 'Notifications for tasks due at their scheduled time and overdue tasks',
       importance: N.AndroidImportance.HIGH,
       vibrationPattern: [0, 200, 100, 200],
       lightColor: '#6366f1',
@@ -55,51 +52,97 @@ async function cancelById(key: string) {
   }
 }
 
-// ─── 1. Daily morning summary ─────────────────────────────────────────────────
+function priorityIcon(priority: string) {
+  if (priority === 'high') return '🔴';
+  if (priority === 'medium') return '🟡';
+  return '🔵';
+}
 
-export async function scheduleTasksDailySummary(
-  todayCount: number,
-  overdueCount: number,
+function formatTime(time: string) {
+  if (!time) return '';
+  const [h, m] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+// ─── Schedule due reminder for a specific task ────────────────────────────────
+
+export async function scheduleTaskDueReminder(
+  taskId: number,
+  taskName: string,
+  priority: 'low' | 'medium' | 'high',
+  dueDate: string,   // YYYY-MM-DD
+  dueTime: string,   // "HH:MM" — defaults to "08:00" if empty
+  minutesBefore = 0,
 ) {
   const N = getNotifications();
-  if (!N) return;
+  if (!N || !dueDate) return;
   await ensureTasksChannel();
-  await cancelById('daily');
 
-  const parts: string[] = [];
-  if (todayCount > 0) parts.push(`${todayCount} task${todayCount !== 1 ? 's' : ''} due today`);
-  if (overdueCount > 0) parts.push(`${overdueCount} overdue`);
-  const body = parts.length > 0 ? parts.join('  •  ') : 'No tasks due today — enjoy your day!';
+  const key = `due_${taskId}`;
+  await cancelById(key);
+
+  const timeStr = dueTime || '08:00';
+  const dueMs = new Date(`${dueDate}T${timeStr}:00`).getTime();
+  const triggerMs = dueMs - minutesBefore * 60 * 1000;
+  if (triggerMs <= Date.now()) return; // already past
+
+  const icon = priorityIcon(priority);
+  const timeDisplay = formatTime(timeStr);
+  const isHighPriority = priority === 'high';
+
+  const title = minutesBefore > 0
+    ? `${icon} Due in ${minutesBefore} min${isHighPriority ? ' — High Priority' : ''}`
+    : `${icon} Task Due Now${isHighPriority ? ' — High Priority' : ''}`;
+
+  const body = minutesBefore > 0
+    ? `"${taskName}" is due at ${timeDisplay}`
+    : `"${taskName}" — time to get it done`;
 
   try {
     const id = await N.scheduleNotificationAsync({
       content: {
-        title: '✅ Task Check-In',
+        title,
         body,
-        data: { type: 'tasks_daily_summary' },
+        data: { type: 'task_due', taskId },
         channelId: 'tasks',
+        sound: true,
       },
-      trigger: {
-        type: N.SchedulableTriggerInputTypes?.DAILY ?? 'daily',
-        hour: 8,
-        minute: 0,
-      },
+      trigger: { date: new Date(triggerMs) },
     });
     const ids = await loadIds();
-    ids.daily = id;
+    ids[key] = id;
     await saveIds(ids);
   } catch (e) {
-    console.log('scheduleTasksDailySummary error', e);
+    console.log('scheduleTaskDueReminder error', e);
   }
 }
 
-export async function cancelTasksDailySummary() {
-  await cancelById('daily');
+export async function cancelTaskDueReminder(taskId: number) {
+  await cancelById(`due_${taskId}`);
 }
 
-// ─── 2. Overdue alert ─────────────────────────────────────────────────────────
+// ─── Cancel all scheduled due reminders ──────────────────────────────────────
 
-export async function fireOverdueAlert(taskName: string, taskId: number) {
+export async function cancelAllTaskDueReminders() {
+  const ids = await loadIds();
+  const N = getNotifications();
+  const dueKeys = Object.keys(ids).filter(k => k.startsWith('due_'));
+  for (const key of dueKeys) {
+    if (N) try { await N.cancelScheduledNotificationAsync(ids[key]); } catch { /* ignore */ }
+    delete ids[key];
+  }
+  await saveIds(ids);
+}
+
+// ─── Overdue alert (fires immediately) ────────────────────────────────────────
+
+export async function fireOverdueAlert(
+  taskName: string,
+  taskId: number,
+  priority: 'low' | 'medium' | 'high' = 'medium',
+) {
   const N = getNotifications();
   if (!N) return;
   await ensureTasksChannel();
@@ -108,14 +151,16 @@ export async function fireOverdueAlert(taskName: string, taskId: number) {
   const ids = await loadIds();
   if (ids[key]) return; // already fired
 
+  const icon = priorityIcon(priority);
+
   try {
     const id = await N.scheduleNotificationAsync({
       content: {
-        title: '⚠️ Task Overdue',
-        body: `"${taskName}" is past its due date`,
+        title: `${icon} Overdue Task`,
+        body: `"${taskName}" is past its due date — tap to review`,
         data: { type: 'task_overdue', taskId },
         channelId: 'tasks',
-        priority: 'high',
+        sound: true,
       },
       trigger: null,
     });
@@ -137,43 +182,13 @@ export async function clearOverdueAlerts() {
   await saveIds(ids);
 }
 
-// ─── 3. Weekly digest ─────────────────────────────────────────────────────────
-
-export async function scheduleTasksWeeklyDigest(completedThisWeek: number, totalThisWeek: number) {
-  const N = getNotifications();
-  if (!N) return;
-  await ensureTasksChannel();
-  await cancelById('weekly');
-
-  try {
-    const id = await N.scheduleNotificationAsync({
-      content: {
-        title: '📋 Weekly Task Recap',
-        body: `This week: ${completedThisWeek} of ${totalThisWeek} task${totalThisWeek !== 1 ? 's' : ''} completed`,
-        data: { type: 'tasks_weekly_digest' },
-        channelId: 'tasks',
-      },
-      trigger: {
-        type: N.SchedulableTriggerInputTypes?.WEEKLY ?? 'weekly',
-        weekday: 1,
-        hour: 19,
-        minute: 0,
-      },
-    });
-    const ids = await loadIds();
-    ids.weekly = id;
-    await saveIds(ids);
-  } catch (e) {
-    console.log('scheduleTasksWeeklyDigest error', e);
-  }
-}
-
-export async function cancelTasksWeeklyDigest() {
-  await cancelById('weekly');
-}
+// ─── Cancel everything ────────────────────────────────────────────────────────
 
 export async function cancelAllTasksNotifications() {
-  await cancelTasksDailySummary();
-  await cancelTasksWeeklyDigest();
-  await clearOverdueAlerts();
+  const ids = await loadIds();
+  const N = getNotifications();
+  for (const key of Object.keys(ids)) {
+    if (N) try { await N.cancelScheduledNotificationAsync(ids[key]); } catch { /* ignore */ }
+  }
+  try { await AsyncStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 }

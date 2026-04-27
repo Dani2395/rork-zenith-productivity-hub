@@ -22,7 +22,6 @@ import { useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateNotesWidget } from '@/widgets/widgetTaskHandler';
-import { schedulePinnedNotesReminder, cancelPinnedNotesReminder, scheduleNotesWeeklyDigest, cancelAllNotesNotifications } from '@/utils/notesNotifications';
 import DateTimePicker from '@/components/DateTimePicker';
 
 
@@ -130,8 +129,6 @@ export default function NotesScreen() {
       currentIndex: 0,
     });
 
-    schedulePinnedNotesReminder(pinnedNotes.length);
-    scheduleNotesWeeklyDigest(notes.length, newThisWeek);
   }, [notes]);
 
   const filteredNotes = notes.filter(note => {
@@ -1009,8 +1006,7 @@ export default function NotesScreen() {
                   onValueChange={async (v) => {
                     setPinnedReminderEnabled(v);
                     const pinnedCount = notes.filter(n => n.pinned).length;
-                    if (v) { await schedulePinnedNotesReminder(pinnedCount); }
-                    else { await cancelPinnedNotesReminder(); }
+                    // notifications disabled
                   }}
                   trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
                   thumbColor={pinnedReminderEnabled ? '#ffffff' : Colors.textDim}
@@ -1029,8 +1025,7 @@ export default function NotesScreen() {
                     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
                     const weekStartStr = weekStart.toISOString().split('T')[0];
                     const newThisWeek = notes.filter(n => n.createdDate && n.createdDate >= weekStartStr).length;
-                    if (v) { await scheduleNotesWeeklyDigest(notes.length, newThisWeek); }
-                    else { await cancelAllNotesNotifications(); }
+                    // notifications disabled
                   }}
                   trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
                   thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
