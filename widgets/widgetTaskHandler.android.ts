@@ -30,6 +30,8 @@ import { PrioritiesWidget } from './PrioritiesWidget';
 import { GiftsWidget }    from './GiftsWidget';
 import { BingoWidget }    from './BingoWidget';
 import { BrainDumpWidget } from './BrainDumpWidget';
+import { LockScreenPrioritiesWidget } from './LockScreenPrioritiesWidget';
+import type { LockScreenPriorityItemData } from './LockScreenPrioritiesWidget';
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -42,6 +44,7 @@ export const PRIORITIES_WIDGET_DATA_KEY = 'prioritiesWidgetData';
 export const GIFTS_WIDGET_DATA_KEY     = 'giftsWidgetData';
 export const BINGO_WIDGET_DATA_KEY      = 'bingoWidgetData';
 export const BRAIN_DUMP_WIDGET_DATA_KEY = 'brainDumpWidgetData';
+export const LOCK_SCREEN_PRIORITIES_WIDGET_DATA_KEY = 'lockScreenPrioritiesWidgetData';
 
 // ─── Shared data interfaces ───────────────────────────────────────────────────
 
@@ -175,6 +178,12 @@ export interface BrainDumpWidgetData {
   totalDumps: number;
 }
 
+export interface LockScreenPrioritiesWidgetData {
+  completedCount: number;
+  totalCount: number;
+  priorities: LockScreenPriorityItemData[];
+}
+
 // ─── Save helpers (called from each screen) ───────────────────────────────────
 
 export async function saveWidgetData(data: WidgetData) {
@@ -211,6 +220,10 @@ export async function saveBingoWidgetData(data: BingoWidgetData) {
 
 export async function saveBrainDumpWidgetData(data: BrainDumpWidgetData) {
   try { await AsyncStorage.setItem(BRAIN_DUMP_WIDGET_DATA_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+}
+
+export async function saveLockScreenPrioritiesWidgetData(data: LockScreenPrioritiesWidgetData) {
+  try { await AsyncStorage.setItem(LOCK_SCREEN_PRIORITIES_WIDGET_DATA_KEY, JSON.stringify(data)); } catch { /* ignore */ }
 }
 
 // ─── Update helpers (save to AsyncStorage + push to widget immediately) ───────
@@ -258,6 +271,11 @@ export async function updateBingoWidget(data: BingoWidgetData) {
 export async function updateBrainDumpWidget(data: BrainDumpWidgetData) {
   await saveBrainDumpWidgetData(data);
   requestWidgetUpdate({ widgetName: 'BrainDumpWidget', renderWidget: () => React.createElement(BrainDumpWidget, data), widgetNotFound: () => {} });
+}
+
+export async function updateLockScreenPrioritiesWidget(data: LockScreenPrioritiesWidgetData) {
+  await saveLockScreenPrioritiesWidgetData(data);
+  requestWidgetUpdate({ widgetName: 'LockScreenPrioritiesWidget', renderWidget: () => React.createElement(LockScreenPrioritiesWidget, data), widgetNotFound: () => {} });
 }
 
 // ─── Load helpers ─────────────────────────────────────────────────────────────
@@ -470,6 +488,33 @@ async function computeBudgetData(): Promise<WidgetData> {
   return { monthLabel, income, expenses, cashflow: income - expenses };
 }
 
+async function computeLockScreenPrioritiesData(): Promise<LockScreenPrioritiesWidgetData> {
+  const priorities: any = await load('priorities', {});
+  const today = new Date().toISOString().split('T')[0];
+  const seenIds = new Set<number>();
+  const allPastUncompleted: any[] = [];
+  for (const date of Object.keys(priorities).filter(d => d < today).sort().reverse()) {
+    for (const p of priorities[date] ?? []) {
+      if (!p.completed && !seenIds.has(p.id)) {
+        seenIds.add(p.id);
+        allPastUncompleted.push({ ...p, overdue: true });
+      }
+    }
+  }
+  const todayList = [
+    ...allPastUncompleted,
+    ...(priorities[today] ?? []).filter((p: any) => !seenIds.has(p.id)),
+  ].slice(0, 5);
+  const completedCount = todayList.filter(p => p.completed).length;
+  const items: LockScreenPriorityItemData[] = todayList.map(p => ({
+    id: p.id,
+    task: p.task,
+    completed: p.completed,
+    overdue: p.overdue ?? false,
+  }));
+  return { completedCount, totalCount: todayList.length, priorities: items };
+}
+
 async function computeBrainDumpData(): Promise<BrainDumpWidgetData> {
   const stored = await AsyncStorage.getItem(BRAIN_DUMP_WIDGET_DATA_KEY);
   if (stored) {
@@ -586,6 +631,24 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
         break;
       }
 
+      case 'TOGGLE_LOCK_PRIORITY': {
+        const lockPriorityId = parseInt((clickActionData as any)?.priorityId ?? '0', 10);
+        if (lockPriorityId) {
+          const priorities: Record<string, any[]> = await load('priorities', {});
+          for (const date of Object.keys(priorities)) {
+            const list: any[] = priorities[date] ?? [];
+            const idx = list.findIndex((p: any) => p.id === lockPriorityId);
+            if (idx >= 0) {
+              priorities[date][idx] = { ...priorities[date][idx], completed: !priorities[date][idx].completed };
+              break;
+            }
+          }
+          await AsyncStorage.setItem('priorities', JSON.stringify(priorities));
+        }
+        renderWidget(React.createElement(LockScreenPrioritiesWidget, await computeLockScreenPrioritiesData()));
+        break;
+      }
+
     }
     return;
   }
@@ -620,6 +683,9 @@ async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
 
       } else if (widgetName === 'BrainDumpWidget') {
         renderWidget(React.createElement(BrainDumpWidget, await computeBrainDumpData()));
+
+      } else if (widgetName === 'LockScreenPrioritiesWidget') {
+        renderWidget(React.createElement(LockScreenPrioritiesWidget, await computeLockScreenPrioritiesData()));
       }
       break;
     }
