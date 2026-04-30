@@ -1,13 +1,14 @@
 /**
- * Expo config plugin — adds android:widgetCategory="keyguard|home_screen"
- * to the LockScreenPrioritiesWidget AppWidget provider XML.
+ * Expo config plugin — changes android:widgetCategory from "home_screen"
+ * to "keyguard|home_screen" for the LockScreenPrioritiesWidget.
  *
- * Samsung One UI 5+ uses this attribute to decide which widgets appear
- * in the lock screen widget picker. Without it, no widgets show up there.
+ * react-native-android-widget writes widgetCategory="home_screen" by default.
+ * Samsung One UI 5+ uses this attribute to decide which widgets appear in
+ * the lock screen widget picker — "keyguard" must be present for the widget
+ * to show there.
  *
- * react-native-android-widget generates XML files named:
- *   rn_widget_{lowercasedwidgetname}.xml
- * e.g. LockScreenPrioritiesWidget → rn_widget_lockscreenprioritieswidget.xml
+ * Generated filename: widgetprovider_{lowercasedname}.xml
+ * e.g. LockScreenPrioritiesWidget → widgetprovider_lockscreenprioritieswidget.xml
  */
 
 const { withDangerousMod } = require('@expo/config-plugins');
@@ -28,41 +29,31 @@ function withLockScreenWidget(config) {
         return config;
       }
 
-      const allFiles = fs.readdirSync(xmlDir).filter(f => f.endsWith('.xml'));
-      console.log('[withLockScreenWidget] XML files found:', allFiles.join(', '));
+      // react-native-android-widget names files: widgetprovider_{lowercasedname}.xml
+      const targetFile = 'widgetprovider_lockscreenprioritieswidget.xml';
+      const filePath = path.join(xmlDir, targetFile);
 
-      // react-native-android-widget lowercases the widget name for the filename
-      const expectedName = 'rn_widget_lockscreenprioritieswidget.xml';
-
-      // Try exact match first, then fall back to a loose scan
-      const targetFile =
-        allFiles.find(f => f === expectedName) ||
-        allFiles.find(f => f.replace(/_/g, '').toLowerCase().includes('lockscreenpriorities')) ||
-        allFiles.find(f => f.replace(/_/g, '').toLowerCase().includes('lockscreen'));
-
-      if (!targetFile) {
-        console.warn(
-          '[withLockScreenWidget] Could not find LockScreenPrioritiesWidget XML.',
-          'Files available:', allFiles.join(', ')
-        );
+      if (!fs.existsSync(filePath)) {
+        console.warn('[withLockScreenWidget] File not found:', targetFile);
+        console.warn('[withLockScreenWidget] Files in xml dir:', fs.readdirSync(xmlDir).join(', '));
         return config;
       }
 
-      const filePath = path.join(xmlDir, targetFile);
       const content = fs.readFileSync(filePath, 'utf8');
 
-      if (content.includes('widgetCategory')) {
-        console.log('[withLockScreenWidget] Already patched:', targetFile);
+      if (content.includes('keyguard')) {
+        console.log('[withLockScreenWidget] Already has keyguard, skipping.');
         return config;
       }
 
+      // Replace home_screen → keyguard|home_screen (library always writes home_screen)
       const patched = content.replace(
-        '<appwidget-provider',
-        '<appwidget-provider\n    android:widgetCategory="keyguard|home_screen"'
+        'android:widgetCategory="home_screen"',
+        'android:widgetCategory="keyguard|home_screen"'
       );
 
       fs.writeFileSync(filePath, patched, 'utf8');
-      console.log('[withLockScreenWidget] Patched', targetFile, 'with widgetCategory="keyguard|home_screen"');
+      console.log('[withLockScreenWidget] Patched', targetFile, '— widgetCategory set to keyguard|home_screen');
 
       return config;
     },
