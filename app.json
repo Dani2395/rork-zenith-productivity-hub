@@ -246,7 +246,8 @@
             }
           ]
         }
-      ]
+      ],
+      "./plugins/withLockScreenWidget"
     ],
     "experiments": {
       "typedRoutes": true
