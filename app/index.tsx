@@ -45,7 +45,8 @@ import {
 import Colors from '@/constants/colors';
 import styles from '@/styles/indexStyles';
 import { useData } from '@/contexts/DataContext';
-import { updatePrioritiesWidget, updateTasksWidget, updateHabitsWidget, updateCalendarWidget, updateNotesWidget, updateGiftsWidget, updateBingoWidget, updateLockScreenPrioritiesWidget } from '@/widgets/widgetTaskHandler';
+import { updatePrioritiesWidget, updateTasksWidget, updateHabitsWidget, updateCalendarWidget, updateNotesWidget, updateGiftsWidget, updateBingoWidget } from '@/widgets/widgetTaskHandler';
+import { updateLockScreenPrioritiesNotification } from '@/utils/lockScreenPriorities';
 import { SubTask, Holiday, Task, Event, Workout, Note, MoodEntry } from '@/types';
 import DateTimePicker from '@/components/DateTimePicker';
 
@@ -282,18 +283,13 @@ export default function HomeScreen() {
       })),
     });
 
-    const lockScreenDateLabel = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dateObj.getDay()]} ${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
-    updateLockScreenPrioritiesWidget({
-      dateLabel: lockScreenDateLabel,
-      completedCount,
-      totalCount: todayPriorities.length,
-      priorities: todayPriorities.map((p: any) => ({
-        id: p.id,
+    updateLockScreenPrioritiesNotification(
+      todayPriorities.map((p: any) => ({
         task: p.task,
         completed: p.completed,
         overdue: p.overdue ?? false,
-      })),
-    });
+      }))
+    );
 
     // Weekly digest: count across last 7 days
     const weekStart = new Date();
