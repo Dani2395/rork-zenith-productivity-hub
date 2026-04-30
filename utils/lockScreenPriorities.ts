@@ -4,39 +4,43 @@
  * Android lock screen widgets were removed in Android 5.0. The correct modern
  * approach is a persistent (ongoing) notification with lockscreen visibility
  * set to PUBLIC so the full content is visible on the lock screen without
- * unlocking the device.
+ * unlocking the device. This is how Todoist, Any.do, and Google Tasks handle it.
  *
  * The notification is updated every time priorities change and shows:
- *   • Up to 5 priority items with a ✓ or • prefix
- *   • A progress line: "X / Y done"
- *   • Tapping opens the app at the priorities screen
+ *   • Up to 5 priority items with a ✓ / ⚠ / • prefix
+ *   • A "X / Y done" count in the sub-text
+ *   • Tapping opens the app
+ *
+ * Implementation note: expo-notifications re-posts a notification in-place
+ * when scheduleNotificationAsync is called with the same identifier string,
+ * because Android's NotificationManager.notify() replaces notifications
+ * sharing the same integer ID (derived from the identifier hash).
  */
 
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let N: any = null;
 function getN() {
   if (!N) {
-    try { N = require('expo-notifications'); } catch { /* unavailable */ }
+    try { N = require('expo-notifications'); } catch { /* unavailable in Expo Go */ }
   }
   return N;
 }
 
-const CHANNEL_ID   = 'lock_screen_priorities';
-const NOTIF_ID_KEY = 'lockScreenPrioritiesNotifId';
-// Fixed identifier so we always update the same notification slot
-const FIXED_ID     = 88421;
+const CHANNEL_ID = 'lock_screen_priorities';
+const NOTIF_IDENTIFIER = 'lock_screen_priorities_pinned';
 
 async function ensureChannel() {
   const n = getN();
   if (!n || Platform.OS !== 'android') return;
   await n.setNotificationChannelAsync(CHANNEL_ID, {
     name: 'Lock Screen Priorities',
-    description: 'Persistent top-5 priority list visible on your lock screen',
-    importance: n.AndroidImportance.LOW,   // LOW = no sound/vibration, stays in tray
+    description: 'Persistent top-5 priority list shown on your lock screen',
+    importance: n.AndroidImportance.LOW,  // silent, no vibration, stays in tray
     lockscreenVisibility: n.AndroidNotificationVisibility?.PUBLIC ?? 1,
     showBadge: false,
+    sound: null,
+    vibrationPattern: null,
   });
 }
 
@@ -50,9 +54,7 @@ export async function updateLockScreenPrioritiesNotification(
   priorities: LockScreenPriorityItem[],
 ): Promise<void> {
   const n = getN();
-  if (!n) return;
-
-  if (Platform.OS !== 'android') return;
+  if (!n || Platform.OS !== 'android') return;
 
   await ensureChannel();
 
@@ -65,38 +67,29 @@ export async function updateLockScreenPrioritiesNotification(
     return;
   }
 
-  // Build body lines: ✓ for done, ⚠ for overdue, • for pending
-  const lines = top5.map(p => {
-    const prefix = p.completed ? '✓' : p.overdue ? '⚠' : '•';
-    return `${prefix}  ${p.task}`;
-  });
-  const body = lines.join('\n');
-  const subText = `${completedCount} / ${totalCount} done`;
+  // ✓ = done, ⚠ = overdue, • = pending
+  const body = top5
+    .map(p => `${p.completed ? '✓' : p.overdue ? '⚠' : '•'}  ${p.task}`)
+    .join('\n');
 
   try {
-    // presentNotificationAsync assigns a new ID every call; we use
-    // scheduleNotificationAsync with no trigger (immediate) and a fixed
-    // identifier via the identifier field so Android updates in-place.
     await n.scheduleNotificationAsync({
-      identifier: String(FIXED_ID),
+      identifier: NOTIF_IDENTIFIER,
       content: {
         title: '⭐ Top 5 Priorities',
         body,
-        subtitle: subText,
-        data: { type: 'lock_screen_priorities', url: 'rork-app:///' },
+        subtitle: `${completedCount} / ${totalCount} done`,
+        data: { type: 'lock_screen_priorities' },
         channelId: CHANNEL_ID,
+        // Android-specific: keep it pinned
         sticky: true,
         autoDismiss: false,
-        ...(Platform.OS === 'android' ? {
-          priority: 'low',
-          vibrate: [],
-          sound: false,
-        } : {}),
+        sound: false,
+        vibrate: false,
+        priority: 'low',
       },
       trigger: null,
     });
-
-    await AsyncStorage.setItem(NOTIF_ID_KEY, String(FIXED_ID));
   } catch (e) {
     console.log('lockScreenPriorities update error', e);
   }
@@ -106,7 +99,6 @@ export async function dismissLockScreenPrioritiesNotification(): Promise<void> {
   const n = getN();
   if (!n) return;
   try {
-    await n.dismissNotificationAsync(String(FIXED_ID));
-    await AsyncStorage.removeItem(NOTIF_ID_KEY);
-  } catch { /* ignore */ }
+    await n.dismissNotificationAsync(NOTIF_IDENTIFIER);
+  } catch { /* ignore if not present */ }
 }
