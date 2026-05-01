@@ -1,46 +1,59 @@
 /**
  * Expo config plugin — patches widgetprovider_lockscreenprioritieswidget.xml
- * to add android:widgetCategory="keyguard|home_screen" so the widget appears
- * in Samsung One UI 5+ lock screen widget picker.
+ * to add android:widgetCategory="keyguard|home_screen" for Samsung lock screen.
  *
- * WHY a Gradle task instead of withDangerousMod:
- * react-native-android-widget also uses withDangerousMod to generate the XML.
- * If our mod runs first the file doesn't exist yet; if it runs second it works.
- * Ordering is non-deterministic across Expo SDK versions, so this approach
- * patches the file inside the Gradle build phase, which always runs after
- * expo prebuild has written every generated file.
+ * react-native-android-widget writes the XML using:
+ *   path.join(platformProjectRoot, 'android/app/src/main/res/xml', filename)
+ * where platformProjectRoot = {projectRoot}/android (Expo SDK 50+).
+ * This produces a double-android path: {projectRoot}/android/android/app/src/main/res/xml/
+ * We search BOTH the correct path and the library's path so the patch always lands.
+ *
+ * We use withAppBuildGradle so the patch runs during the Gradle build phase,
+ * which is guaranteed to run after expo prebuild has written all generated files.
  */
 
 const { withAppBuildGradle } = require('@expo/config-plugins');
 
-const GRADLE_TASK = `
-// Patch LockScreenPrioritiesWidget to appear in Samsung lock screen picker.
-task patchLockScreenWidget {
-    doFirst {
-        def xmlFile = file("src/main/res/xml/widgetprovider_lockscreenprioritieswidget.xml")
-        if (xmlFile.exists()) {
-            def txt = xmlFile.text
-            if (!txt.contains('keyguard')) {
-                xmlFile.text = txt.replace(
-                    'android:widgetCategory="home_screen"',
-                    'android:widgetCategory="keyguard|home_screen"'
-                )
-                println "[withLockScreenWidget] patched " + xmlFile.absolutePath
+const GRADLE_SNIPPET = `
+// Patch LockScreenPrioritiesWidget for Samsung lock screen widget picker.
+afterEvaluate {
+    def patchLockScreenWidget = tasks.create("patchLockScreenWidget") {
+        doLast {
+            def filename = "widgetprovider_lockscreenprioritieswidget.xml"
+            // Candidate 1: correct location (relative to android/app/)
+            // Candidate 2: library double-android bug location (relative to android/app/)
+            // rootProject.projectDir = android/, so:
+            //   rootProject.file("android/app/src/...") = android/android/app/src/...
+            def candidates = [
+                file("src/main/res/xml/" + filename),
+                rootProject.file("android/app/src/main/res/xml/" + filename),
+            ]
+            def target = candidates.find { it.exists() }
+            if (target != null) {
+                def content = target.text
+                if (!content.contains("keyguard")) {
+                    target.text = content.replace(
+                        'android:widgetCategory="home_screen"',
+                        'android:widgetCategory="keyguard|home_screen"'
+                    )
+                    println "[withLockScreenWidget] PATCHED: " + target.absolutePath
+                } else {
+                    println "[withLockScreenWidget] already has keyguard: " + target.absolutePath
+                }
             } else {
-                println "[withLockScreenWidget] already patched"
+                println "[withLockScreenWidget] FILE NOT FOUND — searched:"
+                candidates.each { println "  " + it.absolutePath }
             }
-        } else {
-            println "[withLockScreenWidget] FILE NOT FOUND: " + xmlFile.absolutePath
         }
     }
+    preBuild.dependsOn patchLockScreenWidget
 }
-preBuild.dependsOn patchLockScreenWidget
 `;
 
 function withLockScreenWidget(config) {
   return withAppBuildGradle(config, (config) => {
     if (!config.modResults.contents.includes('patchLockScreenWidget')) {
-      config.modResults.contents += GRADLE_TASK;
+      config.modResults.contents += GRADLE_SNIPPET;
     }
     return config;
   });
