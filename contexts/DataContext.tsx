@@ -441,7 +441,8 @@ export const [DataProvider, useData] = createContextHook(() => {
     };
     setPriorities(prev => {
       const existing = prev[date] || [];
-      if (existing.length >= 5) return prev;
+      const incompleteCount = existing.filter(p => !p.completed).length;
+      if (incompleteCount >= 5) return prev;
       const updated = { ...prev, [date]: [...existing, newPriority] };
       saveData('priorities', updated);
       return updated;
