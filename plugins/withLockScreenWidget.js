@@ -7,9 +7,10 @@
  *    AppWidget providers to be exported=true or the system widget picker
  *    (both home screen and Samsung lock screen) will not list the widget.
  *
- * 2. android:widgetCategory="home_screen" — Samsung One UI 5+ requires
- *    "keyguard" in widgetCategory for a widget to appear in the lock screen
- *    widget panel. Patched directly via withDangerousMod at prebuild time.
+ * 2. android:widgetCategory="home_screen" — must be changed to "keyguard" so
+ *    the widget appears ONLY in the Samsung lock screen widget panel and not
+ *    as an extra entry in the home screen widget picker. Patched directly via
+ *    withDangerousMod at prebuild time.
  */
 
 const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
@@ -48,15 +49,18 @@ function withLockScreenWidget(config) {
 
       if (fs.existsSync(xmlPath)) {
         let content = fs.readFileSync(xmlPath, 'utf8');
-        if (!content.includes('keyguard')) {
+        // Set widgetCategory to "keyguard" only — this removes it from the home
+        // screen widget picker and makes it appear exclusively in the lock screen
+        // widget panel (Samsung One UI 5+).
+        if (!content.includes('android:widgetCategory="keyguard"')) {
           content = content.replace(
-            'android:widgetCategory="home_screen"',
-            'android:widgetCategory="keyguard|home_screen"'
+            /android:widgetCategory="[^"]*"/,
+            'android:widgetCategory="keyguard"'
           );
           fs.writeFileSync(xmlPath, content, 'utf8');
-          console.log('[withLockScreenWidget] Patched widgetCategory to keyguard|home_screen');
+          console.log('[withLockScreenWidget] Patched widgetCategory to keyguard');
         } else {
-          console.log('[withLockScreenWidget] widgetCategory already contains keyguard');
+          console.log('[withLockScreenWidget] widgetCategory already set to keyguard');
         }
       } else {
         console.warn('[withLockScreenWidget] XML not found at:', xmlPath);
