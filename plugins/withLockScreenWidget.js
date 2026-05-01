@@ -2,58 +2,105 @@
  * Expo config plugin — changes android:widgetCategory from "home_screen"
  * to "keyguard|home_screen" for the LockScreenPrioritiesWidget.
  *
- * react-native-android-widget writes widgetCategory="home_screen" by default.
- * Samsung One UI 5+ uses this attribute to decide which widgets appear in
- * the lock screen widget picker — "keyguard" must be present for the widget
- * to show there.
+ * Samsung One UI 5+ uses this attribute to decide which widgets appear
+ * in the lock screen widget picker. Without "keyguard", no widgets from
+ * this app appear there.
  *
- * Generated filename: widgetprovider_{lowercasedname}.xml
- * e.g. LockScreenPrioritiesWidget → widgetprovider_lockscreenprioritieswidget.xml
+ * react-native-android-widget generates:
+ *   {projectRoot}/android/app/src/main/res/xml/widgetprovider_{lowercasedname}.xml
+ * and always writes widgetCategory="home_screen" — this plugin replaces it.
  */
 
 const { withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
+/** Recursively find every file matching `filename` under `dir`. */
+function findRecursive(dir, filename) {
+  const results = [];
+  if (!fs.existsSync(dir)) return results;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...findRecursive(full, filename));
+    } else if (entry.name === filename) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
 function withLockScreenWidget(config) {
   return withDangerousMod(config, [
     'android',
     async (config) => {
-      const xmlDir = path.join(
-        config.modRequest.platformProjectRoot,
-        'app/src/main/res/xml'
-      );
+      const projectRoot = config.modRequest.projectRoot;
+      const platformRoot = config.modRequest.platformProjectRoot;
 
-      if (!fs.existsSync(xmlDir)) {
-        console.warn('[withLockScreenWidget] xml dir not found:', xmlDir);
+      const targetFilename = 'widgetprovider_lockscreenprioritieswidget.xml';
+
+      // 1. Try the two most likely explicit paths first (fastest).
+      const explicitCandidates = [
+        path.join(projectRoot, 'android/app/src/main/res/xml', targetFilename),
+        path.join(platformRoot, 'app/src/main/res/xml', targetFilename),
+      ];
+
+      let targetPath = null;
+      for (const p of explicitCandidates) {
+        if (fs.existsSync(p)) { targetPath = p; break; }
+      }
+
+      // 2. Fallback: recursive search under android/ (covers unexpected paths).
+      if (!targetPath) {
+        const androidDir = fs.existsSync(path.join(projectRoot, 'android'))
+          ? path.join(projectRoot, 'android')
+          : platformRoot;
+        console.warn('[withLockScreenWidget] Explicit paths not found, scanning', androidDir);
+        const found = findRecursive(androidDir, targetFilename);
+        if (found.length > 0) {
+          targetPath = found[0];
+          console.warn('[withLockScreenWidget] Found via recursive scan:', targetPath);
+        }
+      }
+
+      if (!targetPath) {
+        console.error('[withLockScreenWidget] FAILED — file not found anywhere.');
+        console.error('[withLockScreenWidget] projectRoot:', projectRoot);
+        console.error('[withLockScreenWidget] platformRoot:', platformRoot);
+        // List xml dirs to help debug
+        const xmlDirs = [
+          path.join(projectRoot, 'android/app/src/main/res/xml'),
+          path.join(platformRoot, 'app/src/main/res/xml'),
+        ];
+        for (const d of xmlDirs) {
+          if (fs.existsSync(d)) {
+            console.error('[withLockScreenWidget] Contents of', d + ':', fs.readdirSync(d).join(', '));
+          } else {
+            console.error('[withLockScreenWidget] Dir does not exist:', d);
+          }
+        }
         return config;
       }
 
-      // react-native-android-widget names files: widgetprovider_{lowercasedname}.xml
-      const targetFile = 'widgetprovider_lockscreenprioritieswidget.xml';
-      const filePath = path.join(xmlDir, targetFile);
-
-      if (!fs.existsSync(filePath)) {
-        console.warn('[withLockScreenWidget] File not found:', targetFile);
-        console.warn('[withLockScreenWidget] Files in xml dir:', fs.readdirSync(xmlDir).join(', '));
-        return config;
-      }
-
-      const content = fs.readFileSync(filePath, 'utf8');
+      const content = fs.readFileSync(targetPath, 'utf8');
 
       if (content.includes('keyguard')) {
-        console.log('[withLockScreenWidget] Already has keyguard, skipping.');
+        console.log('[withLockScreenWidget] Already patched:', targetPath);
         return config;
       }
 
-      // Replace home_screen → keyguard|home_screen (library always writes home_screen)
+      if (!content.includes('android:widgetCategory="home_screen"')) {
+        console.warn('[withLockScreenWidget] Expected widgetCategory="home_screen" not found in:', targetPath);
+        console.warn('[withLockScreenWidget] File content:', content);
+        return config;
+      }
+
       const patched = content.replace(
         'android:widgetCategory="home_screen"',
         'android:widgetCategory="keyguard|home_screen"'
       );
-
-      fs.writeFileSync(filePath, patched, 'utf8');
-      console.log('[withLockScreenWidget] Patched', targetFile, '— widgetCategory set to keyguard|home_screen');
+      fs.writeFileSync(targetPath, patched, 'utf8');
+      console.log('[withLockScreenWidget] Patched:', targetPath);
 
       return config;
     },
