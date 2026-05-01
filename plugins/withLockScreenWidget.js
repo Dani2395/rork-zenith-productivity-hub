@@ -1,29 +1,28 @@
 /**
- * Expo config plugin — patches widgetprovider_lockscreenprioritieswidget.xml
- * to add android:widgetCategory="keyguard|home_screen" for Samsung lock screen.
+ * Expo config plugin for LockScreenPrioritiesWidget.
  *
- * react-native-android-widget writes the XML using:
- *   path.join(platformProjectRoot, 'android/app/src/main/res/xml', filename)
- * where platformProjectRoot = {projectRoot}/android (Expo SDK 50+).
- * This produces a double-android path: {projectRoot}/android/android/app/src/main/res/xml/
- * We search BOTH the correct path and the library's path so the patch always lands.
+ * Fixes two bugs in react-native-android-widget@0.20.1:
  *
- * We use withAppBuildGradle so the patch runs during the Gradle build phase,
- * which is guaranteed to run after expo prebuild has written all generated files.
+ * 1. android:exported="false" on the receiver — Android 12+ requires
+ *    AppWidget providers to be exported=true or the system widget picker
+ *    (both home screen and Samsung lock screen) will not list the widget.
+ *    Fixed via withAndroidManifest.
+ *
+ * 2. android:widgetCategory="home_screen" — Samsung One UI 5+ requires
+ *    "keyguard" in widgetCategory for a widget to appear in the lock screen
+ *    widget panel. Fixed via a Gradle task that runs after expo prebuild.
  */
 
-const { withAppBuildGradle } = require('@expo/config-plugins');
+const { withAppBuildGradle, withAndroidManifest } = require('@expo/config-plugins');
+
+const WIDGET_RECEIVER_NAME = 'LockScreenPrioritiesWidget';
 
 const GRADLE_SNIPPET = `
-// Patch LockScreenPrioritiesWidget for Samsung lock screen widget picker.
+// Patch LockScreenPrioritiesWidget widgetCategory for Samsung lock screen.
 afterEvaluate {
     def patchLockScreenWidget = tasks.create("patchLockScreenWidget") {
         doLast {
             def filename = "widgetprovider_lockscreenprioritieswidget.xml"
-            // Candidate 1: correct location (relative to android/app/)
-            // Candidate 2: library double-android bug location (relative to android/app/)
-            // rootProject.projectDir = android/, so:
-            //   rootProject.file("android/app/src/...") = android/android/app/src/...
             def candidates = [
                 file("src/main/res/xml/" + filename),
                 rootProject.file("android/app/src/main/res/xml/" + filename),
@@ -36,13 +35,13 @@ afterEvaluate {
                         'android:widgetCategory="home_screen"',
                         'android:widgetCategory="keyguard|home_screen"'
                     )
-                    println "[withLockScreenWidget] PATCHED: " + target.absolutePath
+                    println "[withLockScreenWidget] PATCHED widgetCategory: " + target.absolutePath
                 } else {
-                    println "[withLockScreenWidget] already has keyguard: " + target.absolutePath
+                    println "[withLockScreenWidget] widgetCategory already has keyguard"
                 }
             } else {
-                println "[withLockScreenWidget] FILE NOT FOUND — searched:"
-                candidates.each { println "  " + it.absolutePath }
+                println "[withLockScreenWidget] ERROR: XML file not found"
+                candidates.each { println "  checked: " + it.absolutePath }
             }
         }
     }
@@ -51,12 +50,32 @@ afterEvaluate {
 `;
 
 function withLockScreenWidget(config) {
-  return withAppBuildGradle(config, (config) => {
+  // Fix 1: set android:exported="true" on the LockScreenPrioritiesWidget receiver.
+  // The library hardcodes exported="false" which prevents Android 12+ from listing
+  // the widget in any widget picker (home screen or lock screen).
+  config = withAndroidManifest(config, (config) => {
+    const mainApp = config.modResults.manifest.application?.[0];
+    if (!mainApp?.receiver) return config;
+
+    for (const receiver of mainApp.receiver) {
+      const name = receiver.$?.['android:name'] ?? '';
+      if (name.includes(WIDGET_RECEIVER_NAME)) {
+        receiver.$['android:exported'] = 'true';
+        console.log('[withLockScreenWidget] Set exported=true on receiver:', name);
+      }
+    }
+    return config;
+  });
+
+  // Fix 2: patch widgetCategory in the provider XML via a Gradle task.
+  config = withAppBuildGradle(config, (config) => {
     if (!config.modResults.contents.includes('patchLockScreenWidget')) {
       config.modResults.contents += GRADLE_SNIPPET;
     }
     return config;
   });
+
+  return config;
 }
 
 module.exports = withLockScreenWidget;
