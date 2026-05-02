@@ -78,8 +78,6 @@ export default function NotesScreen() {
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [pinnedReminderEnabled, setPinnedReminderEnabled] = useState(false);
-  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
   const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
 
   const CATEGORIES = [
@@ -996,41 +994,6 @@ export default function NotesScreen() {
               <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
                 Add a "Notes Overview" widget: Long-press your Android home screen → Widgets → Zenith → Notes Overview. Shows total notes, pinned count, and your latest note.
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Pinned Notes Reminder</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Daily 9 AM reminder to review your pinned notes</Text>
-                </View>
-                <Switch
-                  value={pinnedReminderEnabled}
-                  onValueChange={async (v) => {
-                    setPinnedReminderEnabled(v);
-                    const pinnedCount = notes.filter(n => n.pinned).length;
-                    // notifications disabled
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={pinnedReminderEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday summary of total notes and new this week</Text>
-                </View>
-                <Switch
-                  value={weeklyDigestEnabled}
-                  onValueChange={async (v) => {
-                    setWeeklyDigestEnabled(v);
-                    const weekStart = new Date();
-                    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-                    const weekStartStr = weekStart.toISOString().split('T')[0];
-                    const newThisWeek = notes.filter(n => n.createdDate && n.createdDate >= weekStartStr).length;
-                    // notifications disabled
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
             </ScrollView>
             <TouchableOpacity
               style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}

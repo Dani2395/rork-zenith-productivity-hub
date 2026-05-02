@@ -1,53 +1,24 @@
 /**
  * Expo config plugin for LockScreenPrioritiesWidget.
  *
- * Fixes two bugs in react-native-android-widget@0.20.1:
+ * Fixes two issues in react-native-android-widget:
  *
  * 1. android:exported="false" on the receiver — Android 12+ requires
  *    AppWidget providers to be exported=true or the system widget picker
  *    (both home screen and Samsung lock screen) will not list the widget.
- *    Fixed via withAndroidManifest.
  *
- * 2. android:widgetCategory="home_screen" — Samsung One UI 5+ requires
- *    "keyguard" in widgetCategory for a widget to appear in the lock screen
- *    widget panel. Fixed via a Gradle task that runs after expo prebuild.
+ * 2. android:widgetCategory="home_screen" — must be changed to "keyguard" so
+ *    the widget appears ONLY in the Samsung lock screen widget panel and not
+ *    as an extra entry in the home screen widget picker. Patched directly via
+ *    withDangerousMod at prebuild time.
  */
 
-const { withAppBuildGradle, withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
+const path = require('path');
+const fs = require('fs');
 
 const WIDGET_RECEIVER_NAME = 'LockScreenPrioritiesWidget';
-
-const GRADLE_SNIPPET = `
-// Patch LockScreenPrioritiesWidget widgetCategory for Samsung lock screen.
-afterEvaluate {
-    def patchLockScreenWidget = tasks.create("patchLockScreenWidget") {
-        doLast {
-            def filename = "widgetprovider_lockscreenprioritieswidget.xml"
-            def candidates = [
-                file("src/main/res/xml/" + filename),
-                rootProject.file("android/app/src/main/res/xml/" + filename),
-            ]
-            def target = candidates.find { it.exists() }
-            if (target != null) {
-                def content = target.text
-                if (!content.contains("keyguard")) {
-                    target.text = content.replace(
-                        'android:widgetCategory="home_screen"',
-                        'android:widgetCategory="keyguard|home_screen"'
-                    )
-                    println "[withLockScreenWidget] PATCHED widgetCategory: " + target.absolutePath
-                } else {
-                    println "[withLockScreenWidget] widgetCategory already has keyguard"
-                }
-            } else {
-                println "[withLockScreenWidget] ERROR: XML file not found"
-                candidates.each { println "  checked: " + it.absolutePath }
-            }
-        }
-    }
-    preBuild.dependsOn patchLockScreenWidget
-}
-`;
+const XML_FILENAME = 'widgetprovider_lockscreenprioritieswidget.xml';
 
 function withLockScreenWidget(config) {
   // Fix 1: set android:exported="true" on the LockScreenPrioritiesWidget receiver.
@@ -67,13 +38,37 @@ function withLockScreenWidget(config) {
     return config;
   });
 
-  // Fix 2: patch widgetCategory in the provider XML via a Gradle task.
-  config = withAppBuildGradle(config, (config) => {
-    if (!config.modResults.contents.includes('patchLockScreenWidget')) {
-      config.modResults.contents += GRADLE_SNIPPET;
-    }
-    return config;
-  });
+  // Fix 2: patch widgetCategory directly in the provider XML at prebuild time
+  // using withDangerousMod so it runs after react-native-android-widget writes
+  // the file, and before the native build starts.
+  config = withDangerousMod(config, [
+    'android',
+    async (config) => {
+      const projectRoot = config.modRequest.platformProjectRoot;
+      const xmlPath = path.join(projectRoot, 'app', 'src', 'main', 'res', 'xml', XML_FILENAME);
+
+      if (fs.existsSync(xmlPath)) {
+        let content = fs.readFileSync(xmlPath, 'utf8');
+        // Set widgetCategory to "keyguard" only — this removes it from the home
+        // screen widget picker and makes it appear exclusively in the lock screen
+        // widget panel (Samsung One UI 5+).
+        if (!content.includes('android:widgetCategory="keyguard"')) {
+          content = content.replace(
+            /android:widgetCategory="[^"]*"/,
+            'android:widgetCategory="keyguard"'
+          );
+          fs.writeFileSync(xmlPath, content, 'utf8');
+          console.log('[withLockScreenWidget] Patched widgetCategory to keyguard');
+        } else {
+          console.log('[withLockScreenWidget] widgetCategory already set to keyguard');
+        }
+      } else {
+        console.warn('[withLockScreenWidget] XML not found at:', xmlPath);
+      }
+
+      return config;
+    },
+  ]);
 
   return config;
 }

@@ -106,8 +106,6 @@ export default function BudgetScreen() {
 
   // Widget / notification settings
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [dailyNotifEnabled, setDailyNotifEnabled] = useState(false);
-  const [weeklyNotifEnabled, setWeeklyNotifEnabled] = useState(false);
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [monthDetailVisible, setMonthDetailVisible] = useState(false);
@@ -297,14 +295,6 @@ export default function BudgetScreen() {
       }
     }
   }, [transactions, budgets]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleDailyNotifToggle = (value: boolean) => {
-    setDailyNotifEnabled(value);
-  };
-
-  const handleWeeklyNotifToggle = (value: boolean) => {
-    setWeeklyNotifEnabled(value);
-  };
 
   const toggleQuarter = (key: string) => {
     setExpandedQuarters(prev => {
@@ -2233,45 +2223,6 @@ export default function BudgetScreen() {
                 </Text>
               </View>
 
-              {/* Daily summary toggle */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Daily Morning Summary</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
-                    Notification at 8 AM with this month's cashflow
-                  </Text>
-                </View>
-                <Switch
-                  value={dailyNotifEnabled}
-                  onValueChange={handleDailyNotifToggle}
-                  trackColor={{ false: Colors.card, true: Colors.primary }}
-                  thumbColor={dailyNotifEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-
-              {/* Weekly digest toggle */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Digest</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>
-                    Sunday evening summary of the week's income & expenses
-                  </Text>
-                </View>
-                <Switch
-                  value={weeklyNotifEnabled}
-                  onValueChange={handleWeeklyNotifToggle}
-                  trackColor={{ false: Colors.card, true: Colors.primary }}
-                  thumbColor={weeklyNotifEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-
-              {/* Budget alerts note */}
-              <View style={{ backgroundColor: Colors.background, borderRadius: 10, padding: 12, marginBottom: 16 }}>
-                <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>⚠️ Budget Threshold Alerts</Text>
-                <Text style={{ color: Colors.textDim, fontSize: 12, lineHeight: 18 }}>
-                  Automatic — you'll get a notification whenever a budget category reaches 80% or 100% of its limit. No toggle needed.
-                </Text>
-              </View>
 
               {/* Other available widgets */}
               <View style={{ backgroundColor: Colors.background, borderRadius: 10, padding: 12, marginBottom: 20 }}>

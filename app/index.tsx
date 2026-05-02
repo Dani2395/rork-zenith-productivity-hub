@@ -162,6 +162,9 @@ export default function HomeScreen() {
 
   const today = new Date().toISOString().split('T')[0];
   const todayPriorities = (priorities[today] || []);
+  const incompletePriorities = todayPriorities.filter((p: any) => !p.completed);
+  const completedPriorities = todayPriorities.filter((p: any) => p.completed);
+  const sortedPriorities = [...incompletePriorities, ...completedPriorities];
   const pinnedNotes = notes.filter(n => n.pinned);
 
   const fetchWeather = useCallback(async () => {
@@ -1114,10 +1117,10 @@ export default function HomeScreen() {
                 <Plus size={16} color={Colors.text} />
               </TouchableOpacity>
             </View>
-            {todayPriorities.length === 0 ? (
+            {sortedPriorities.length === 0 ? (
               <Text style={styles.emptyText}>No priorities set</Text>
             ) : (
-              todayPriorities.slice(0, 5).map((priority, index) => (
+              sortedPriorities.map((priority, index) => (
                 <TouchableOpacity
                   key={priority.id}
                   style={styles.priorityItem}
@@ -1125,10 +1128,12 @@ export default function HomeScreen() {
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={[Colors.primary, Colors.secondary]}
+                    colors={priority.completed ? ['#2a2a40', '#1a1a30'] : [Colors.primary, Colors.secondary]}
                     style={styles.priorityNumber}
                   >
-                    <Text style={styles.priorityNumberText}>{index + 1}</Text>
+                    <Text style={styles.priorityNumberText}>
+                      {priority.completed ? '✓' : index + 1}
+                    </Text>
                   </LinearGradient>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
