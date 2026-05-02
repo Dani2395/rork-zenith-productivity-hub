@@ -155,7 +155,15 @@ function RootLayoutNav() {
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
-    registerForPushNotificationsAsync();
+    registerForPushNotificationsAsync().then(() => {
+      // Wipe any stale scheduled notifications from previous builds
+      // (habits, priorities, budget, etc. were removed — clear their queued alerts).
+      // Tasks and calendar screens reschedule their own when they mount.
+      try {
+        const N = require('expo-notifications');
+        N.cancelAllScheduledNotificationsAsync();
+      } catch { /* not available in Expo Go */ }
+    });
   }, []);
 
   return (

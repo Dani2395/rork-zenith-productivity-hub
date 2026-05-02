@@ -38,8 +38,6 @@ export default function BingoScreen() {
   const [prizeDescription, setPrizeDescription] = useState('');
   const [prizeEmoji, setPrizeEmoji] = useState('');
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [weeklyCheckInEnabled, setWeeklyCheckInEnabled] = useState(false);
-  const [monthlyMotivationEnabled, setMonthlyMotivationEnabled] = useState(false);
 
   const completedCount = bingoData.filter(item => item.d).length;
 
@@ -459,36 +457,6 @@ export default function BingoScreen() {
               <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
                 Add a "2026 Bingo Goals" widget: Long-press your Android home screen → Widgets → Zenith → 2026 Bingo Goals. Shows completed goals, bingo status, and most recent goal.
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Check-In</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday reminder of your bingo progress this week</Text>
-                </View>
-                <Switch
-                  value={weeklyCheckInEnabled}
-                  onValueChange={async (v) => {
-                    setWeeklyCheckInEnabled(v);
-                    // notifications disabled
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={weeklyCheckInEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Monthly Motivation</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>1st of each month with your bingo progress update</Text>
-                </View>
-                <Switch
-                  value={monthlyMotivationEnabled}
-                  onValueChange={async (v) => {
-                    setMonthlyMotivationEnabled(v);
-                    // notifications disabled
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={monthlyMotivationEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
             </ScrollView>
             <TouchableOpacity
               style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}

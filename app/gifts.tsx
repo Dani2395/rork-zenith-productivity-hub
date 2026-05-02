@@ -99,8 +99,6 @@ export default function GiftsScreen() {
   };
   const [personModalVisible, setPersonModalVisible] = useState(false);
   const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [monthlyReminderEnabled, setMonthlyReminderEnabled] = useState(false);
-  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(false);
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
   const [expandedPersons, setExpandedPersons] = useState<Set<number>>(new Set());
@@ -696,39 +694,6 @@ export default function GiftsScreen() {
               <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
                 Add a "Gift Tracker" widget: Long-press your Android home screen → Widgets → Zenith → Gift Tracker. Shows people count, total gifts, purchased count, and next upcoming event.
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Monthly Gift Reminder</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>1st of each month: reminder of unpurchased gifts</Text>
-                </View>
-                <Switch
-                  value={monthlyReminderEnabled}
-                  onValueChange={async (v) => {
-                    setMonthlyReminderEnabled(v);
-                    const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
-                    const unpurchasedTotal = allGifts.filter((g: any) => !g.purchased).length;
-                    // notifications disabled
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={monthlyReminderEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ color: Colors.text, fontSize: 14, fontWeight: '600' }}>Weekly Gift Digest</Text>
-                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 2 }}>Sunday summary of upcoming events and gift status</Text>
-                </View>
-                <Switch
-                  value={weeklyDigestEnabled}
-                  onValueChange={async (v) => {
-                    setWeeklyDigestEnabled(v);
-                    const allGifts = giftPeople.flatMap(p => p.gifts ?? []);
-                    // notifications disabled
-                  }}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: Colors.primary }}
-                  thumbColor={weeklyDigestEnabled ? '#ffffff' : Colors.textDim}
-                />
-              </View>
             </ScrollView>
             <TouchableOpacity
               style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
