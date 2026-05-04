@@ -499,8 +499,21 @@ export const [DataProvider, useData] = createContextHook(() => {
       // Keep today's items that aren't already represented in the overdue list
       const todayNewItems = todayPriorities.filter(p => !seenIds.has(p.id));
 
+      // Mark rolled-over items as completed in their original past date entries
+      // so they are not picked up again on subsequent days
+      const updatedPrev: Priorities = {};
+      for (const date of Object.keys(prev)) {
+        if (date < today) {
+          updatedPrev[date] = prev[date].map(p =>
+            seenIds.has(p.id) && !p.completed ? { ...p, completed: true } : p
+          );
+        } else {
+          updatedPrev[date] = prev[date];
+        }
+      }
+
       const updated = {
-        ...prev,
+        ...updatedPrev,
         [today]: [...allPastUncompleted, ...todayNewItems].slice(0, 5),
       };
       saveData('priorities', updated);

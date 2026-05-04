@@ -11,20 +11,22 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Switch,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Plus, Trash2, Lock, Pin, Search, Grid3x3, List, Image as ImageIcon, Smile, X, Unlock, Settings, Edit2, Bell, Eye, EyeOff } from 'lucide-react-native';
-import MarkdownRenderer from '@/components/MarkdownRenderer';
+import {
+  ArrowLeft, Search, MoreVertical, Pin, Lock, Unlock,
+  Bold, Italic, Underline, Strikethrough, List, ListOrdered,
+  CheckSquare, Image as ImageIcon, Smile, X, Settings, Edit2,
+  Trash2, Bell, Plus, Grid3x3,
+} from 'lucide-react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useData } from '@/contexts/DataContext';
 import { updateNotesWidget } from '@/widgets/widgetTaskHandler';
 import DateTimePicker from '@/components/DateTimePicker';
-
-
 
 const STAMPS = [
   '⭐', '❤️', '🎉', '🌟', '✨', '🎯', '🔥', '💎',
@@ -51,13 +53,17 @@ export default function NotesScreen() {
   const { notes, addNote, updateNote, deleteNote, noteCategories, addNoteCategory, updateNoteCategory, deleteNoteCategory } = useData();
   const params = useLocalSearchParams<{ noteId?: string; action?: string }>();
   const handledParamRef = useRef<string | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingNote, setEditingNote] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [filter, setFilter] = useState<'all' | 'locked' | 'unlocked'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'journal'>('list');
 
+  // List state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
+
+  // Editor state
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingNote, setEditingNote] = useState<number | null>(null);
   const [noteName, setNoteName] = useState('');
   const [noteText, setNoteText] = useState('');
   const [noteLocked, setNoteLocked] = useState(false);
@@ -68,30 +74,37 @@ export default function NotesScreen() {
   const [noteLockPin, setNoteLockPin] = useState('');
   const [noteDate, setNoteDate] = useState('');
   const [noteTime, setNoteTime] = useState('');
+  const [editorSelection, setEditorSelection] = useState({ start: 0, end: 0 });
+  const [showEditorMenu, setShowEditorMenu] = useState(false);
   const [showStampPicker, setShowStampPicker] = useState(false);
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showLockSection, setShowLockSection] = useState(false);
+
+  // Unlock state
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockingNoteId, setUnlockingNoteId] = useState<number | null>(null);
   const [unlockPin, setUnlockPin] = useState('');
+
+  // Category management
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [newCategoryValue, setNewCategoryValue] = useState('');
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
-  const [widgetModalVisible, setWidgetModalVisible] = useState(false);
-  const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
+
+  const contentInputRef = useRef<TextInput>(null);
 
   const CATEGORIES = [
     { id: 0, value: '', label: 'All', type: 'note' as const },
     ...noteCategories,
   ];
 
-  // Deep-link handler: open a specific note or new-note modal from widget
   useEffect(() => {
     const paramKey = `${params.noteId ?? ''}-${params.action ?? ''}`;
     if (!paramKey || paramKey === '-' || handledParamRef.current === paramKey) return;
     if (params.action === 'new') {
       handledParamRef.current = paramKey;
-      setModalVisible(true);
+      openNewNote();
     } else if (params.noteId) {
       const noteId = parseInt(params.noteId, 10);
       if (!isNaN(noteId) && notes.length > 0) {
@@ -101,47 +114,56 @@ export default function NotesScreen() {
     }
   }, [params.noteId, params.action, notes]);
 
-  // Widget data + smart notifications
   useEffect(() => {
-    const pinnedNotes = notes.filter(n => n.pinned);
-    const sorted = [...notes].sort((a, b) => (b.lastModified ?? b.date ?? '').localeCompare(a.lastModified ?? a.date ?? ''));
+    const sorted = [...notes].sort((a, b) =>
+      (b.lastModified ?? b.date ?? '').localeCompare(a.lastModified ?? a.date ?? '')
+    );
     const latest = sorted[0];
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - 7);
     const weekStartStr = weekStart.toISOString().split('T')[0];
-    const newThisWeek = notes.filter(n => (n.createdDate ?? n.date ?? '') >= weekStartStr).length;
-
-    const recentNotes = sorted.map(n => ({
-      id: n.id,
-      title: n.name ?? n.title ?? 'Untitled',
-      date: n.date ?? '',
-      pinned: !!n.pinned,
-      preview: typeof (n.content ?? n.text) === 'string' && (n.content ?? n.text) ? (n.content ?? n.text).replace(/\n/g, ' ').slice(0, 120) : undefined,
-    }));
     updateNotesWidget({
       totalNotes: notes.length,
-      pinnedCount: pinnedNotes.length,
+      pinnedCount: notes.filter(n => n.pinned).length,
       latestNoteTitle: latest?.name ?? '',
       latestNoteDate: latest?.date ?? '',
-      recentNotes,
+      recentNotes: sorted.map(n => ({
+        id: n.id,
+        title: n.name ?? 'Untitled',
+        date: n.date ?? '',
+        pinned: !!n.pinned,
+        preview: n.text ? n.text.replace(/\n/g, ' ').slice(0, 120) : undefined,
+      })),
       currentIndex: 0,
     });
-
   }, [notes]);
 
-  const filteredNotes = notes.filter(note => {
-    if (searchQuery && !note.name.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-    if (selectedCategory && note.category !== selectedCategory) {
-      return false;
-    }
-    if (filter === 'locked' && !note.locked) return false;
-    if (filter === 'unlocked' && note.locked) return false;
-    return true;
-  });
+  useEffect(() => {
+    if (!showEditor) return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleEditorBack();
+      return true;
+    });
+    return () => handler.remove();
+  }, [showEditor, noteName, noteText, editingNote]);
 
-  const resetForm = () => {
+  const filteredNotes = notes
+    .filter(note => {
+      if (
+        searchQuery &&
+        !note.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !note.text.toLowerCase().includes(searchQuery.toLowerCase())
+      ) return false;
+      if (selectedCategory && note.category !== selectedCategory) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return (b.lastModified ?? b.date ?? '').localeCompare(a.lastModified ?? a.date ?? '');
+    });
+
+  const resetEditor = () => {
     setNoteName('');
     setNoteText('');
     setNoteLocked(false);
@@ -153,77 +175,13 @@ export default function NotesScreen() {
     setNoteDate('');
     setNoteTime('');
     setEditingNote(null);
+    setShowLockSection(false);
+    setShowDatePicker(false);
   };
 
-  const handleSaveNote = () => {
-    if (!noteName.trim() || !noteText.trim()) {
-      Alert.alert('Missing Information', 'Please enter both a title and content for your note');
-      return;
-    }
-
-    if (noteLocked && !noteLockPin.trim()) {
-      Alert.alert('PIN Required', 'Please enter a 4-digit PIN to lock this note');
-      return;
-    }
-
-    if (noteLocked && noteLockPin.length !== 4) {
-      Alert.alert('Invalid PIN', 'PIN must be exactly 4 digits');
-      return;
-    }
-
-    const timestamp = new Date().toISOString();
-
-    try {
-      if (editingNote !== null) {
-        updateNote(editingNote, {
-          name: noteName.trim(),
-          text: noteText.trim(),
-          locked: noteLocked,
-          pinned: notePinned,
-          category: noteCategory,
-          date: noteDate.trim() || new Date().toISOString().split('T')[0],
-          time: noteTime.trim() || undefined,
-          images: noteImages,
-          stamps: noteStamps,
-          lockPin: noteLocked ? noteLockPin : undefined,
-          lastModified: timestamp,
-        });
-      } else {
-        addNote({
-          name: noteName.trim(),
-          text: noteText.trim(),
-          locked: noteLocked,
-          pinned: notePinned,
-          category: noteCategory,
-          date: noteDate.trim() || new Date().toISOString().split('T')[0],
-          time: noteTime.trim() || undefined,
-          images: noteImages,
-          stamps: noteStamps,
-          lockPin: noteLocked ? noteLockPin : undefined,
-          createdDate: timestamp,
-          lastModified: timestamp,
-        });
-      }
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      resetForm();
-      setModalVisible(false);
-    } catch (error) {
-      console.error('Error saving note:', error);
-      Alert.alert('Error', 'Failed to save note. Please try again.');
-    }
-  };
-
-  const handleEditNote = (noteId: number) => {
-    const note = notes.find(n => n.id === noteId);
-    if (note) {
-      if (note.locked && note.lockPin) {
-        setUnlockingNoteId(noteId);
-        setUnlockModalVisible(true);
-      } else {
-        openNoteForEdit(note);
-      }
-    }
+  const openNewNote = () => {
+    resetEditor();
+    setShowEditor(true);
   };
 
   const openNoteForEdit = (note: typeof notes[0]) => {
@@ -238,57 +196,107 @@ export default function NotesScreen() {
     setNoteLockPin(note.lockPin || '');
     setNoteDate(note.date || '');
     setNoteTime(note.time || '');
-    setModalVisible(true);
+    setShowLockSection(note.locked);
+    setShowEditor(true);
   };
 
-  const handleSaveCategory = () => {
-    if (!newCategoryValue.trim() || !newCategoryLabel.trim()) {
-      Alert.alert('Missing Information', 'Please enter both value and label');
+  const handleEditNote = (noteId: number) => {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    if (note.locked && note.lockPin) {
+      setUnlockingNoteId(noteId);
+      setUnlockModalVisible(true);
+    } else {
+      openNoteForEdit(note);
+    }
+  };
+
+  const saveNote = () => {
+    if (!noteName.trim() && !noteText.trim()) return;
+    if (noteLocked && noteLockPin && noteLockPin.length !== 4) {
+      Alert.alert('Invalid PIN', 'PIN must be exactly 4 digits');
       return;
     }
-
-    if (editingCategoryId !== null) {
-      updateNoteCategory(editingCategoryId, {
-        value: newCategoryValue.trim(),
-        label: newCategoryLabel.trim(),
+    const timestamp = new Date().toISOString();
+    const name = noteName.trim() || noteText.trim().split('\n')[0].slice(0, 50) || 'Untitled';
+    if (editingNote !== null) {
+      updateNote(editingNote, {
+        name,
+        text: noteText.trim(),
+        locked: noteLocked,
+        pinned: notePinned,
+        category: noteCategory,
+        date: noteDate || new Date().toISOString().split('T')[0],
+        time: noteTime || undefined,
+        images: noteImages,
+        stamps: noteStamps,
+        lockPin: noteLocked ? noteLockPin : undefined,
+        lastModified: timestamp,
       });
     } else {
-      addNoteCategory(newCategoryValue.trim(), newCategoryLabel.trim());
+      addNote({
+        name,
+        text: noteText.trim(),
+        locked: noteLocked,
+        pinned: notePinned,
+        category: noteCategory,
+        date: noteDate || new Date().toISOString().split('T')[0],
+        time: noteTime || undefined,
+        images: noteImages,
+        stamps: noteStamps,
+        lockPin: noteLocked ? noteLockPin : undefined,
+        createdDate: timestamp,
+        lastModified: timestamp,
+      });
     }
-
-    setNewCategoryValue('');
-    setNewCategoryLabel('');
-    setEditingCategoryId(null);
-    setCategoryModalVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleEditCategory = (id: number) => {
-    const category = noteCategories.find(c => c.id === id);
-    if (category) {
-      setEditingCategoryId(id);
-      setNewCategoryValue(category.value);
-      setNewCategoryLabel(category.label);
-      setCategoryModalVisible(true);
+  const handleEditorBack = () => {
+    if (!noteName.trim() && !noteText.trim()) {
+      if (editingNote !== null) deleteNote(editingNote);
+      setShowEditor(false);
+      resetEditor();
+      return;
     }
+    saveNote();
+    setShowEditor(false);
+    resetEditor();
   };
 
-  const handleDeleteCategory = (id: number) => {
-    Alert.alert(
-      'Delete Category',
-      'Are you sure you want to delete this category?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteNoteCategory(id);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
+  const handleDeleteNote = (id: number) => {
+    Alert.alert('Delete Note', 'Delete this note?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          deleteNote(id);
+          if (showEditor) { setShowEditor(false); resetEditor(); }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
-      ]
-    );
+      },
+    ]);
+  };
+
+  const applyFormat = (prefix: string, suffix?: string) => {
+    const s = editorSelection.start;
+    const e = editorSelection.end;
+    const sfx = suffix ?? prefix;
+    let newText: string;
+    if (s !== e) {
+      newText = noteText.slice(0, s) + prefix + noteText.slice(s, e) + sfx + noteText.slice(e);
+    } else {
+      newText = noteText.slice(0, s) + prefix + sfx + noteText.slice(s);
+    }
+    setNoteText(newText);
+  };
+
+  const insertLinePrefix = (prefix: string) => {
+    const s = editorSelection.start;
+    const before = noteText.slice(0, s);
+    const lineStart = before.lastIndexOf('\n') + 1;
+    setNoteText(noteText.slice(0, lineStart) + prefix + noteText.slice(lineStart));
   };
 
   const handleUnlock = () => {
@@ -306,607 +314,519 @@ export default function NotesScreen() {
     }
   };
 
-  const categoryIcons: Record<string, string> = {
-    Work: '💼',
-    Personal: '👤',
-    Ideas: '💡',
-    Projects: '🚀',
-    Journal: '📔',
-    Recipes: '🍳',
-    Study: '📚',
-    Health: '💪',
-    Finance: '💰',
-    Travel: '✈️',
+  const handleSaveCategory = () => {
+    if (!newCategoryValue.trim() || !newCategoryLabel.trim()) {
+      Alert.alert('Missing Information', 'Please enter both value and label');
+      return;
+    }
+    if (editingCategoryId !== null) {
+      updateNoteCategory(editingCategoryId, { value: newCategoryValue.trim(), label: newCategoryLabel.trim() });
+    } else {
+      addNoteCategory(newCategoryValue.trim(), newCategoryLabel.trim());
+    }
+    setNewCategoryValue('');
+    setNewCategoryLabel('');
+    setEditingCategoryId(null);
+    setCategoryModalVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>📝 {viewMode === 'journal' ? 'Journal' : 'Notes'}</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => setWidgetModalVisible(true)}
-          >
-            <Bell size={20} color={Colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => {
-              setEditingCategoryId(null);
-              setNewCategoryValue('');
-              setNewCategoryLabel('');
-              setCategoryModalVisible(true);
-            }}
-          >
-            <Settings size={20} color={Colors.textDim} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.viewToggle}
-            onPress={() => {
-              setViewMode(viewMode === 'list' ? 'journal' : 'list');
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-          >
-            {viewMode === 'list' ? (
-              <Grid3x3 size={20} color={Colors.primary} />
-            ) : (
-              <List size={20} color={Colors.primary} />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => {
-              resetForm();
-              setModalVisible(true);
-            }}
-          >
-            <LinearGradient
-              colors={[Colors.primary, Colors.secondary]}
-              style={styles.addButtonGradient}
-            >
-              <Plus size={20} color="white" />
-              <Text style={styles.addButtonText}>Add</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </View>
+  const formatDate = (note: typeof notes[0]) => {
+    const d = note.lastModified ?? note.date ?? '';
+    if (!d) return '';
+    try {
+      const date = new Date(d);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (date.toDateString() === today.toDateString())
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } catch {
+      return d.slice(0, 10);
+    }
+  };
 
-      <View style={styles.searchContainer}>
-        <Search size={18} color={Colors.textDim} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search notes..."
-          placeholderTextColor={Colors.textDim}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersScroll}
-        contentContainerStyle={styles.filtersContainer}
-      >
-        {['all', 'locked', 'unlocked'].map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterChip, filter === f && styles.filterChipActive]}
-            onPress={() => setFilter(f as typeof filter)}
-          >
-            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
-              {f === 'locked' ? '🔒 ' : f === 'unlocked' ? '🔓 ' : ''}
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesScroll}
-        contentContainerStyle={styles.categoriesContainer}
-      >
-        {CATEGORIES.map(cat => (
-          <View key={cat.id} style={styles.categoryChipWrapper}>
-            <TouchableOpacity
-              style={[
-                styles.categoryChip,
-                selectedCategory === cat.value && styles.categoryChipActive,
-              ]}
-              onPress={() => setSelectedCategory(cat.value)}
-              onLongPress={() => {
-                if (cat.id !== 0) {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  Alert.alert(
-                    'Manage Category',
-                    cat.label,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Edit', onPress: () => handleEditCategory(cat.id) },
-                      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteCategory(cat.id) },
-                    ]
-                  );
-                }
-              }}
-            >
-              <Text
-                style={[
-                  styles.categoryChipText,
-                  selectedCategory === cat.value && styles.categoryChipTextActive,
-                ]}
-              >
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-      </ScrollView>
-
-      <ScrollView 
-        style={styles.notesList} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={viewMode === 'journal' ? styles.journalGrid : undefined}
-      >
-        {filteredNotes.length === 0 ? (
-          <Text style={styles.emptyText}>No notes found</Text>
-        ) : viewMode === 'journal' ? (
-          filteredNotes.map(note => (
-            <TouchableOpacity
-              key={note.id}
-              style={styles.journalCard}
-              onPress={() => handleEditNote(note.id)}
-            >
-              <LinearGradient
-                colors={['#f9f7f4', '#ede8e0']}
-                style={styles.paperGradient}
-              >
-                <View style={styles.journalHeader}>
-                  <View style={styles.journalIcons}>
-                    {note.locked && <Lock size={12} color={Colors.danger} />}
-                    {note.pinned && <Pin size={12} color={Colors.primary} />}
-                  </View>
-                  {note.stamps && note.stamps.length > 0 && (
-                    <View style={styles.stampContainer}>
-                      <Text style={styles.stamp}>{note.stamps[0]}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.journalTitle} numberOfLines={2}>
-                  {note.name}
-                </Text>
-                <Text style={styles.journalDate}>{note.date}</Text>
-                {note.images && note.images.length > 0 && (
-                  <Image
-                    source={{ uri: note.images[0] }}
-                    style={styles.journalImage}
-                    resizeMode="cover"
-                  />
-                )}
-                <Text style={styles.journalText} numberOfLines={4}>
-                  {note.locked ? '🔒 Locked' : note.text}
-                </Text>
-                <TouchableOpacity
-                  style={styles.journalDeleteButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    deleteNote(note.id);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  }}
-                >
-                  <Trash2 size={14} color={Colors.danger} />
-                </TouchableOpacity>
-              </LinearGradient>
-            </TouchableOpacity>
-          ))
-        ) : (
-          filteredNotes.map(note => (
-            <TouchableOpacity
-              key={note.id}
-              style={styles.noteCard}
-              onPress={() => handleEditNote(note.id)}
-            >
-              <View style={styles.noteHeader}>
-                <View style={styles.noteIcons}>
-                  {note.locked && <Lock size={14} color={Colors.danger} />}
-                  {note.pinned && <Pin size={14} color={Colors.primary} />}
-                </View>
-                <Text style={styles.noteName} numberOfLines={1}>
-                  {note.name}
-                </Text>
-                {note.category && (
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryBadgeText}>
-                      {categoryIcons[note.category] || ''} {note.category}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              {note.lastModified && (
-                <Text style={styles.noteTimestamp}>
-                  {new Date(note.lastModified).toLocaleString()}
-                </Text>
-              )}
-              {note.images && note.images.length > 0 && (
-                <Image
-                  source={{ uri: note.images[0] }}
-                  style={styles.noteImagePreview}
-                  resizeMode="cover"
-                />
-              )}
-              <Text style={styles.noteText} numberOfLines={2}>
-                {note.locked ? '🔒 Locked' : note.text}
-              </Text>
-              {note.stamps && note.stamps.length > 0 && (
-                <View style={styles.noteStamps}>
-                  {note.stamps.slice(0, 3).map((stamp, idx) => (
-                    <Text key={idx} style={styles.noteStamp}>{stamp}</Text>
-                  ))}
-                </View>
-              )}
-              {note.date && (
-                <Text style={styles.noteDate}>📅 {note.date}</Text>
-              )}
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  deleteNote(note.id);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                }}
-              >
-                <Trash2 size={16} color={Colors.danger} />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
-
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
+  // ── EDITOR ──────────────────────────────────────────────────────────────────
+  if (showEditor) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <View style={styles.modalOverlay}>
-            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                {editingNote ? '✏️ Edit Note' : 'Add Note'}
-              </Text>
+          {/* Editor header */}
+          <View style={styles.editorHeader}>
+            <TouchableOpacity style={styles.editorBackBtn} onPress={handleEditorBack}>
+              <ArrowLeft size={22} color={Colors.text} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity
+              style={[styles.editorHeaderBtn, notePinned && styles.editorHeaderBtnActive]}
+              onPress={() => { setNotePinned(v => !v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            >
+              <Pin size={20} color={notePinned ? Colors.primary : Colors.textDim} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.editorHeaderBtn} onPress={() => setShowEditorMenu(true)}>
+              <MoreVertical size={20} color={Colors.textDim} />
+            </TouchableOpacity>
+          </View>
 
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Note title *"
-                placeholderTextColor={Colors.textDim}
-                value={noteName}
-                onChangeText={setNoteName}
-              />
+          {/* Editor body */}
+          <ScrollView
+            style={styles.editorScroll}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.editorScrollContent}
+          >
+            <TextInput
+              style={styles.editorTitle}
+              placeholder="Title"
+              placeholderTextColor={Colors.textDim}
+              value={noteName}
+              onChangeText={setNoteName}
+              returnKeyType="next"
+              onSubmitEditing={() => contentInputRef.current?.focus()}
+            />
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontSize: 12, color: Colors.textDim, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Content {showMarkdownPreview ? '(preview)' : '(supports **bold**, *italic*, # headers)'}
-                </Text>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: showMarkdownPreview ? Colors.primary + '22' : 'rgba(255,255,255,0.06)', borderRadius: 8, borderWidth: 1, borderColor: showMarkdownPreview ? Colors.primary + '44' : Colors.border }}
-                  onPress={() => setShowMarkdownPreview(v => !v)}
-                >
-                  {showMarkdownPreview ? <EyeOff size={13} color={Colors.primary} /> : <Eye size={13} color={Colors.textDim} />}
-                  <Text style={{ fontSize: 12, color: showMarkdownPreview ? Colors.primary : Colors.textDim, fontWeight: '600' }}>
-                    {showMarkdownPreview ? 'Edit' : 'Preview'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {showMarkdownPreview ? (
-                <View style={[styles.modalInput, styles.modalTextarea, { paddingTop: 12 }]}>
-                  {noteText ? <MarkdownRenderer content={noteText} /> : <Text style={{ color: Colors.textDim, fontSize: 14 }}>Nothing to preview yet…</Text>}
-                </View>
-              ) : (
-                <TextInput
-                  style={[styles.modalInput, styles.modalTextarea]}
-                  placeholder="Note content — supports markdown formatting"
-                  placeholderTextColor={Colors.textDim}
-                  value={noteText}
-                  onChangeText={setNoteText}
-                  multiline
-                />
-              )}
-
-              <DateTimePicker
-                label="Schedule (Optional)"
-                date={noteDate}
-                time={noteTime}
-                onDateChange={setNoteDate}
-                onTimeChange={setNoteTime}
-              />
-
-              <View style={styles.optionsRow}>
-                <TouchableOpacity
-                  style={[styles.optionButton, noteLocked && styles.optionButtonActive]}
-                  onPress={() => setNoteLocked(!noteLocked)}
-                >
-                  <Lock size={18} color={noteLocked ? 'white' : Colors.textDim} />
-                  <Text style={[styles.optionText, noteLocked && styles.optionTextActive]}>
-                    Lock
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.optionButton, notePinned && styles.optionButtonActive]}
-                  onPress={() => setNotePinned(!notePinned)}
-                >
-                  <Pin size={18} color={notePinned ? 'white' : Colors.textDim} />
-                  <Text style={[styles.optionText, notePinned && styles.optionTextActive]}>
-                    Pin
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {noteLocked && (
-                <View style={styles.pinSection}>
-                  <Text style={styles.inputLabel}>Set PIN (4 digits)</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Enter 4-digit PIN"
-                    placeholderTextColor={Colors.textDim}
-                    value={noteLockPin}
-                    onChangeText={(text) => {
-                      if (/^\d{0,4}$/.test(text)) {
-                        setNoteLockPin(text);
-                      }
-                    }}
-                    keyboardType="number-pad"
-                    maxLength={4}
-                    secureTextEntry
-                  />
-                </View>
-              )}
-
-              <View style={styles.mediaButtons}>
-                <TouchableOpacity
-                  style={styles.mediaButton}
-                  onPress={() => setShowImagePicker(true)}
-                >
-                  <ImageIcon size={18} color={Colors.primary} />
-                  <Text style={styles.mediaButtonText}>Add Image</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.mediaButton}
-                  onPress={() => setShowStampPicker(true)}
-                >
-                  <Smile size={18} color={Colors.secondary} />
-                  <Text style={styles.mediaButtonText}>Add Stamp</Text>
-                </TouchableOpacity>
-              </View>
-
-              {noteImages.length > 0 && (
-                <View style={styles.selectedImages}>
-                  <Text style={styles.inputLabel}>Images</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.imagesRow}>
-                      {noteImages.map((img, idx) => (
-                        <View key={idx} style={styles.selectedImageContainer}>
-                          <Image source={{ uri: img }} style={styles.selectedImage} />
-                          <TouchableOpacity
-                            style={styles.removeImageButton}
-                            onPress={() => setNoteImages(noteImages.filter((_, i) => i !== idx))}
-                          >
-                            <X size={12} color="white" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-              )}
-
-              {noteStamps.length > 0 && (
-                <View style={styles.selectedStamps}>
-                  <Text style={styles.inputLabel}>Stamps</Text>
-                  <View style={styles.stampsRow}>
-                    {noteStamps.map((stamp, idx) => (
+            {noteImages.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {noteImages.map((img, idx) => (
+                    <View key={idx} style={{ position: 'relative' }}>
+                      <Image source={{ uri: img }} style={styles.editorImage} />
                       <TouchableOpacity
-                        key={idx}
-                        style={styles.selectedStamp}
-                        onPress={() => setNoteStamps(noteStamps.filter((_, i) => i !== idx))}
+                        style={styles.removeImageBtn}
+                        onPress={() => setNoteImages(noteImages.filter((_, i) => i !== idx))}
                       >
-                        <Text style={styles.selectedStampText}>{stamp}</Text>
+                        <X size={12} color="white" />
                       </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              <Text style={styles.inputLabel}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.categoryOptions}>
-                  {noteCategories.map(cat => (
-                    <TouchableOpacity
-                      key={cat.id}
-                      style={[
-                        styles.categoryOption,
-                        noteCategory === cat.value && styles.categoryOptionActive,
-                      ]}
-                      onPress={() => setNoteCategory(cat.value)}
-                    >
-                      <Text style={styles.categoryOptionText}>{cat.label}</Text>
-                    </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
               </ScrollView>
+            )}
 
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalButtonSecondary}
-                  onPress={() => {
-                    resetForm();
-                    setModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleSaveNote}>
-                  <LinearGradient
-                    colors={[Colors.primary, Colors.secondary]}
-                    style={styles.modalButtonGradient}
+            {noteStamps.length > 0 && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {noteStamps.map((stamp, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => setNoteStamps(noteStamps.filter((_, i) => i !== idx))}
                   >
-                    <Text style={styles.modalButtonText}>Save Note</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                    <Text style={{ fontSize: 28 }}>{stamp}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            </View>
-          </ScrollView>
-        </View>
-        </KeyboardAvoidingView>
-      </Modal>
+            )}
 
-      <Modal
-        visible={showStampPicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowStampPicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.pickerOverlay}
-          activeOpacity={1}
-          onPress={() => setShowStampPicker(false)}
-        >
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>Choose a Stamp</Text>
-            <ScrollView>
+            <TextInput
+              ref={contentInputRef}
+              style={styles.editorContent}
+              placeholder="Start writing..."
+              placeholderTextColor={Colors.textDim}
+              value={noteText}
+              onChangeText={setNoteText}
+              multiline
+              textAlignVertical="top"
+              onSelectionChange={e => setEditorSelection(e.nativeEvent.selection)}
+            />
+
+            {showDatePicker && (
+              <View style={{ marginTop: 16 }}>
+                <DateTimePicker
+                  label="Reminder"
+                  date={noteDate}
+                  time={noteTime}
+                  onDateChange={setNoteDate}
+                  onTimeChange={setNoteTime}
+                />
+              </View>
+            )}
+
+            {showLockSection && (
+              <View style={styles.lockSection}>
+                <Text style={styles.lockLabel}>Note PIN (4 digits)</Text>
+                <TextInput
+                  style={styles.lockInput}
+                  placeholder="••••"
+                  placeholderTextColor={Colors.textDim}
+                  value={noteLockPin}
+                  onChangeText={text => { if (/^\d{0,4}$/.test(text)) setNoteLockPin(text); }}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  secureTextEntry
+                />
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Formatting toolbar */}
+          <View style={styles.formatBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.formatBarContent}
+            >
+              <TouchableOpacity style={styles.formatBtn} onPress={() => applyFormat('**')}>
+                <Bold size={18} color={Colors.text} strokeWidth={2.5} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.formatBtn} onPress={() => applyFormat('*')}>
+                <Italic size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.formatBtn} onPress={() => applyFormat('__')}>
+                <Underline size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.formatBtn} onPress={() => applyFormat('~~')}>
+                <Strikethrough size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <View style={styles.formatDivider} />
+              <TouchableOpacity style={styles.formatBtn} onPress={() => insertLinePrefix('- ')}>
+                <List size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.formatBtn} onPress={() => insertLinePrefix('1. ')}>
+                <ListOrdered size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.formatBtn} onPress={() => insertLinePrefix('- [ ] ')}>
+                <CheckSquare size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <View style={styles.formatDivider} />
+              <TouchableOpacity style={styles.formatBtn} onPress={() => setShowImagePicker(true)}>
+                <ImageIcon size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.formatBtn} onPress={() => setShowStampPicker(true)}>
+                <Smile size={18} color={Colors.text} />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+
+        {/* Editor more menu */}
+        <Modal visible={showEditorMenu} transparent animationType="fade" onRequestClose={() => setShowEditorMenu(false)}>
+          <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowEditorMenu(false)}>
+            <View style={styles.menuContent}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => { setShowDatePicker(v => !v); setShowEditorMenu(false); }}
+              >
+                <Bell size={18} color={Colors.text} />
+                <Text style={styles.menuItemText}>Set Reminder</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  const next = !noteLocked;
+                  setNoteLocked(next);
+                  setShowLockSection(next);
+                  setShowEditorMenu(false);
+                }}
+              >
+                {noteLocked
+                  ? <Unlock size={18} color={Colors.text} />
+                  : <Lock size={18} color={Colors.text} />}
+                <Text style={styles.menuItemText}>{noteLocked ? 'Remove Lock' : 'Lock Note'}</Text>
+              </TouchableOpacity>
+
+              {noteCategories.length > 0 && (
+                <>
+                  <View style={styles.menuDivider} />
+                  <Text style={styles.menuSectionLabel}>Category</Text>
+                  {[{ id: -1, value: '', label: 'None', type: 'note' as const }, ...noteCategories].map(cat => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.menuItem, noteCategory === cat.value && styles.menuItemActive]}
+                      onPress={() => { setNoteCategory(cat.value); setShowEditorMenu(false); }}
+                    >
+                      <Text style={[styles.menuItemText, noteCategory === cat.value && { color: Colors.primary }]}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              <View style={styles.menuDivider} />
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowEditorMenu(false);
+                  if (editingNote !== null) handleDeleteNote(editingNote);
+                  else { setShowEditor(false); resetEditor(); }
+                }}
+              >
+                <Trash2 size={18} color={Colors.danger} />
+                <Text style={[styles.menuItemText, { color: Colors.danger }]}>Delete Note</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Stamp picker */}
+        <Modal visible={showStampPicker} transparent animationType="fade" onRequestClose={() => setShowStampPicker(false)}>
+          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowStampPicker(false)}>
+            <View style={styles.pickerContent}>
+              <Text style={styles.pickerTitle}>Stickers</Text>
               <View style={styles.stampsGrid}>
                 {STAMPS.map((stamp, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={styles.stampOption}
-                    onPress={() => {
-                      setNoteStamps([...noteStamps, stamp]);
-                      setShowStampPicker(false);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
+                    onPress={() => { setNoteStamps([...noteStamps, stamp]); setShowStampPicker(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                   >
-                    <Text style={styles.stampOptionText}>{stamp}</Text>
+                    <Text style={{ fontSize: 32 }}>{stamp}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
-      <Modal
-        visible={showImagePicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowImagePicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.pickerOverlay}
-          activeOpacity={1}
-          onPress={() => setShowImagePicker(false)}
-        >
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>Choose an Image</Text>
-            <ScrollView>
+        {/* Image picker */}
+        <Modal visible={showImagePicker} transparent animationType="fade" onRequestClose={() => setShowImagePicker(false)}>
+          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowImagePicker(false)}>
+            <View style={styles.pickerContent}>
+              <Text style={styles.pickerTitle}>Choose Image</Text>
               <View style={styles.imagesGrid}>
                 {IMAGE_URLS.map((url, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={styles.imageOption}
-                    onPress={() => {
-                      setNoteImages([...noteImages, url]);
-                      setShowImagePicker(false);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
+                    onPress={() => { setNoteImages([...noteImages, url]); setShowImagePicker(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                   >
                     <Image source={{ uri: url }} style={styles.imageOptionImg} />
                   </TouchableOpacity>
                 ))}
               </View>
-            </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </SafeAreaView>
+    );
+  }
+
+  // ── NOTE LIST ────────────────────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Header */}
+      <View style={styles.header}>
+        {showSearch ? (
+          <View style={styles.searchBarInline}>
+            <Search size={16} color={Colors.textDim} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search notes..."
+              placeholderTextColor={Colors.textDim}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            <TouchableOpacity onPress={() => { setShowSearch(false); setSearchQuery(''); }}>
+              <X size={18} color={Colors.textDim} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.listTitle}>Notes</Text>
+            {notes.length > 0 && (
+              <Text style={styles.listCount}>{notes.length}</Text>
+            )}
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity style={styles.headerBtn} onPress={() => setShowSearch(true)}>
+              <Search size={20} color={Colors.textDim} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => setViewMode(v => v === 'list' ? 'grid' : 'list')}
+            >
+              <Grid3x3 size={20} color={Colors.textDim} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerBtn} onPress={() => setShowMoreOptions(true)}>
+              <MoreVertical size={20} color={Colors.textDim} />
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+
+      {/* Category chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryScroll}
+        contentContainerStyle={styles.categoryScrollContent}
+      >
+        {CATEGORIES.map(cat => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[styles.categoryChip, selectedCategory === cat.value && styles.categoryChipActive]}
+            onPress={() => setSelectedCategory(cat.value)}
+            onLongPress={() => {
+              if (cat.id === 0) return;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              Alert.alert('Category', cat.label, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Edit',
+                  onPress: () => {
+                    const c = noteCategories.find(x => x.id === cat.id);
+                    if (c) { setEditingCategoryId(c.id); setNewCategoryValue(c.value); setNewCategoryLabel(c.label); }
+                    setCategoryModalVisible(true);
+                  },
+                },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => deleteNoteCategory(cat.id),
+                },
+              ]);
+            }}
+          >
+            <Text style={[styles.categoryChipText, selectedCategory === cat.value && styles.categoryChipTextActive]}>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity
+          style={styles.categoryChipAdd}
+          onPress={() => { setEditingCategoryId(null); setNewCategoryValue(''); setNewCategoryLabel(''); setCategoryModalVisible(true); }}
+        >
+          <Plus size={14} color={Colors.textDim} />
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Notes list */}
+      <ScrollView
+        style={styles.list}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.listContent, viewMode === 'grid' && styles.gridContent]}
+      >
+        {filteredNotes.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>📝</Text>
+            <Text style={styles.emptyTitle}>No notes yet</Text>
+            <Text style={styles.emptySubtitle}>Tap + to create your first note</Text>
+          </View>
+        ) : (
+          filteredNotes.map(note => (
+            <TouchableOpacity
+              key={note.id}
+              style={[styles.noteCard, viewMode === 'grid' && styles.noteCardGrid]}
+              onPress={() => handleEditNote(note.id)}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                Alert.alert(note.name || 'Note', undefined, [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: note.pinned ? 'Unpin' : 'Pin',
+                    onPress: () => updateNote(note.id, { pinned: !note.pinned, lastModified: new Date().toISOString() }),
+                  },
+                  { text: 'Delete', style: 'destructive', onPress: () => handleDeleteNote(note.id) },
+                ]);
+              }}
+              activeOpacity={0.7}
+            >
+              {note.images && note.images.length > 0 && (
+                <Image source={{ uri: note.images[0] }} style={styles.noteCardImage} />
+              )}
+              <View style={styles.noteCardTitleRow}>
+                <Text style={styles.noteCardTitle} numberOfLines={1}>
+                  {note.name || 'Untitled'}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {note.pinned && <Pin size={13} color={Colors.primary} />}
+                  {note.locked && <Lock size={13} color={Colors.warning} />}
+                </View>
+              </View>
+              <Text style={styles.noteCardPreview} numberOfLines={viewMode === 'grid' ? 4 : 2}>
+                {note.locked ? '🔒 Locked note' : (note.text || '')}
+              </Text>
+              <View style={styles.noteCardFooter}>
+                {note.category ? (
+                  <Text style={styles.noteCardCategory}>{note.category}</Text>
+                ) : (
+                  <View />
+                )}
+                <Text style={styles.noteCardDate}>{formatDate(note)}</Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={openNewNote} activeOpacity={0.85}>
+        <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.fabGradient}>
+          <Plus size={26} color="white" strokeWidth={2.5} />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      {/* More options menu */}
+      <Modal visible={showMoreOptions} transparent animationType="fade" onRequestClose={() => setShowMoreOptions(false)}>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMoreOptions(false)}>
+          <View style={styles.menuContent}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMoreOptions(false);
+                setEditingCategoryId(null);
+                setNewCategoryValue('');
+                setNewCategoryLabel('');
+                setCategoryModalVisible(true);
+              }}
+            >
+              <Settings size={18} color={Colors.text} />
+              <Text style={styles.menuItemText}>Manage Categories</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
+      {/* Unlock modal */}
       <Modal
         visible={unlockModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          setUnlockModalVisible(false);
-          setUnlockPin('');
-          setUnlockingNoteId(null);
-        }}
+        onRequestClose={() => { setUnlockModalVisible(false); setUnlockPin(''); setUnlockingNoteId(null); }}
       >
-        <View style={styles.unlockOverlay}>
-          <View style={styles.unlockContent}>
-            <Unlock size={48} color={Colors.primary} />
+        <View style={styles.overlayCenter}>
+          <View style={styles.unlockCard}>
+            <Lock size={40} color={Colors.primary} />
             <Text style={styles.unlockTitle}>Enter PIN</Text>
-            <Text style={styles.unlockSubtitle}>This note is locked</Text>
             <TextInput
               style={styles.unlockInput}
-              placeholder="Enter 4-digit PIN"
+              placeholder="••••"
               placeholderTextColor={Colors.textDim}
               value={unlockPin}
-              onChangeText={(text) => {
-                if (/^\d{0,4}$/.test(text)) {
-                  setUnlockPin(text);
-                }
-              }}
+              onChangeText={text => { if (/^\d{0,4}$/.test(text)) setUnlockPin(text); }}
               keyboardType="number-pad"
               maxLength={4}
               secureTextEntry
               autoFocus
             />
-            <View style={styles.unlockButtons}>
+            <View style={styles.rowButtons}>
               <TouchableOpacity
-                style={styles.unlockButtonSecondary}
-                onPress={() => {
-                  setUnlockModalVisible(false);
-                  setUnlockPin('');
-                  setUnlockingNoteId(null);
-                }}
+                style={styles.btnSecondary}
+                onPress={() => { setUnlockModalVisible(false); setUnlockPin(''); setUnlockingNoteId(null); }}
               >
-                <Text style={styles.unlockButtonTextSecondary}>Cancel</Text>
+                <Text style={styles.btnSecondaryText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.unlockButtonPrimary}
-                onPress={handleUnlock}
-              >
-                <LinearGradient
-                  colors={[Colors.primary, Colors.secondary]}
-                  style={styles.unlockButtonGradient}
-                >
-                  <Text style={styles.unlockButtonText}>Unlock</Text>
-                </LinearGradient>
+              <TouchableOpacity style={styles.btnPrimary} onPress={handleUnlock}>
+                <Text style={styles.btnPrimaryText}>Unlock</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
+      {/* Category modal */}
       <Modal
         visible={categoryModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          setCategoryModalVisible(false);
-          setEditingCategoryId(null);
-          setNewCategoryValue('');
-          setNewCategoryLabel('');
-        }}
+        onRequestClose={() => { setCategoryModalVisible(false); setEditingCategoryId(null); setNewCategoryValue(''); setNewCategoryLabel(''); }}
       >
-        <View style={styles.unlockOverlay}>
-          <View style={styles.categoryModalContent}>
-            <Settings size={48} color={Colors.primary} />
-            <Text style={styles.unlockTitle}>{editingCategoryId ? 'Edit Category' : 'Add Category'}</Text>
-            <Text style={styles.unlockSubtitle}>{editingCategoryId ? 'Update category details' : 'Create a new category'}</Text>
-            
+        <View style={styles.overlayCenter}>
+          <View style={[styles.unlockCard, { width: '90%' }]}>
+            <Text style={styles.unlockTitle}>{editingCategoryId ? 'Edit Category' : 'New Category'}</Text>
             <TextInput
               style={styles.categoryInput}
               placeholder="Value (e.g., Study)"
@@ -914,7 +834,6 @@ export default function NotesScreen() {
               value={newCategoryValue}
               onChangeText={setNewCategoryValue}
             />
-            
             <TextInput
               style={styles.categoryInput}
               placeholder="Label (e.g., 📚 Study)"
@@ -922,85 +841,42 @@ export default function NotesScreen() {
               value={newCategoryLabel}
               onChangeText={setNewCategoryLabel}
             />
-
-            {noteCategories.length > 0 && !editingCategoryId && (
-              <View style={styles.existingCategoriesSection}>
-                <Text style={styles.existingCategoriesTitle}>Existing Categories:</Text>
-                <ScrollView style={styles.existingCategoriesList}>
-                  {noteCategories.map(cat => (
-                    <View key={cat.id} style={styles.existingCategoryItem}>
-                      <Text style={styles.existingCategoryText}>{cat.label}</Text>
-                      <View style={styles.categoryActions}>
-                        <TouchableOpacity
-                          onPress={() => handleEditCategory(cat.id)}
-                          style={styles.categoryActionButton}
-                        >
-                          <Edit2 size={16} color={Colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteCategory(cat.id)}
-                          style={styles.categoryActionButton}
-                        >
-                          <Trash2 size={16} color={Colors.danger} />
-                        </TouchableOpacity>
-                      </View>
+            {!editingCategoryId && noteCategories.length > 0 && (
+              <ScrollView style={{ width: '100%', maxHeight: 160, marginBottom: 12 }}>
+                {noteCategories.map(cat => (
+                  <View key={cat.id} style={styles.existingCatRow}>
+                    <Text style={styles.existingCatText}>{cat.label}</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditingCategoryId(cat.id);
+                          setNewCategoryValue(cat.value);
+                          setNewCategoryLabel(cat.label);
+                        }}
+                      >
+                        <Edit2 size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deleteNoteCategory(cat.id)}>
+                        <Trash2 size={16} color={Colors.danger} />
+                      </TouchableOpacity>
                     </View>
-                  ))}
-                </ScrollView>
-              </View>
+                  </View>
+                ))}
+              </ScrollView>
             )}
-
-            <View style={styles.unlockButtons}>
+            <View style={styles.rowButtons}>
               <TouchableOpacity
-                style={styles.unlockButtonSecondary}
-                onPress={() => {
-                  setCategoryModalVisible(false);
-                  setEditingCategoryId(null);
-                  setNewCategoryValue('');
-                  setNewCategoryLabel('');
-                }}
+                style={styles.btnSecondary}
+                onPress={() => { setCategoryModalVisible(false); setEditingCategoryId(null); setNewCategoryValue(''); setNewCategoryLabel(''); }}
               >
-                <Text style={styles.unlockButtonTextSecondary}>Cancel</Text>
+                <Text style={styles.btnSecondaryText}>Cancel</Text>
               </TouchableOpacity>
               {(newCategoryValue.trim() || newCategoryLabel.trim()) && (
-                <TouchableOpacity
-                  style={styles.unlockButtonPrimary}
-                  onPress={handleSaveCategory}
-                >
-                  <LinearGradient
-                    colors={[Colors.primary, Colors.secondary]}
-                    style={styles.unlockButtonGradient}
-                  >
-                    <Text style={styles.unlockButtonText}>{editingCategoryId ? 'Update' : 'Add'}</Text>
-                  </LinearGradient>
+                <TouchableOpacity style={styles.btnPrimary} onPress={handleSaveCategory}>
+                  <Text style={styles.btnPrimaryText}>{editingCategoryId ? 'Update' : 'Add'}</Text>
                 </TouchableOpacity>
               )}
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Widget & Notification Settings Modal */}
-      <Modal
-        visible={widgetModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setWidgetModalVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
-            <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 16 }}>📱 Widgets & Notifications</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={{ color: Colors.textDim, fontSize: 13, lineHeight: 20, marginBottom: 16 }}>
-                Add a "Notes Overview" widget: Long-press your Android home screen → Widgets → Zenith → Notes Overview. Shows total notes, pinned count, and your latest note.
-              </Text>
-            </ScrollView>
-            <TouchableOpacity
-              style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
-              onPress={() => setWidgetModalVisible(false)}
-            >
-              <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>Done</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1009,487 +885,266 @@ export default function NotesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+
+  // List header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
+  listTitle: { fontSize: 28, fontWeight: '700', color: Colors.text },
+  listCount: {
+    fontSize: 13,
+    color: Colors.textDim,
+    marginLeft: 8,
+    marginTop: 6,
+    backgroundColor: Colors.card,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
-  viewToggle: {
+  headerBtn: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: Colors.text,
-  },
-  addButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  addButtonGradient: {
+  searchBarInline: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    gap: 6,
-  },
-  addButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: 'white',
-  },
-  journalGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingBottom: 20,
-  },
-  journalCard: {
-    width: '48%',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 0,
-  },
-  paperGradient: {
-    padding: 12,
-    minHeight: 200,
-    borderWidth: 1,
-    borderColor: '#d4c5b9',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  journalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  journalIcons: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  stampContainer: {
-    position: 'absolute',
-    right: 0,
-    top: -4,
-  },
-  stamp: {
-    fontSize: 32,
-    opacity: 0.8,
-    transform: [{ rotate: '15deg' }],
-  },
-  journalTitle: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: '#2d2d2d',
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  journalDate: {
-    fontSize: 10,
-    color: '#8b7355',
-    marginBottom: 8,
-    fontStyle: 'italic' as const,
-  },
-  journalImage: {
-    width: '100%',
-    height: 80,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  journalText: {
-    fontSize: 11,
-    color: '#4a4a4a',
-    lineHeight: 16,
-  },
-  journalDeleteButton: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noteImagePreview: {
-    width: '100%',
-    height: 120,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  noteStamps: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 8,
-  },
-  noteStamp: {
-    fontSize: 20,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.card,
     borderRadius: 12,
     paddingHorizontal: 12,
     gap: 8,
+    height: 44,
   },
-  searchInput: {
-    flex: 1,
-    padding: 12,
-    color: Colors.text,
-    fontSize: 14,
-  },
-  filtersScroll: {
-    maxHeight: 50,
-    marginTop: 12,
-  },
-  filtersContainer: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  filterChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  filterChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  filterChipText: {
-    fontSize: 13,
-    color: Colors.textDim,
-  },
-  filterChipTextActive: {
-    color: 'white',
-  },
-  categoriesScroll: {
-    maxHeight: 50,
-    marginTop: 8,
-  },
-  categoriesContainer: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
+  searchInput: { flex: 1, color: Colors.text, fontSize: 15 },
+
+  // Category chips
+  categoryScroll: { maxHeight: 44 },
+  categoryScrollContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   categoryChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    backgroundColor: Colors.card,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  categoryChipActive: {
-    backgroundColor: Colors.secondary,
-    borderColor: Colors.secondary,
-  },
-  categoryChipText: {
-    fontSize: 12,
-    color: Colors.textDim,
-  },
-  categoryChipTextActive: {
-    color: 'white',
-  },
-  notesList: {
-    flex: 1,
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: Colors.textDim,
-    marginTop: 40,
-    fontSize: 14,
-  },
-  noteCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    position: 'relative',
-  },
-  noteHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  noteIcons: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  noteName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.text,
-  },
-  categoryBadge: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  categoryBadgeText: {
-    fontSize: 11,
-    color: Colors.primary,
-  },
-  noteText: {
-    fontSize: 13,
-    color: Colors.textDim,
-    lineHeight: 20,
-  },
-  noteDate: {
-    fontSize: 12,
-    color: Colors.textDim,
-    marginTop: 8,
-  },
-  noteTimestamp: {
-    fontSize: 10,
-    color: Colors.textDim,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  deleteButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
+  categoryChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  categoryChipText: { fontSize: 13, color: Colors.textDim, fontWeight: '500' },
+  categoryChipTextActive: { color: 'white', fontWeight: '600' },
+  categoryChipAdd: {
     width: 32,
     height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  },
-  modalScroll: {
-    flex: 1,
-    marginTop: 100,
-  },
-  modalContent: {
+    borderRadius: 16,
     backgroundColor: Colors.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    minHeight: 500,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    marginBottom: 16,
-  },
-  modalInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 12,
-    color: Colors.text,
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  modalTextarea: {
-    minHeight: 150,
-    textAlignVertical: 'top',
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  optionButton: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  optionButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  optionText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.textDim,
-  },
-  optionTextActive: {
-    color: 'white',
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.textDim,
+
+  // Note list
+  list: { flex: 1, marginTop: 10 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  gridContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+
+  noteCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 8,
-  },
-  dateTimeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  categoryOptions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  categoryOption: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  categoryOptionActive: {
-    backgroundColor: Colors.secondary,
-    borderColor: Colors.secondary,
+  noteCardGrid: { width: '48.5%', marginBottom: 0 },
+  noteCardImage: {
+    width: '100%',
+    height: 100,
+    borderRadius: 10,
+    marginBottom: 10,
   },
-  categoryOptionText: {
-    fontSize: 12,
-    color: Colors.text,
-  },
-  modalButtons: {
+  noteCardTitleRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalButtonSecondary: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 5,
   },
-  modalButtonTextSecondary: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.text,
+  noteCardTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.text },
+  noteCardPreview: { fontSize: 13, color: Colors.textDim, lineHeight: 19, marginBottom: 10 },
+  noteCardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  noteCardCategory: {
+    fontSize: 11,
+    color: Colors.primary,
+    backgroundColor: Colors.primary + '22',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    fontWeight: '600',
   },
-  modalButtonPrimary: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
+  noteCardDate: { fontSize: 11, color: Colors.textDim },
+
+  // Empty state
+  emptyState: { alignItems: 'center', marginTop: 80 },
+  emptyIcon: { fontSize: 52, marginBottom: 14 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: Colors.text, marginBottom: 6 },
+  emptySubtitle: { fontSize: 14, color: Colors.textDim },
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    borderRadius: 30,
+    elevation: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  modalButtonGradient: {
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: 'white',
-  },
-  pinSection: {
-    marginBottom: 16,
-  },
-  mediaButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  mediaButton: {
-    flex: 1,
-    flexDirection: 'row',
+  fabGradient: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  mediaButtonText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.text,
-  },
-  selectedImages: {
-    marginBottom: 16,
-  },
-  imagesRow: {
+
+  // Editor
+  editorHeader: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  selectedImageContainer: {
-    position: 'relative',
+  editorBackBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  editorHeaderBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
+  editorHeaderBtnActive: { backgroundColor: Colors.primary + '22' },
+  editorScroll: { flex: 1 },
+  editorScrollContent: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 24 },
+  editorTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 14,
+    paddingVertical: 2,
   },
-  selectedImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
+  editorContent: {
+    fontSize: 16,
+    color: Colors.text,
+    lineHeight: 26,
+    minHeight: 300,
   },
-  removeImageButton: {
+  editorImage: { width: 130, height: 100, borderRadius: 10 },
+  removeImageBtn: {
     position: 'absolute',
     top: 4,
     right: 4,
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  selectedStamps: {
-    marginBottom: 16,
+
+  lockSection: {
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  stampsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  lockLabel: { fontSize: 13, color: Colors.textDim, marginBottom: 8, fontWeight: '600' },
+  lockInput: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 14,
+    color: Colors.text,
+    fontSize: 22,
+    textAlign: 'center',
+    letterSpacing: 10,
   },
-  selectedStamp: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+
+  // Formatting toolbar
+  formatBar: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  formatBarContent: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 2,
+    alignItems: 'center',
+  },
+  formatBtn: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
   },
-  selectedStampText: {
-    fontSize: 24,
+  formatDivider: {
+    width: 1,
+    height: 26,
+    backgroundColor: Colors.border,
+    marginHorizontal: 4,
   },
+
+  // Dropdown menu
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)' },
+  menuContent: {
+    position: 'absolute',
+    top: 56,
+    right: 12,
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    paddingVertical: 6,
+    minWidth: 210,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  menuItemActive: { backgroundColor: Colors.primary + '18' },
+  menuItemText: { fontSize: 14, color: Colors.text, fontWeight: '500' },
+  menuSectionLabel: {
+    fontSize: 11,
+    color: Colors.textDim,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  menuDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
+
+  // Pickers
   pickerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1497,186 +1152,104 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: 20,
     padding: 20,
-    width: '85%',
+    width: '88%',
     maxHeight: '70%',
   },
   pickerTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.text,
     marginBottom: 16,
     textAlign: 'center',
   },
-  stampsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'center',
-  },
+  stampsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
   stampOption: {
-    width: 60,
-    height: 60,
+    width: 56,
+    height: 56,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stampOptionText: {
-    fontSize: 32,
-  },
-  imagesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  imageOption: {
-    width: '31%',
-    aspectRatio: 1,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  imageOptionImg: {
-    width: '100%',
-    height: '100%',
-  },
-  unlockOverlay: {
+  imagesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  imageOption: { width: '31%', aspectRatio: 1, borderRadius: 8, overflow: 'hidden' },
+  imageOptionImg: { width: '100%', height: '100%' },
+
+  // Overlays / modals
+  overlayCenter: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  unlockContent: {
+  unlockCard: {
     backgroundColor: Colors.card,
     borderRadius: 20,
-    padding: 32,
+    padding: 28,
     width: '80%',
     alignItems: 'center',
   },
   unlockTitle: {
-    fontSize: 22,
-    fontWeight: '700' as const,
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  unlockSubtitle: {
-    fontSize: 14,
-    color: Colors.textDim,
-    marginBottom: 24,
+    marginTop: 12,
+    marginBottom: 20,
   },
   unlockInput: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 2,
     borderColor: Colors.primary,
     borderRadius: 12,
     padding: 16,
     color: Colors.text,
-    fontSize: 24,
-    fontWeight: '600' as const,
+    fontSize: 28,
+    fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 24,
-    letterSpacing: 8,
+    letterSpacing: 12,
+    marginBottom: 20,
   },
-  unlockButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  unlockButtonSecondary: {
+  rowButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+  btnSecondary: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
   },
-  unlockButtonTextSecondary: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.text,
-  },
-  unlockButtonPrimary: {
+  btnSecondaryText: { fontSize: 14, fontWeight: '600', color: Colors.text },
+  btnPrimary: {
     flex: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  unlockButtonGradient: {
     paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
   },
-  unlockButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: 'white',
-  },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryChipWrapper: {
-    position: 'relative',
-  },
-  categoryModalContent: {
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    padding: 32,
-    width: '85%',
-    maxHeight: '80%',
-    alignItems: 'center',
-  },
+  btnPrimaryText: { fontSize: 14, fontWeight: '600', color: 'white' },
+
+  // Category modal
   categoryInput: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 2,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     color: Colors.text,
     fontSize: 14,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  existingCategoriesSection: {
-    width: '100%',
-    marginTop: 16,
-    marginBottom: 16,
-    maxHeight: 200,
-  },
-  existingCategoriesTitle: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  existingCategoriesList: {
-    maxHeight: 160,
-  },
-  existingCategoryItem: {
+  existingCatRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  existingCategoryText: {
-    fontSize: 13,
-    color: Colors.text,
-    flex: 1,
-  },
-  categoryActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  categoryActionButton: {
-    padding: 4,
-  },
+  existingCatText: { fontSize: 13, color: Colors.text, flex: 1 },
 });
