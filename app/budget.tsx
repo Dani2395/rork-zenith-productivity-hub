@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,6 +46,8 @@ import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
 import { updateBudgetWidget } from '@/widgets/widgetTaskHandler';
 
 export default function BudgetScreen() {
+  const insets = useSafeAreaInsets();
+  const modalPaddingBottom = Math.max(insets.bottom, 16) + 24;
   const {
     budgets,
     transactions,
@@ -266,7 +268,8 @@ export default function BudgetScreen() {
     return 'onetime';
   }, [allTxsBySubKey]);
 
-  // Detect duplicate subscriptions: same key, 2+ recurring charges in the same month on different descriptions
+  // Detect true duplicate subscriptions: same keyword, same amount (within $1), same day in same month.
+  // Two different recurring charges for the same service (e.g., Prime on two cards) are NOT duplicates.
   const duplicateSubs = useMemo(() => {
     const dupes: Set<string> = new Set();
     for (const [key, txs] of Object.entries(allTxsBySubKey)) {
@@ -277,15 +280,33 @@ export default function BudgetScreen() {
         byMonth[ym].push(t);
       }
       for (const monthTxs of Object.values(byMonth)) {
-        const recurring = monthTxs.filter(t => {
-          const all = allTxsBySubKey[key] ?? [];
-          const months = new Set(all.filter(tx => Math.abs(tx.amount - t.amount) <= 2).map(tx => tx.date.substring(0, 7)));
-          return months.size >= 2;
-        });
-        if (recurring.length >= 2) { dupes.add(key); break; }
+        // Only flag as duplicate if same amount AND same date (likely accidental double-charge)
+        const byDateAndAmount: Record<string, number> = {};
+        for (const t of monthTxs) {
+          const bucket = `${t.date}|${Math.round(t.amount * 100)}`;
+          byDateAndAmount[bucket] = (byDateAndAmount[bucket] ?? 0) + 1;
+        }
+        if (Object.values(byDateAndAmount).some(c => c >= 2)) { dupes.add(key); break; }
       }
     }
     return dupes;
+  }, [allTxsBySubKey]);
+
+  // Count of recurring charges per sub key per month (to show "2 Spotify" instead of duplicate warning)
+  const subCountByKeyMonth = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {};
+    for (const [key, txs] of Object.entries(allTxsBySubKey)) {
+      for (const t of txs) {
+        const ym = t.date.substring(0, 7);
+        const all = allTxsBySubKey[key] ?? [];
+        const months = new Set(all.filter(tx => Math.abs(tx.amount - t.amount) <= 2).map(tx => tx.date.substring(0, 7)));
+        if (months.size >= 2) {
+          if (!map[key]) map[key] = {};
+          map[key][ym] = (map[key][ym] ?? 0) + 1;
+        }
+      }
+    }
+    return map;
   }, [allTxsBySubKey]);
 
   // For a budget card: which subscription keys have transactions assigned to this budget?
@@ -1392,10 +1413,12 @@ export default function BudgetScreen() {
           })()}
 
           {/* Summary bar */}
-          {subsForMonth.length > 0 && (() => {
+          {(() => {
+            const selectedMonthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(activeSubsMonth));
+            const totalSpent = selectedMonthTxs.reduce((s, t) => s + t.amount, 0);
             const activeSubsTotal = subsForMonth.filter(s => !s.cancelled).reduce((sum, s) => sum + s.amount, 0);
-            const totalSpent = Object.values(monthlySpentByBudgetId).reduce((s, v) => s + v, 0);
             const totalBudget = budgets.reduce((s, b) => s + b.amount, 0);
+            if (totalSpent === 0 && activeSubsTotal === 0) return null;
             return (
               <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 12, marginBottom: 14, flexDirection: 'row' }}>
                 <View style={{ flex: 1, alignItems: 'center' }}>
@@ -1478,18 +1501,28 @@ export default function BudgetScreen() {
                         const isExpanded = expandedSubKeys.has(sub.key);
                         const allCharges = (allTxsBySubKey[sub.key] ?? []).filter(t => t.date.startsWith(activeSubsMonth)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                         const groupColor = SUB_GROUPS[sub.group]?.color ?? '#9ca3af';
+                        const subCount = subCountByKeyMonth[sub.key]?.[activeSubsMonth] ?? 1;
                         return (
                           <View key={`sub-${si}`} style={{ borderBottomWidth: si < budgetSubs.length - 1 ? 1 : 0, borderBottomColor: Colors.border, paddingVertical: 8 }}>
                             {/* Sub row top */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, opacity: sub.cancelled ? 0.45 : 1 }}>
                               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: groupColor, flexShrink: 0 }} />
                               <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: sub.cancelled ? Colors.textDim : Colors.text, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
-                                  {sub.description}
-                                  {sub.isDuplicate && !sub.cancelled && (
-                                    <Text style={{ fontSize: 10, color: Colors.danger }}> ⚠ duplicate?</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5 }}>
+                                  <Text style={{ fontSize: 12, fontWeight: '600', color: sub.cancelled ? Colors.textDim : Colors.text, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
+                                    {sub.description}
+                                  </Text>
+                                  {subCount > 1 && !sub.cancelled && (
+                                    <View style={{ backgroundColor: '#1e1a2e', borderWidth: 1, borderColor: '#6d28d960', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#a78bfa' }}>{subCount}×</Text>
+                                    </View>
                                   )}
-                                </Text>
+                                  {sub.isDuplicate && !sub.cancelled && (
+                                    <View style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d60', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                      <Text style={{ fontSize: 9, fontWeight: '700', color: Colors.danger }}>⚠ double charge?</Text>
+                                    </View>
+                                  )}
+                                </View>
                                 <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 1 }}>
                                   {sub.cancelled ? `Cancelled · last ${sub.date}` : `Last charged ${sub.date}`}
                                 </Text>
@@ -1525,7 +1558,8 @@ export default function BudgetScreen() {
                               <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, marginTop: 8, overflow: 'hidden' }}>
                                 <View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
                                   <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.textDim }}>All charges matching this service this month</Text>
-                                  {sub.isDuplicate && <Text style={{ fontSize: 10, color: Colors.danger, marginTop: 2 }}>⚠ Multiple recurring charges detected — possible duplicate subscription</Text>}
+                                  {sub.isDuplicate && <Text style={{ fontSize: 10, color: Colors.danger, marginTop: 2 }}>⚠ Same amount charged twice on the same day — possible accidental double charge</Text>}
+                                  {!sub.isDuplicate && subCount > 1 && <Text style={{ fontSize: 10, color: '#a78bfa', marginTop: 2 }}>{subCount} separate subscriptions detected for this service</Text>}
                                 </View>
                                 {allCharges.map((t, ci) => {
                                   const chargeType = classifyCharge(t, sub.key);
@@ -1595,17 +1629,30 @@ export default function BudgetScreen() {
                   const isExpanded = expandedSubKeys.has(sub.key);
                   const allCharges = (allTxsBySubKey[sub.key] ?? []).filter(t => t.date.startsWith(activeSubsMonth)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                   const groupColor = SUB_GROUPS[sub.group]?.color ?? '#9ca3af';
+                  const subCount = subCountByKeyMonth[sub.key]?.[activeSubsMonth] ?? 1;
                   return (
                     <View key={`usub-${si}`} style={{ borderBottomWidth: si < unassignedSubs.length - 1 ? 1 : 0, borderBottomColor: Colors.border, paddingVertical: 8 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, opacity: sub.cancelled ? 0.45 : 1 }}>
                         <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: groupColor, flexShrink: 0 }} />
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: sub.cancelled ? Colors.textDim : Colors.text, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
-                            {sub.description}{sub.isDuplicate && !sub.cancelled && <Text style={{ fontSize: 10, color: Colors.danger }}> ⚠</Text>}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: sub.cancelled ? Colors.textDim : Colors.text, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
+                              {sub.description}
+                            </Text>
+                            {subCount > 1 && !sub.cancelled && (
+                              <View style={{ backgroundColor: '#1e1a2e', borderWidth: 1, borderColor: '#6d28d960', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: '#a78bfa' }}>{subCount}×</Text>
+                              </View>
+                            )}
+                            {sub.isDuplicate && !sub.cancelled && (
+                              <View style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d60', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: Colors.danger }}>⚠ double charge?</Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 1 }}>{sub.group} · {sub.cancelled ? `Cancelled` : `Last ${sub.date}`}</Text>
                         </View>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: sub.cancelled ? Colors.textDim : Colors.danger, textDecorationLine: sub.cancelled ? 'line-through' : 'none', marginRight: 6 }}>${sub.amount.toFixed(2)}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: sub.cancelled ? Colors.textDim : Colors.danger, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>${sub.amount.toFixed(2)}</Text>
                         {allCharges.length > 0 && (
                           <TouchableOpacity
                             onPress={() => setExpandedSubKeys(prev => { const n = new Set(prev); if (n.has(sub.key)) n.delete(sub.key); else n.add(sub.key); return n; })}
@@ -1614,19 +1661,39 @@ export default function BudgetScreen() {
                             <Text style={{ fontSize: 10, color: Colors.textDim }}>{allCharges.length} charge{allCharges.length !== 1 ? 's' : ''} {isExpanded ? '▲' : '▼'}</Text>
                           </TouchableOpacity>
                         )}
-                        {sub.cancelled ? (
-                          <TouchableOpacity onPress={() => handleUncancelSub(sub.key)} style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 }}>
-                            <Text style={{ fontSize: 10, color: Colors.textDim }}>Restore</Text>
+                      </View>
+                      {/* Assign / Cancel row */}
+                      {!sub.cancelled && (
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 7 }}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              const budgetOptions = budgets.map(b => ({ text: `${b.icon} ${b.name}`, onPress: () => {
+                                transactions.forEach(t => {
+                                  if (t.type !== 'expense' || !t.date.startsWith(activeSubsMonth)) return;
+                                  const d = (t.description ?? '').toLowerCase();
+                                  if (d.includes(sub.key)) updateTransaction(t.id, { budgetId: b.id });
+                                });
+                              }}));
+                              Alert.alert('Assign to Budget', `Where does "${sub.description}" belong?`, [...budgetOptions, { text: 'Cancel', style: 'cancel' as const }]);
+                            }}
+                            style={{ flex: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 7, paddingVertical: 5, alignItems: 'center' }}
+                          >
+                            <Text style={{ fontSize: 11, color: Colors.text, fontWeight: '600' }}>📂 Assign to budget</Text>
                           </TouchableOpacity>
-                        ) : (
                           <TouchableOpacity
                             onPress={() => Alert.alert('Cancel Subscription', `Mark "${sub.description}" as cancelled?\n\nIt will still show in past months but won't appear going forward.`, [{ text: 'Not yet' }, { text: 'Cancel it', style: 'destructive', onPress: () => handleCancelSub(sub.key) }])}
-                            style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d40', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 }}
+                            style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d40', borderRadius: 7, paddingHorizontal: 12, paddingVertical: 5, alignItems: 'center' }}
                           >
-                            <Text style={{ fontSize: 10, color: Colors.danger }}>Cancel</Text>
+                            <Text style={{ fontSize: 11, color: Colors.danger }}>Cancel</Text>
                           </TouchableOpacity>
-                        )}
-                      </View>
+                        </View>
+                      )}
+                      {sub.cancelled && (
+                        <TouchableOpacity onPress={() => handleUncancelSub(sub.key)} style={{ marginTop: 6, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 7, paddingVertical: 5, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 11, color: Colors.textDim }}>Restore</Text>
+                        </TouchableOpacity>
+                      )}
+
                       {isExpanded && allCharges.length > 0 && (
                         <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, marginTop: 8, overflow: 'hidden' }}>
                           <View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
@@ -2142,7 +2209,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>
               {editingId ? 'Edit Budget' : 'Add Budget Category'}
             </Text>
@@ -2223,7 +2290,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>
               {editingId ? 'Edit Transaction' : `Add ${transactionType === 'income' ? 'Income' : 'Expense'}`}
             </Text>
@@ -2320,7 +2387,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>{editingId ? 'Edit Debt' : 'Add Debt'}</Text>
             <TextInput
               style={styles.modalInput}
@@ -2399,7 +2466,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>
               {editingId ? 'Edit Savings Goal' : 'Add Savings Goal'}
             </Text>
@@ -2474,7 +2541,7 @@ export default function BudgetScreen() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>Upload Status</Text>
             
             {uploadStatus ? (
@@ -2511,7 +2578,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setInsightsModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={styles.advisorModalHeader}>
               <View style={styles.advisorModalTitleRow}>
                 <Lightbulb size={22} color="#f59e0b" />
@@ -2600,7 +2667,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setMonthDetailVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={styles.modalTitle}>{selectedMonthKey}</Text>
               <TouchableOpacity onPress={() => setMonthDetailVisible(false)}>
@@ -2855,7 +2922,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setBudgetDetailVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={styles.modalTitle}>
                 {selectedBudgetForDetail?.icon} {selectedBudgetForDetail?.name}
@@ -3022,7 +3089,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setWidgetModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '80%', paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>📱 Widgets & Notifications</Text>
             <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 1 }}>
 
