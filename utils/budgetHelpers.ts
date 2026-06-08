@@ -705,6 +705,10 @@ export const processCSVData = (
       if (/^\([\d.,]+\)$/.test(s)) {
         return -(parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
       }
+      // Trailing minus notation: 100.00- → -100.00
+      if (/^[\d.,]+-$/.test(s)) {
+        return -(parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
+      }
       return parseFloat(s.replace(/[^0-9.\x2D]/g, '')) || 0;
     };
 
