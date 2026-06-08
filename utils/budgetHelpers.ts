@@ -738,9 +738,45 @@ export const processCSVData = (
       continue;
     }
 
-    const isExpense = amountNum < 0;
+    let isExpense = amountNum < 0;
     const amount = Math.abs(amountNum);
     const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
+
+    // Reclassify positive amounts that are clearly payments/transfers/refunds (not real income).
+    // These inflate income totals when multiple accounts are uploaded (e.g. credit card payments
+    // appear as a credit on the card statement even though the cash already left checking).
+    if (!isExpense) {
+      const d = description.toLowerCase();
+      const isPaymentOrTransfer =
+        // Credit card payments
+        /\bpayment\b/.test(d) ||
+        /autopay/.test(d) ||
+        /\bpay\s+thank/.test(d) ||
+        /thank\s+you/.test(d) ||
+        // Transfers between own accounts
+        /\btransfer\b/.test(d) ||
+        /\bxfer\b/.test(d) ||
+        /\bfrom\s+(checking|savings|account)\b/.test(d) ||
+        /\bto\s+(checking|savings|account)\b/.test(d) ||
+        // Zelle / Venmo / cash-app person-to-person (not payroll)
+        (/\bzelle\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
+        (/\bvenmo\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
+        (/\bcash\s*app\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
+        // Refunds/reversals — keep as expense offset, skip as income
+        /\brefund\b/.test(d) ||
+        /\breversal\b/.test(d) ||
+        /\bcredit\s+adj/.test(d) ||
+        // ATM / cash deposits that are just moving cash
+        /\batm\s+(deposit|cash)\b/.test(d);
+
+      if (isPaymentOrTransfer) {
+        // Treat as an expense-offset / skip rather than income so it doesn't
+        // inflate the income total. Mark as expense so it either cancels out or
+        // gets skipped in the duplicate-month filter.
+        skipped++;
+        continue;
+      }
+    }
 
     const cleanedName = cleanDescription(description);
     const category = categorizeTransaction(description) || categorizeTransaction(cleanedName);
@@ -757,6 +793,36 @@ export const processCSVData = (
       type: isExpense ? 'expense' : 'income',
       budgetId: matchedBudgetId,
     });
+  }
+
+  // Sign-flip detection: some credit card formats (Citi, Discover, Capital One) export
+  // purchases as positive and payments as negative — opposite of what we expect.
+  // Detect this by checking if most "income" rows look like merchant purchases.
+  if (imported.length > 3) {
+    const incomeRows = imported.filter(t => t.type === 'income');
+    const merchantKeywords = ['food', 'dining', 'grocery', 'groceries', 'shopping', 'gas', 'restaurant',
+      'amazon', 'walmart', 'target', 'uber', 'lyft', 'netflix', 'spotify', 'apple', 'google',
+      'starbucks', 'mcdonald', 'doordash', 'instacart', 'pharmacy', 'cvs', 'walgreen'];
+    const merchantIncomeCount = incomeRows.filter(t => {
+      const d = (t.description ?? '').toLowerCase();
+      return merchantKeywords.some(kw => d.includes(kw));
+    }).length;
+    // If >40% of "income" rows are clearly merchant purchases, signs are flipped
+    if (incomeRows.length > 0 && merchantIncomeCount / incomeRows.length > 0.4) {
+      console.log('processCSVData: sign-flip detected, inverting income/expense classification');
+      imported = imported.map(t => ({ ...t, type: t.type === 'income' ? 'expense' : 'income' }));
+      // Re-run the payment/transfer filter on newly-flipped income rows
+      imported = imported.filter(t => {
+        if (t.type !== 'income') return true;
+        const d = (t.description ?? '').toLowerCase();
+        return !(
+          /\bpayment\b/.test(d) || /autopay/.test(d) || /thank\s+you/.test(d) ||
+          /\btransfer\b/.test(d) || /\bxfer\b/.test(d) ||
+          /\bfrom\s+(checking|savings|account)\b/.test(d) ||
+          /\brefund\b/.test(d) || /\breversal\b/.test(d)
+        );
+      });
+    }
   }
 
   console.log('processCSVData: pre-filter import count:', imported.length);
