@@ -158,7 +158,7 @@ export default function BudgetScreen() {
   const SUB_GROUPS: Record<string, { keywords: string[]; emoji: string; color: string }> = {
     'Streaming':    { emoji: '🎬', color: '#a78bfa', keywords: ['netflix','hulu','disney','hbo','peacock','paramount','apple tv','appletv','showtime','starz','crunchyroll','fubo','sling','prime video','youtube premium','twitch'] },
     'Music & Audio':{ emoji: '🎵', color: '#34d399', keywords: ['spotify','apple music','tidal','amazon music','youtube music','pandora','deezer','audible','podcast subscripti'] },
-    'Shopping':     { emoji: '🛒', color: '#fbbf24', keywords: ['amazon prime','kindle','walmart+','walmart+ member','instacart','doordash','costco','sams club'] },
+    'Shopping':     { emoji: '🛒', color: '#fbbf24', keywords: ['amazon prime','kindle','walmart+','walmart+ member','instacart','dashpass','costco member','sams club member'] },
     'Software':     { emoji: '💻', color: '#60a5fa', keywords: ['microsoft','adobe','norton','mcafee','nordvpn','expressvpn','google one','icloud','dropbox','grammarly','setapp','mimo','skillshare','masterclass','coursera','duolingo','calm','headspace','truthfinder','ancestry','myheritage','usesprout','claude.ai','anthropic','chatgpt','openai'] },
     'Fitness':      { emoji: '💪', color: '#f87171', keywords: ['24 hour fitness','planet fitness','gym','peloton','anytime fitness','equinox'] },
     'Other':        { emoji: '📦', color: '#9ca3af', keywords: ['patreon','substack','onlyfans','discord nitro','xbox game pass','playstation','apple one','acorns','robinhood','subscription','subscripti','membership','membershi','blind wave','hidive','webnovel'] },
@@ -443,14 +443,35 @@ export default function BudgetScreen() {
   // Compute budget spent from the active month's transactions only (not the stored cumulative value)
   const monthlySpentByBudgetId = useMemo(() => {
     const map: Record<number, number> = {};
-    const currentMonthTransactions = thisMonthData?.transactions ?? [];
-    for (const t of currentMonthTransactions) {
-      if (t.type === 'expense' && t.budgetId != null) {
+    const ym = activeSubsMonth || thisMonth;
+    const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(ym));
+    for (const t of monthTxs) {
+      if (t.budgetId != null) {
+        // Directly assigned to a budget
         map[t.budgetId] = (map[t.budgetId] ?? 0) + t.amount;
+      } else {
+        // No budgetId — try to match via subscription keywords assigned to a budget
+        const desc = (t.description ?? '').toLowerCase();
+        outer: for (const [group, { keywords }] of Object.entries(SUB_GROUPS)) {
+          void group;
+          for (const kw of keywords) {
+            if (desc.includes(kw)) {
+              // Find which budget has this subscription assigned
+              for (const budget of budgets) {
+                const subList = subsByBudgetId[budget.id] ?? [];
+                if (subList.some(s => s.key === kw)) {
+                  map[budget.id] = (map[budget.id] ?? 0) + t.amount;
+                  break outer;
+                }
+              }
+              break outer;
+            }
+          }
+        }
       }
     }
     return map;
-  }, [thisMonthData]);
+  }, [transactions, activeSubsMonth, thisMonth, subsByBudgetId, budgets]);
   const netCashflow = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
 
