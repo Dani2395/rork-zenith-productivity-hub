@@ -143,6 +143,39 @@ export default function BudgetScreen() {
   const totalSavingsTarget = savings.reduce((sum, s) => sum + s.target, 0);
   const totalSavingsCurrent = savings.reduce((sum, s) => sum + s.current, 0);
 
+  const SUBSCRIPTION_KEYWORDS = [
+    'netflix', 'hulu', 'disney', 'hbo', 'peacock', 'paramount', 'apple tv', 'appletv',
+    'showtime', 'starz', 'crunchyroll', 'fubo', 'sling', 'spotify', 'apple music',
+    'tidal', 'amazon music', 'youtube music', 'pandora', 'deezer', 'audible',
+    'amazon prime', 'prime video', 'kindle', 'google one', 'icloud', 'dropbox',
+    'microsoft', 'adobe', 'norton', 'mcafee', 'nordvpn', 'expressvpn',
+    'patreon', 'onlyfans', 'substack', 'grammarly', 'duolingo', 'calm',
+    'headspace', '24 hour fitness', 'planet fitness', 'gym', 'peloton',
+    'doordash', 'instacart', 'walmart+', 'sams club', 'costco',
+    'twitch', 'youtube premium', 'discord nitro', 'xbox game pass', 'playstation',
+    'apple one', 'setapp', 'mimo', 'skillshare', 'masterclass', 'coursera',
+    'ancestry', 'truthfinder', 'myheritage', 'acorns', 'robinhood',
+    'subscription', 'subscripti', 'membership', 'membershi',
+  ];
+
+  const detectedSubscriptions = useMemo(() => {
+    const seen = new Map<string, { description: string; amount: number; date: string; count: number }>();
+    for (const t of transactions) {
+      if (t.type !== 'expense') continue;
+      const desc = (t.description ?? '').toLowerCase();
+      const matched = SUBSCRIPTION_KEYWORDS.find(k => desc.includes(k));
+      if (!matched) continue;
+      const key = matched;
+      const existing = seen.get(key);
+      if (!existing || t.amount > existing.amount) {
+        seen.set(key, { description: t.description ?? matched, amount: t.amount, date: t.date, count: (existing?.count ?? 0) + 1 });
+      } else {
+        existing.count += 1;
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) => b.amount - a.amount);
+  }, [transactions]);
+
   const monthsWithData = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const monthMap: Record<string, { income: number; expenses: number; transactions: Transaction[] }> = {};
@@ -1285,6 +1318,56 @@ export default function BudgetScreen() {
           )}
         </View>
 
+        {/* Monthly Subscriptions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>📡 Monthly Subscriptions</Text>
+          {detectedSubscriptions.length === 0 ? (
+            <Text style={styles.emptyText}>No subscriptions detected yet. Upload a bank statement to auto-detect them.</Text>
+          ) : (
+            <>
+              <Text style={{ color: Colors.textDim, fontSize: 12, marginBottom: 10 }}>
+                Detected from your transactions • Tap to view details
+              </Text>
+              {detectedSubscriptions.map((sub, idx) => (
+                <View
+                  key={`sub-${idx}`}
+                  style={[styles.transactionCard, { borderLeftColor: Colors.warning ?? '#f59e0b', borderLeftWidth: 3 }]}
+                >
+                  <View style={styles.transactionInfo}>
+                    <Text style={styles.transactionName}>📡 {sub.description}</Text>
+                    <Text style={styles.transactionDate}>
+                      {sub.count > 1 ? `${sub.count} charges found` : 'Detected in transactions'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
+                    ~${sub.amount.toFixed(2)}/mo
+                  </Text>
+                </View>
+              ))}
+              <View style={[styles.metricsCard, { marginTop: 10 }]}>
+                <View style={styles.metricsGrid}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Subscriptions</Text>
+                    <Text style={styles.metricValue}>{detectedSubscriptions.length}</Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Monthly Total</Text>
+                    <Text style={[styles.metricValue, { color: Colors.danger }]}>
+                      ${detectedSubscriptions.reduce((s, x) => s + x.amount, 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Annual Cost</Text>
+                    <Text style={[styles.metricValue, { color: Colors.danger }]}>
+                      ${(detectedSubscriptions.reduce((s, x) => s + x.amount, 0) * 12).toFixed(0)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+        </View>
+
         {/* Yearly / Quarterly Overview */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -2226,8 +2309,46 @@ export default function BudgetScreen() {
                   No transactions yet for this category.
                 </Text>
               ) : (
+                <>
+                  {(() => {
+                    const subs = budgetDetailTransactions.filter(t =>
+                      SUBSCRIPTION_KEYWORDS.some(k => (t.description ?? '').toLowerCase().includes(k))
+                    );
+                    if (subs.length === 0) return null;
+                    return (
+                      <View style={styles.txnGroup}>
+                        <Text style={styles.txnGroupTitle}>📡 Subscriptions ({subs.length})</Text>
+                        {subs.map((t, idx) => (
+                          <TouchableOpacity
+                            key={`bds-${t.id}-${idx}`}
+                            style={[styles.transactionCard, { borderLeftColor: Colors.warning ?? '#f59e0b', borderLeftWidth: 3 }]}
+                            onPress={() => { setBudgetDetailVisible(false); openTransactionModal(t); }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.transactionInfo}>
+                              <Text style={styles.transactionName}>📡 {t.description || 'Subscription'}</Text>
+                              <Text style={styles.transactionDate}>{t.date}</Text>
+                            </View>
+                            <View style={styles.transactionRight}>
+                              <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
+                                -${t.amount.toFixed(2)}
+                              </Text>
+                              <View style={styles.transactionActions}>
+                                <TouchableOpacity onPress={() => { setBudgetDetailVisible(false); openTransactionModal(t); }} style={styles.iconButton}>
+                                  <Edit2 size={14} color={Colors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleDeleteTransaction(t.id)} style={styles.iconButton}>
+                                  <Trash2 size={14} color={Colors.danger} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    );
+                  })()}
                 <View style={styles.txnGroup}>
-                  <Text style={styles.txnGroupTitle}>💸 Transactions ({budgetDetailTransactions.length})</Text>
+                  <Text style={styles.txnGroupTitle}>💸 All Transactions ({budgetDetailTransactions.length})</Text>
                   {budgetDetailTransactions.map((t, idx) => (
                     <TouchableOpacity
                       key={`bd-${t.id}-${idx}`}
@@ -2266,6 +2387,7 @@ export default function BudgetScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                </>
               )}
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, marginBottom: 16 }}>
