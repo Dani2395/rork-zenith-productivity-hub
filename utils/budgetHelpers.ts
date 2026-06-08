@@ -699,12 +699,19 @@ export const processCSVData = (
     const dateStr = parts[cols.dateCol]?.replace(/^"|"$/g, '').trim();
     const description = cols.descCol >= 0 ? parts[cols.descCol]?.replace(/^"|"$/g, '').trim() : '';
 
+    const parseSignedAmount = (raw: string | undefined): number => {
+      const s = (raw ?? '').replace(/^"|"$/g, '').trim();
+      // Parentheses notation: (100.00) → -100.00
+      if (/^\([\d.,]+\)$/.test(s)) {
+        return -(parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
+      }
+      return parseFloat(s.replace(/[^0-9.\x2D]/g, '')) || 0;
+    };
+
     let amountNum = 0;
     if (cols.debitCol >= 0 || cols.creditCol >= 0) {
-      const debitStr = cols.debitCol >= 0 ? parts[cols.debitCol]?.replace(/[^0-9.\x2D]/g, '') : '';
-      const creditStr = cols.creditCol >= 0 ? parts[cols.creditCol]?.replace(/[^0-9.\x2D]/g, '') : '';
-      const debitVal = parseFloat(debitStr || '0') || 0;
-      const creditVal = parseFloat(creditStr || '0') || 0;
+      const debitVal = cols.debitCol >= 0 ? parseSignedAmount(parts[cols.debitCol]) : 0;
+      const creditVal = cols.creditCol >= 0 ? parseSignedAmount(parts[cols.creditCol]) : 0;
       if (creditVal > 0) {
         amountNum = creditVal;
       } else if (debitVal > 0) {
@@ -713,8 +720,7 @@ export const processCSVData = (
         amountNum = debitVal;
       }
     } else if (cols.amountCol >= 0) {
-      const amountStr = parts[cols.amountCol]?.replace(/[^0-9.\x2D]/g, '') || '0';
-      amountNum = parseFloat(amountStr);
+      amountNum = parseSignedAmount(parts[cols.amountCol]);
     }
 
     if (!dateStr) {
