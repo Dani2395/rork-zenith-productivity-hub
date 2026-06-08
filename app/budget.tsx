@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,6 +46,8 @@ import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
 import { updateBudgetWidget } from '@/widgets/widgetTaskHandler';
 
 export default function BudgetScreen() {
+  const insets = useSafeAreaInsets();
+  const modalPaddingBottom = Math.max(insets.bottom, 16) + 24;
   const {
     budgets,
     transactions,
@@ -2207,7 +2209,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>
               {editingId ? 'Edit Budget' : 'Add Budget Category'}
             </Text>
@@ -2288,7 +2290,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>
               {editingId ? 'Edit Transaction' : `Add ${transactionType === 'income' ? 'Income' : 'Expense'}`}
             </Text>
@@ -2385,7 +2387,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>{editingId ? 'Edit Debt' : 'Add Debt'}</Text>
             <TextInput
               style={styles.modalInput}
@@ -2464,7 +2466,7 @@ export default function BudgetScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.modalContent}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>
               {editingId ? 'Edit Savings Goal' : 'Add Savings Goal'}
             </Text>
@@ -2539,7 +2541,7 @@ export default function BudgetScreen() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>Upload Status</Text>
             
             {uploadStatus ? (
@@ -2576,7 +2578,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setInsightsModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={styles.advisorModalHeader}>
               <View style={styles.advisorModalTitleRow}>
                 <Lightbulb size={22} color="#f59e0b" />
@@ -2665,7 +2667,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setMonthDetailVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={styles.modalTitle}>{selectedMonthKey}</Text>
               <TouchableOpacity onPress={() => setMonthDetailVisible(false)}>
@@ -2920,7 +2922,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setBudgetDetailVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={styles.modalTitle}>
                 {selectedBudgetForDetail?.icon} {selectedBudgetForDetail?.name}
@@ -3087,7 +3089,7 @@ export default function BudgetScreen() {
         onRequestClose={() => setWidgetModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+          <View style={[styles.modalContent, { maxHeight: '80%', paddingBottom: modalPaddingBottom }]}>
             <Text style={styles.modalTitle}>📱 Widgets & Notifications</Text>
             <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 1 }}>
 

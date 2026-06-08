@@ -77,7 +77,7 @@ export default StyleSheet.create({
   transactionRight: { alignItems: 'flex-end', gap: 4 },
   transactionAmount: { fontSize: 14, fontWeight: '700' as const },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.7)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalContent: { backgroundColor: Colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 24 },
   modalTitle: { fontSize: 20, fontWeight: '700' as const, color: Colors.text, marginBottom: 16 },
   modalInput: { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 12, color: Colors.text, fontSize: 14, marginBottom: 12 },
   amountInput: { fontSize: 24, fontWeight: '700' as const, textAlign: 'center' },
