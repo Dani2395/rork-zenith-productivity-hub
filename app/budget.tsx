@@ -120,8 +120,18 @@ export default function BudgetScreen() {
   const [incomeGoalEditing, setIncomeGoalEditing] = useState(false);
   const [incomeGoalDraft, setIncomeGoalDraft] = useState('');
 
+  // Subscriptions state
+  const [subsBudgetGoal, setSubsBudgetGoal] = useState<string>('');
+  const [subsBudgetEditing, setSubsBudgetEditing] = useState(false);
+  const [subsBudgetDraft, setSubsBudgetDraft] = useState('');
+  const [cancelledSubs, setCancelledSubs] = useState<Record<string, string>>({});
+  const [expandedSubGroups, setExpandedSubGroups] = useState<Set<string>>(new Set(['Streaming', 'Music & Audio', 'Shopping', 'Software', 'Fitness', 'Other']));
+  const [subsViewMonth, setSubsViewMonth] = useState<string>('');
+  const [expandedSubKeys, setExpandedSubKeys] = useState<Set<string>>(new Set());
   useEffect(() => {
     AsyncStorage.getItem('monthlyIncomeGoal').then(v => { if (v) setMonthlyIncomeGoal(v); });
+    AsyncStorage.getItem('subsBudgetGoal').then(v => { if (v) setSubsBudgetGoal(v); });
+    AsyncStorage.getItem('cancelledSubs').then(v => { if (v) { try { setCancelledSubs(JSON.parse(v)); } catch {} } });
   }, []);
 
   const saveIncomeGoal = async (value: string) => {
@@ -143,38 +153,226 @@ export default function BudgetScreen() {
   const totalSavingsTarget = savings.reduce((sum, s) => sum + s.target, 0);
   const totalSavingsCurrent = savings.reduce((sum, s) => sum + s.current, 0);
 
-  const SUBSCRIPTION_KEYWORDS = [
-    'netflix', 'hulu', 'disney', 'hbo', 'peacock', 'paramount', 'apple tv', 'appletv',
-    'showtime', 'starz', 'crunchyroll', 'fubo', 'sling', 'spotify', 'apple music',
-    'tidal', 'amazon music', 'youtube music', 'pandora', 'deezer', 'audible',
-    'amazon prime', 'prime video', 'kindle', 'google one', 'icloud', 'dropbox',
-    'microsoft', 'adobe', 'norton', 'mcafee', 'nordvpn', 'expressvpn',
-    'patreon', 'onlyfans', 'substack', 'grammarly', 'duolingo', 'calm',
-    'headspace', '24 hour fitness', 'planet fitness', 'gym', 'peloton',
-    'doordash', 'instacart', 'walmart+', 'sams club', 'costco',
-    'twitch', 'youtube premium', 'discord nitro', 'xbox game pass', 'playstation',
-    'apple one', 'setapp', 'mimo', 'skillshare', 'masterclass', 'coursera',
-    'ancestry', 'truthfinder', 'myheritage', 'acorns', 'robinhood',
-    'subscription', 'subscripti', 'membership', 'membershi',
-  ];
+  const SUB_GROUPS: Record<string, { keywords: string[]; emoji: string; color: string }> = {
+    'Streaming':    { emoji: '🎬', color: '#a78bfa', keywords: ['netflix','hulu','disney','hbo','peacock','paramount','apple tv','appletv','showtime','starz','crunchyroll','fubo','sling','prime video','youtube premium','twitch'] },
+    'Music & Audio':{ emoji: '🎵', color: '#34d399', keywords: ['spotify','apple music','tidal','amazon music','youtube music','pandora','deezer','audible','podcast subscripti'] },
+    'Shopping':     { emoji: '🛒', color: '#fbbf24', keywords: ['amazon prime','kindle','walmart+','walmart+ member','instacart','doordash','costco','sams club'] },
+    'Software':     { emoji: '💻', color: '#60a5fa', keywords: ['microsoft','adobe','norton','mcafee','nordvpn','expressvpn','google one','icloud','dropbox','grammarly','setapp','mimo','skillshare','masterclass','coursera','duolingo','calm','headspace','truthfinder','ancestry','myheritage','usesprout','claude.ai','anthropic','chatgpt','openai'] },
+    'Fitness':      { emoji: '💪', color: '#f87171', keywords: ['24 hour fitness','planet fitness','gym','peloton','anytime fitness','equinox'] },
+    'Other':        { emoji: '📦', color: '#9ca3af', keywords: ['patreon','substack','onlyfans','discord nitro','xbox game pass','playstation','apple one','acorns','robinhood','subscription','subscripti','membership','membershi','blind wave','hidive','webnovel'] },
+  };
 
-  const detectedSubscriptions = useMemo(() => {
-    const seen = new Map<string, { description: string; amount: number; date: string; count: number }>();
+  const SUBSCRIPTION_KEYWORDS = Object.values(SUB_GROUPS).flatMap(g => g.keywords);
+
+  // Build per-month subscription data
+  const allSubsByMonth = useMemo(() => {
+    // map from YYYY-MM -> key -> { description, amount, date, count }
+    const result: Record<string, Record<string, { description: string; amount: number; date: string; count: number; group: string }>> = {};
     for (const t of transactions) {
       if (t.type !== 'expense') continue;
       const desc = (t.description ?? '').toLowerCase();
-      const matched = SUBSCRIPTION_KEYWORDS.find(k => desc.includes(k));
-      if (!matched) continue;
-      const key = matched;
-      const existing = seen.get(key);
+      let matchedKey: string | null = null;
+      let matchedGroup = 'Other';
+      outer: for (const [group, { keywords }] of Object.entries(SUB_GROUPS)) {
+        for (const kw of keywords) {
+          if (desc.includes(kw)) { matchedKey = kw; matchedGroup = group; break outer; }
+        }
+      }
+      if (!matchedKey) continue;
+      const ym = t.date.substring(0, 7); // YYYY-MM
+      if (!result[ym]) result[ym] = {};
+      const existing = result[ym][matchedKey];
       if (!existing || t.amount > existing.amount) {
-        seen.set(key, { description: t.description ?? matched, amount: t.amount, date: t.date, count: (existing?.count ?? 0) + 1 });
+        result[ym][matchedKey] = { description: t.description ?? matchedKey, amount: t.amount, date: t.date, count: (existing?.count ?? 0) + 1, group: matchedGroup };
       } else {
         existing.count += 1;
       }
     }
-    return Array.from(seen.values()).sort((a, b) => b.amount - a.amount);
+    return result;
   }, [transactions]);
+
+  const subsMonthOptions = useMemo(() => Object.keys(allSubsByMonth).sort().reverse(), [allSubsByMonth]);
+
+  const activeSubsMonth = useMemo(() => {
+    if (subsViewMonth && allSubsByMonth[subsViewMonth]) return subsViewMonth;
+    return subsMonthOptions[0] ?? '';
+  }, [subsViewMonth, subsMonthOptions, allSubsByMonth]);
+
+  const subsForMonth = useMemo(() => {
+    const raw = allSubsByMonth[activeSubsMonth] ?? {};
+    return Object.entries(raw).map(([key, val]) => ({
+      key,
+      ...val,
+      cancelled: !!cancelledSubs[key] && cancelledSubs[key] <= activeSubsMonth,
+    }));
+  }, [allSubsByMonth, activeSubsMonth, cancelledSubs]);
+
+  const subsGrouped = useMemo(() => {
+    const groups: Record<string, typeof subsForMonth> = {};
+    for (const sub of subsForMonth) {
+      if (!groups[sub.group]) groups[sub.group] = [];
+      groups[sub.group].push(sub);
+    }
+    return groups;
+  }, [subsForMonth]);
+
+  const handleCancelSub = (key: string) => {
+    // cancel from the NEXT month onward
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const ym = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`;
+    const updated = { ...cancelledSubs, [key]: ym };
+    setCancelledSubs(updated);
+    AsyncStorage.setItem('cancelledSubs', JSON.stringify(updated));
+  };
+
+  const handleUncancelSub = (key: string) => {
+    const updated = { ...cancelledSubs };
+    delete updated[key];
+    setCancelledSubs(updated);
+    AsyncStorage.setItem('cancelledSubs', JSON.stringify(updated));
+  };
+
+  // For each subscription key, get every matching transaction across ALL months
+  const allTxsBySubKey = useMemo(() => {
+    const map: Record<string, Transaction[]> = {};
+    for (const t of transactions) {
+      if (t.type !== 'expense') continue;
+      const desc = (t.description ?? '').toLowerCase();
+      for (const [, { keywords }] of Object.entries(SUB_GROUPS)) {
+        for (const kw of keywords) {
+          if (desc.includes(kw)) {
+            if (!map[kw]) map[kw] = [];
+            map[kw].push(t);
+            break;
+          }
+        }
+      }
+    }
+    return map;
+  }, [transactions]);
+
+  // Classify a transaction for a sub key: 'recurring' | 'channel' | 'onetime'
+  const classifyCharge = useCallback((t: Transaction, key: string): 'recurring' | 'channel' | 'onetime' => {
+    const all = allTxsBySubKey[key] ?? [];
+    // Count how many months have a charge within $2 of this amount
+    const months = new Set<string>();
+    for (const tx of all) {
+      if (Math.abs(tx.amount - t.amount) <= 2) months.add(tx.date.substring(0, 7));
+    }
+    if (months.size >= 2) return 'recurring';
+    // Smaller amounts that repeat could be channel add-ons
+    if (t.amount < 12 && all.filter(tx => Math.abs(tx.amount - t.amount) <= 1).length >= 1) return 'channel';
+    return 'onetime';
+  }, [allTxsBySubKey]);
+
+  // Detect duplicate subscriptions: same key, 2+ recurring charges in the same month on different descriptions
+  const duplicateSubs = useMemo(() => {
+    const dupes: Set<string> = new Set();
+    for (const [key, txs] of Object.entries(allTxsBySubKey)) {
+      const byMonth: Record<string, Transaction[]> = {};
+      for (const t of txs) {
+        const ym = t.date.substring(0, 7);
+        if (!byMonth[ym]) byMonth[ym] = [];
+        byMonth[ym].push(t);
+      }
+      for (const monthTxs of Object.values(byMonth)) {
+        const recurring = monthTxs.filter(t => {
+          const all = allTxsBySubKey[key] ?? [];
+          const months = new Set(all.filter(tx => Math.abs(tx.amount - t.amount) <= 2).map(tx => tx.date.substring(0, 7)));
+          return months.size >= 2;
+        });
+        if (recurring.length >= 2) { dupes.add(key); break; }
+      }
+    }
+    return dupes;
+  }, [allTxsBySubKey]);
+
+  // For a budget card: which subscription keys have transactions assigned to this budget?
+  const subsByBudgetId = useMemo(() => {
+    const map: Record<number, { key: string; description: string; amount: number; date: string; group: string; cancelled: boolean; isDuplicate: boolean }[]> = {};
+    const ym = activeSubsMonth;
+    const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(ym));
+    for (const t of monthTxs) {
+      if (t.budgetId == null) continue;
+      const desc = (t.description ?? '').toLowerCase();
+      let matchedKey: string | null = null;
+      let matchedGroup = 'Other';
+      outer: for (const [group, { keywords }] of Object.entries(SUB_GROUPS)) {
+        for (const kw of keywords) {
+          if (desc.includes(kw)) { matchedKey = kw; matchedGroup = group; break outer; }
+        }
+      }
+      if (!matchedKey) continue;
+      if (!map[t.budgetId]) map[t.budgetId] = [];
+      const existing = map[t.budgetId].find(s => s.key === matchedKey);
+      if (!existing) {
+        map[t.budgetId].push({
+          key: matchedKey,
+          description: t.description ?? matchedKey,
+          amount: t.amount,
+          date: t.date,
+          group: matchedGroup,
+          cancelled: !!cancelledSubs[matchedKey] && cancelledSubs[matchedKey] <= ym,
+          isDuplicate: duplicateSubs.has(matchedKey),
+        });
+      }
+    }
+    return map;
+  }, [transactions, activeSubsMonth, cancelledSubs, duplicateSubs]);
+
+  // Unassigned subs (no budgetId) for the active month
+  const unassignedSubs = useMemo(() => {
+    const ym = activeSubsMonth;
+    const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(ym) && !t.budgetId);
+    const seen = new Map<string, { key: string; description: string; amount: number; date: string; group: string; cancelled: boolean; isDuplicate: boolean }>();
+    for (const t of monthTxs) {
+      const desc = (t.description ?? '').toLowerCase();
+      let matchedKey: string | null = null;
+      let matchedGroup = 'Other';
+      outer: for (const [group, { keywords }] of Object.entries(SUB_GROUPS)) {
+        for (const kw of keywords) {
+          if (desc.includes(kw)) { matchedKey = kw; matchedGroup = group; break outer; }
+        }
+      }
+      if (!matchedKey || seen.has(matchedKey)) continue;
+      seen.set(matchedKey, {
+        key: matchedKey,
+        description: t.description ?? matchedKey,
+        amount: t.amount,
+        date: t.date,
+        group: matchedGroup,
+        cancelled: !!cancelledSubs[matchedKey] && cancelledSubs[matchedKey] <= ym,
+        isDuplicate: duplicateSubs.has(matchedKey),
+      });
+    }
+    return Array.from(seen.values());
+  }, [transactions, activeSubsMonth, cancelledSubs, duplicateSubs]);
+
+  // Calendar charge days for active month
+  const calChargeDays = useMemo(() => {
+    const ym = activeSubsMonth;
+    const days: Record<number, { names: string[]; urgent: boolean }> = {};
+    const today = new Date();
+    const todayDay = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') === ym ? today.getDate() : -1;
+    const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(ym));
+    for (const t of monthTxs) {
+      const desc = (t.description ?? '').toLowerCase();
+      for (const [, { keywords }] of Object.entries(SUB_GROUPS)) {
+        for (const kw of keywords) {
+          if (desc.includes(kw)) {
+            const day = parseInt(t.date.split('-')[2], 10);
+            if (!days[day]) days[day] = { names: [], urgent: false };
+            const short = (t.description ?? kw).split(' ')[0].substring(0, 7);
+            if (!days[day].names.includes(short)) days[day].names.push(short);
+            if (todayDay > 0 && day >= todayDay && day <= todayDay + 5) days[day].urgent = true;
+            break;
+          }
+        }
+      }
+    }
+    return days;
+  }, [transactions, activeSubsMonth]);
 
   const monthsWithData = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -1143,8 +1341,86 @@ export default function BudgetScreen() {
           </View>
         </View>
 
+        {/* ── Combined Budget + Subscriptions ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💰 Budgets</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>💰 Budget & Subscriptions</Text>
+            <TouchableOpacity onPress={() => openBudgetModal()} style={styles.addButton}>
+              <Plus size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Month selector */}
+          {subsMonthOptions.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 6, paddingRight: 8 }}>
+              {subsMonthOptions.map(ym => (
+                <TouchableOpacity
+                  key={ym}
+                  onPress={() => setSubsViewMonth(ym)}
+                  style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, backgroundColor: activeSubsMonth === ym ? Colors.primary : 'transparent', borderWidth: 1, borderColor: activeSubsMonth === ym ? Colors.primary : Colors.border }}
+                >
+                  <Text style={{ fontSize: 12, color: activeSubsMonth === ym ? '#fff' : Colors.textDim, fontWeight: activeSubsMonth === ym ? '700' : '400' }}>{ym}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Calendar charge strip */}
+          {Object.keys(calChargeDays).length > 0 && (() => {
+            const days = Object.keys(calChargeDays).map(Number).sort((a, b) => a - b);
+            const allSubsTotal = subsForMonth.filter(s => !s.cancelled).reduce((sum, s) => sum + s.amount, 0);
+            return (
+              <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 12, marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.textDim }}>📅 Subscription charge days</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.danger }}>${allSubsTotal.toFixed(2)}/mo</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
+                  {days.map(day => {
+                    const info = calChargeDays[day];
+                    return (
+                      <View key={day} style={{ width: 44, backgroundColor: info.urgent ? '#2d1515' : '#1a1a2a', borderWidth: 1, borderColor: info.urgent ? '#7f1d1d60' : '#2a2a3a', borderRadius: 10, padding: 6, alignItems: 'center', gap: 3 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: info.urgent ? Colors.danger : '#a78bfa' }}>{day}</Text>
+                        <Text style={{ fontSize: 8, color: info.urgent ? Colors.danger : '#6b7280', textAlign: 'center' }} numberOfLines={1}>{info.names[0] ?? ''}</Text>
+                        <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: info.urgent ? Colors.danger : '#7c3aed' }} />
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            );
+          })()}
+
+          {/* Summary bar */}
+          {subsForMonth.length > 0 && (() => {
+            const activeSubsTotal = subsForMonth.filter(s => !s.cancelled).reduce((sum, s) => sum + s.amount, 0);
+            const totalSpent = Object.values(monthlySpentByBudgetId).reduce((s, v) => s + v, 0);
+            const totalBudget = budgets.reduce((s, b) => s + b.amount, 0);
+            return (
+              <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 14, padding: 12, marginBottom: 14, flexDirection: 'row' }}>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.danger }}>${totalSpent.toFixed(0)}</Text>
+                  <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 2 }}>Total spent</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: Colors.border }} />
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#a78bfa' }}>${activeSubsTotal.toFixed(0)}</Text>
+                  <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 2 }}>Subscriptions</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: Colors.border }} />
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: totalBudget - totalSpent >= 0 ? Colors.success : Colors.danger }}>${Math.abs(totalBudget - totalSpent).toFixed(0)}</Text>
+                  <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 2 }}>{totalBudget - totalSpent >= 0 ? 'Remaining' : 'Over budget'}</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: Colors.border }} />
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.text }}>{subsForMonth.filter(s => !s.cancelled).length}</Text>
+                  <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 2 }}>Active subs</Text>
+                </View>
+              </View>
+            );
+          })()}
+
           {budgets.length === 0 ? (
             <Text style={styles.emptyText}>No budgets set up yet</Text>
           ) : (
@@ -1152,62 +1428,236 @@ export default function BudgetScreen() {
               const spentThisMonth = monthlySpentByBudgetId[budget.id] ?? 0;
               const percent = Math.min(100, Math.round((spentThisMonth / budget.amount) * 100));
               const isOverBudget = spentThisMonth > budget.amount;
+              const budgetSubs = subsByBudgetId[budget.id] ?? [];
 
               return (
-                <TouchableOpacity
-                  key={`budget-${budget.id}-${idx}`}
-                  style={styles.budgetCard}
-                  onPress={() => openBudgetDetail(budget)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.budgetHeader}>
-                    <View style={styles.budgetInfo}>
-                      <Text style={styles.budgetIcon}>{budget.icon}</Text>
-                      <View>
-                        <Text style={styles.budgetName}>{budget.name}</Text>
-                        <Text style={styles.budgetSpent}>
-                          ${spentThisMonth.toFixed(0)} / ${budget.amount.toFixed(0)}
-                        </Text>
-                        {budget.recurring && (
-                          <Text style={styles.budgetRecurringLabel}>🔄 Recurring</Text>
-                        )}
+                <View key={`budget-${budget.id}-${idx}`} style={[styles.budgetCard, { overflow: 'hidden' }]}>
+                  {/* Budget header — tappable to open detail */}
+                  <TouchableOpacity onPress={() => openBudgetDetail(budget)} activeOpacity={0.7} style={{ padding: 14, paddingBottom: 10 }}>
+                    <View style={styles.budgetHeader}>
+                      <View style={styles.budgetInfo}>
+                        <Text style={styles.budgetIcon}>{budget.icon}</Text>
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.budgetName}>{budget.name}</Text>
+                            {budgetSubs.filter(s => !s.cancelled).length > 0 && (
+                              <View style={{ backgroundColor: '#1e1629', borderWidth: 1, borderColor: '#4c1d9550', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#a78bfa' }}>
+                                  {budgetSubs.filter(s => !s.cancelled).length} sub{budgetSubs.filter(s => !s.cancelled).length !== 1 ? 's' : ''}
+                                </Text>
+                              </View>
+                            )}
+                            {isOverBudget && (
+                              <View style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d50', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: Colors.danger }}>OVER</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.budgetSpent}>${spentThisMonth.toFixed(0)} / ${budget.amount.toFixed(0)}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.budgetActions}>
+                        <TouchableOpacity onPress={() => openBudgetModal(budget)} style={styles.iconButton}>
+                          <Edit2 size={16} color={Colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteBudget(budget.id, budget.name)} style={styles.iconButton}>
+                          <Trash2 size={16} color={Colors.danger} />
+                        </TouchableOpacity>
                       </View>
                     </View>
-                    <View style={styles.budgetActions}>
-                      <TouchableOpacity
-                        onPress={() => openBudgetModal(budget)}
-                        style={styles.iconButton}
-                      >
-                        <Edit2 size={16} color={Colors.primary} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDeleteBudget(budget.id, budget.name)}
-                        style={styles.iconButton}
-                      >
-                        <Trash2 size={16} color={Colors.danger} />
-                      </TouchableOpacity>
+                    <View style={styles.progressBar}>
+                      <View style={[styles.progressFill, { width: `${Math.min(100, percent)}%`, backgroundColor: isOverBudget ? Colors.danger : Colors.primary }]} />
                     </View>
-                  </View>
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${Math.min(100, percent)}%`,
-                          backgroundColor: isOverBudget ? Colors.danger : Colors.primary,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    style={styles.addExpenseButton}
-                    onPress={() => openTransactionModal(undefined, budget.id, 'expense')}
-                  >
+                  </TouchableOpacity>
+
+                  {/* Subscription sub-rows */}
+                  {budgetSubs.length > 0 && (
+                    <View style={{ backgroundColor: Colors.background, borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 4 }}>
+                      <Text style={{ fontSize: 10, color: Colors.textDim, marginBottom: 6, letterSpacing: 0.3 }}>📡 SUBSCRIPTIONS IN THIS CATEGORY</Text>
+                      {budgetSubs.map((sub, si) => {
+                        const isExpanded = expandedSubKeys.has(sub.key);
+                        const allCharges = (allTxsBySubKey[sub.key] ?? []).filter(t => t.date.startsWith(activeSubsMonth)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        const groupColor = SUB_GROUPS[sub.group]?.color ?? '#9ca3af';
+                        return (
+                          <View key={`sub-${si}`} style={{ borderBottomWidth: si < budgetSubs.length - 1 ? 1 : 0, borderBottomColor: Colors.border, paddingVertical: 8 }}>
+                            {/* Sub row top */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, opacity: sub.cancelled ? 0.45 : 1 }}>
+                              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: groupColor, flexShrink: 0 }} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: sub.cancelled ? Colors.textDim : Colors.text, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
+                                  {sub.description}
+                                  {sub.isDuplicate && !sub.cancelled && (
+                                    <Text style={{ fontSize: 10, color: Colors.danger }}> ⚠ duplicate?</Text>
+                                  )}
+                                </Text>
+                                <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 1 }}>
+                                  {sub.cancelled ? `Cancelled · last ${sub.date}` : `Last charged ${sub.date}`}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: sub.cancelled ? Colors.textDim : Colors.danger, textDecorationLine: sub.cancelled ? 'line-through' : 'none', marginRight: 6 }}>
+                                ${sub.amount.toFixed(2)}
+                              </Text>
+                              {/* charges pill */}
+                              {allCharges.length > 0 && (
+                                <TouchableOpacity
+                                  onPress={() => setExpandedSubKeys(prev => { const n = new Set(prev); if (n.has(sub.key)) n.delete(sub.key); else n.add(sub.key); return n; })}
+                                  style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, flexShrink: 0 }}
+                                >
+                                  <Text style={{ fontSize: 10, color: Colors.textDim }}>{allCharges.length} charge{allCharges.length !== 1 ? 's' : ''} {isExpanded ? '▲' : '▼'}</Text>
+                                </TouchableOpacity>
+                              )}
+                              {sub.cancelled ? (
+                                <TouchableOpacity onPress={() => handleUncancelSub(sub.key)} style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 }}>
+                                  <Text style={{ fontSize: 10, color: Colors.textDim }}>Restore</Text>
+                                </TouchableOpacity>
+                              ) : (
+                                <TouchableOpacity
+                                  onPress={() => Alert.alert('Cancel Subscription', `Mark "${sub.description}" as cancelled?\n\nIt will still show in past months but won't appear going forward.`, [{ text: 'Not yet' }, { text: 'Cancel it', style: 'destructive', onPress: () => handleCancelSub(sub.key) }])}
+                                  style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d40', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 }}
+                                >
+                                  <Text style={{ fontSize: 10, color: Colors.danger }}>Cancel</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+
+                            {/* Expanded charge list */}
+                            {isExpanded && allCharges.length > 0 && (
+                              <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, marginTop: 8, overflow: 'hidden' }}>
+                                <View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.textDim }}>All charges matching this service this month</Text>
+                                  {sub.isDuplicate && <Text style={{ fontSize: 10, color: Colors.danger, marginTop: 2 }}>⚠ Multiple recurring charges detected — possible duplicate subscription</Text>}
+                                </View>
+                                {allCharges.map((t, ci) => {
+                                  const chargeType = classifyCharge(t, sub.key);
+                                  const typeLabel = chargeType === 'recurring' ? '🔁 Subscription' : chargeType === 'channel' ? '📺 Add-on' : '⚡ One-time';
+                                  const typeColor = chargeType === 'recurring' ? '#a78bfa' : chargeType === 'channel' ? '#60a5fa' : '#fbbf24';
+                                  return (
+                                    <View key={`c-${ci}`} style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 10, borderBottomWidth: ci < allCharges.length - 1 ? 1 : 0, borderBottomColor: Colors.border, gap: 10 }}>
+                                      <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 12, color: Colors.text }} numberOfLines={1}>{t.description}</Text>
+                                        <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 2 }}>{t.date}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                          <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                            <Text style={{ fontSize: 9, fontWeight: '700', color: typeColor }}>{typeLabel}</Text>
+                                          </View>
+                                          {chargeType === 'onetime' && <Text style={{ fontSize: 9, color: Colors.textDim, marginLeft: 6 }}>Not counted as subscription</Text>}
+                                        </View>
+                                      </View>
+                                      <Text style={{ fontSize: 13, fontWeight: '700', color: typeColor, flexShrink: 0 }}>${t.amount.toFixed(2)}</Text>
+                                    </View>
+                                  );
+                                })}
+                                {sub.isDuplicate && (
+                                  <View style={{ flexDirection: 'row', gap: 8, padding: 10, backgroundColor: '#1a0e0e', borderTopWidth: 1, borderTopColor: Colors.border }}>
+                                    <TouchableOpacity onPress={() => {}} style={{ flex: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 7, alignItems: 'center' }}>
+                                      <Text style={{ fontSize: 11, color: Colors.textDim }}>Both intentional</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      onPress={() => Alert.alert('Cancel Subscription', `Mark one "${sub.description}" charge as cancelled?`, [{ text: 'Not yet' }, { text: 'Cancel one', style: 'destructive', onPress: () => handleCancelSub(sub.key) }])}
+                                      style={{ flex: 1, backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d40', borderRadius: 8, padding: 7, alignItems: 'center' }}
+                                    >
+                                      <Text style={{ fontSize: 11, color: Colors.danger }}>Cancel one</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                )}
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {/* Add expense */}
+                  <TouchableOpacity style={styles.addExpenseButton} onPress={() => openTransactionModal(undefined, budget.id, 'expense')}>
                     <Text style={styles.addExpenseText}>+ Add Expense</Text>
                   </TouchableOpacity>
-                </TouchableOpacity>
+                </View>
               );
             })
+          )}
+
+          {/* Unassigned subscriptions (no budget category) */}
+          {unassignedSubs.length > 0 && (
+            <View style={[styles.budgetCard, { overflow: 'hidden' }]}>
+              <View style={{ padding: 14, paddingBottom: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Text style={styles.budgetName}>📦 Uncategorized</Text>
+                  <View style={{ backgroundColor: '#1e1629', borderWidth: 1, borderColor: '#4c1d9550', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#a78bfa' }}>{unassignedSubs.filter(s => !s.cancelled).length} subs</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: Colors.textDim }}>Subscriptions not linked to a budget category</Text>
+              </View>
+              <View style={{ backgroundColor: Colors.background, borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 4 }}>
+                <Text style={{ fontSize: 10, color: Colors.textDim, marginBottom: 6, letterSpacing: 0.3 }}>📡 SUBSCRIPTIONS</Text>
+                {unassignedSubs.map((sub, si) => {
+                  const isExpanded = expandedSubKeys.has(sub.key);
+                  const allCharges = (allTxsBySubKey[sub.key] ?? []).filter(t => t.date.startsWith(activeSubsMonth)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                  const groupColor = SUB_GROUPS[sub.group]?.color ?? '#9ca3af';
+                  return (
+                    <View key={`usub-${si}`} style={{ borderBottomWidth: si < unassignedSubs.length - 1 ? 1 : 0, borderBottomColor: Colors.border, paddingVertical: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, opacity: sub.cancelled ? 0.45 : 1 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: groupColor, flexShrink: 0 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: sub.cancelled ? Colors.textDim : Colors.text, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
+                            {sub.description}{sub.isDuplicate && !sub.cancelled && <Text style={{ fontSize: 10, color: Colors.danger }}> ⚠</Text>}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 1 }}>{sub.group} · {sub.cancelled ? `Cancelled` : `Last ${sub.date}`}</Text>
+                        </View>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: sub.cancelled ? Colors.textDim : Colors.danger, textDecorationLine: sub.cancelled ? 'line-through' : 'none', marginRight: 6 }}>${sub.amount.toFixed(2)}</Text>
+                        {allCharges.length > 0 && (
+                          <TouchableOpacity
+                            onPress={() => setExpandedSubKeys(prev => { const n = new Set(prev); if (n.has(sub.key)) n.delete(sub.key); else n.add(sub.key); return n; })}
+                            style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, flexShrink: 0 }}
+                          >
+                            <Text style={{ fontSize: 10, color: Colors.textDim }}>{allCharges.length} charge{allCharges.length !== 1 ? 's' : ''} {isExpanded ? '▲' : '▼'}</Text>
+                          </TouchableOpacity>
+                        )}
+                        {sub.cancelled ? (
+                          <TouchableOpacity onPress={() => handleUncancelSub(sub.key)} style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 }}>
+                            <Text style={{ fontSize: 10, color: Colors.textDim }}>Restore</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            onPress={() => Alert.alert('Cancel Subscription', `Mark "${sub.description}" as cancelled?\n\nIt will still show in past months but won't appear going forward.`, [{ text: 'Not yet' }, { text: 'Cancel it', style: 'destructive', onPress: () => handleCancelSub(sub.key) }])}
+                            style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d40', borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 }}
+                          >
+                            <Text style={{ fontSize: 10, color: Colors.danger }}>Cancel</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {isExpanded && allCharges.length > 0 && (
+                        <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, marginTop: 8, overflow: 'hidden' }}>
+                          <View style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.textDim }}>All charges matching this service this month</Text>
+                          </View>
+                          {allCharges.map((t, ci) => {
+                            const chargeType = classifyCharge(t, sub.key);
+                            const typeLabel = chargeType === 'recurring' ? '🔁 Subscription' : chargeType === 'channel' ? '📺 Add-on' : '⚡ One-time';
+                            const typeColor = chargeType === 'recurring' ? '#a78bfa' : chargeType === 'channel' ? '#60a5fa' : '#fbbf24';
+                            return (
+                              <View key={`uc-${ci}`} style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 10, borderBottomWidth: ci < allCharges.length - 1 ? 1 : 0, borderBottomColor: Colors.border, gap: 10 }}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 12, color: Colors.text }} numberOfLines={1}>{t.description}</Text>
+                                  <Text style={{ fontSize: 10, color: Colors.textDim, marginTop: 2 }}>{t.date}</Text>
+                                  <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                                    <View style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                      <Text style={{ fontSize: 9, fontWeight: '700', color: typeColor }}>{typeLabel}</Text>
+                                    </View>
+                                  </View>
+                                </View>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: typeColor, flexShrink: 0 }}>${t.amount.toFixed(2)}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
           )}
         </View>
 
@@ -1318,55 +1768,198 @@ export default function BudgetScreen() {
           )}
         </View>
 
-        {/* Monthly Subscriptions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📡 Monthly Subscriptions</Text>
-          {detectedSubscriptions.length === 0 ? (
+        {/* REMOVED: old subscriptions section replaced by combined Budget & Subscriptions above */}
+        {false && <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>📡 Subscriptions</Text>
+          </View>
+
+          {subsMonthOptions.length === 0 ? (
             <Text style={styles.emptyText}>No subscriptions detected yet. Upload a bank statement to auto-detect them.</Text>
           ) : (
             <>
-              <Text style={{ color: Colors.textDim, fontSize: 12, marginBottom: 10 }}>
-                Detected from your transactions • Tap to view details
-              </Text>
-              {detectedSubscriptions.map((sub, idx) => (
-                <View
-                  key={`sub-${idx}`}
-                  style={[styles.transactionCard, { borderLeftColor: Colors.warning ?? '#f59e0b', borderLeftWidth: 3 }]}
-                >
-                  <View style={styles.transactionInfo}>
-                    <Text style={styles.transactionName}>📡 {sub.description}</Text>
-                    <Text style={styles.transactionDate}>
-                      {sub.count > 1 ? `${sub.count} charges found` : 'Detected in transactions'}
+              {/* Month selector */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                {subsMonthOptions.map(ym => (
+                  <TouchableOpacity
+                    key={ym}
+                    onPress={() => setSubsViewMonth(ym)}
+                    style={{
+                      paddingHorizontal: 14, paddingVertical: 6,
+                      borderRadius: 20,
+                      backgroundColor: activeSubsMonth === ym ? Colors.primary : 'transparent',
+                      borderWidth: 1,
+                      borderColor: activeSubsMonth === ym ? Colors.primary : Colors.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, color: activeSubsMonth === ym ? '#fff' : Colors.textDim, fontWeight: activeSubsMonth === ym ? '700' : '400' }}>
+                      {ym}
                     </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Budget cap bar */}
+              {(() => {
+                const activeTotal = subsForMonth.filter(s => !s.cancelled).reduce((sum, s) => sum + s.amount, 0);
+                const goal = parseFloat(subsBudgetGoal) || 0;
+                const over = goal > 0 ? activeTotal - goal : 0;
+                const pct = goal > 0 ? Math.min(100, (activeTotal / goal) * 100) : 0;
+                return (
+                  <View style={[styles.metricsCard, { marginBottom: 12 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      {subsBudgetEditing ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <Text style={{ color: Colors.textDim, fontSize: 12 }}>Budget cap: $</Text>
+                          <TextInput
+                            style={{ color: Colors.text, fontSize: 13, borderBottomWidth: 1, borderColor: Colors.primary, minWidth: 60, padding: 2 }}
+                            value={subsBudgetDraft}
+                            onChangeText={setSubsBudgetDraft}
+                            keyboardType="numeric"
+                            autoFocus
+                            onBlur={() => {
+                              const v = subsBudgetDraft.replace(/[^0-9.]/g, '');
+                              setSubsBudgetGoal(v);
+                              AsyncStorage.setItem('subsBudgetGoal', v);
+                              setSubsBudgetEditing(false);
+                            }}
+                          />
+                        </View>
+                      ) : (
+                        <TouchableOpacity onPress={() => { setSubsBudgetDraft(subsBudgetGoal); setSubsBudgetEditing(true); }}>
+                          <Text style={{ color: Colors.textDim, fontSize: 12 }}>
+                            {goal > 0 ? `Budget cap: $${goal.toFixed(0)}/mo` : 'Tap to set a budget cap'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: over > 0 ? Colors.danger : Colors.success }}>
+                        ${activeTotal.toFixed(2)}/mo
+                      </Text>
+                    </View>
+                    {goal > 0 && (
+                      <>
+                        <View style={styles.progressBar}>
+                          <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: over > 0 ? Colors.danger : Colors.primary }]} />
+                        </View>
+                        <Text style={{ fontSize: 11, color: over > 0 ? Colors.danger : Colors.textDim, marginTop: 4 }}>
+                          {over > 0 ? `$${over.toFixed(2)} over budget` : `$${(goal - activeTotal).toFixed(2)} under budget`}
+                        </Text>
+                      </>
+                    )}
+                    <View style={[styles.metricsGrid, { marginTop: 10, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10 }]}>
+                      <View style={styles.metricItem}>
+                        <Text style={styles.metricLabel}>Active</Text>
+                        <Text style={styles.metricValue}>{subsForMonth.filter(s => !s.cancelled).length}</Text>
+                      </View>
+                      <View style={styles.metricItem}>
+                        <Text style={styles.metricLabel}>Cancelled</Text>
+                        <Text style={[styles.metricValue, { color: Colors.textDim }]}>{subsForMonth.filter(s => s.cancelled).length}</Text>
+                      </View>
+                      <View style={styles.metricItem}>
+                        <Text style={styles.metricLabel}>Annual</Text>
+                        <Text style={[styles.metricValue, { color: Colors.danger }]}>${(activeTotal * 12).toFixed(0)}</Text>
+                      </View>
+                    </View>
                   </View>
-                  <Text style={[styles.transactionAmount, { color: Colors.danger }]}>
-                    ~${sub.amount.toFixed(2)}/mo
-                  </Text>
-                </View>
-              ))}
-              <View style={[styles.metricsCard, { marginTop: 10 }]}>
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Subscriptions</Text>
-                    <Text style={styles.metricValue}>{detectedSubscriptions.length}</Text>
+                );
+              })()}
+
+              {/* Grouped categories */}
+              {Object.entries(subsGrouped).map(([groupName, subs]) => {
+                const groupDef = SUB_GROUPS[groupName] ?? SUB_GROUPS['Other'];
+                const isOpen = expandedSubGroups.has(groupName);
+                const groupTotal = subs.filter(s => !s.cancelled).reduce((sum, s) => sum + s.amount, 0);
+                return (
+                  <View key={groupName} style={{ marginBottom: 8 }}>
+                    {/* Group header */}
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                        backgroundColor: Colors.card,
+                        borderWidth: 1, borderColor: Colors.border,
+                        borderRadius: isOpen ? 12 : 12,
+                        borderBottomLeftRadius: isOpen ? 0 : 12,
+                        borderBottomRightRadius: isOpen ? 0 : 12,
+                        padding: 12,
+                      }}
+                      onPress={() => setExpandedSubGroups(prev => {
+                        const next = new Set(prev);
+                        if (next.has(groupName)) next.delete(groupName); else next.add(groupName);
+                        return next;
+                      })}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.text }}>
+                        {groupDef.emoji} {groupName}
+                        <Text style={{ fontSize: 12, color: Colors.textDim, fontWeight: '400' }}> ({subs.length})</Text>
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {groupTotal > 0 && <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.danger }}>${groupTotal.toFixed(2)}</Text>}
+                        <Text style={{ color: Colors.textDim, fontSize: 12 }}>{isOpen ? '▲' : '▼'}</Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Group body */}
+                    {isOpen && (
+                      <View style={{
+                        backgroundColor: Colors.background,
+                        borderWidth: 1, borderTopWidth: 0,
+                        borderColor: Colors.border,
+                        borderBottomLeftRadius: 12, borderBottomRightRadius: 12,
+                        paddingVertical: 4,
+                      }}>
+                        {subs.map((sub, idx) => (
+                          <View
+                            key={`sg-${idx}`}
+                            style={{
+                              flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10,
+                              borderBottomWidth: idx < subs.length - 1 ? 1 : 0, borderBottomColor: Colors.border,
+                              opacity: sub.cancelled ? 0.5 : 1,
+                            }}
+                          >
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: groupDef.color, marginRight: 10, flexShrink: 0 }} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, color: sub.cancelled ? Colors.textDim : Colors.text, fontWeight: '500', textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
+                                {sub.description}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: Colors.textDim, marginTop: 1 }}>
+                                {sub.cancelled
+                                  ? `Cancelled · last charged ${sub.date}`
+                                  : `${sub.count} charge${sub.count !== 1 ? 's' : ''} · last ${sub.date}`}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: sub.cancelled ? Colors.textDim : Colors.danger, marginRight: 10, textDecorationLine: sub.cancelled ? 'line-through' : 'none' }}>
+                              ${sub.amount.toFixed(2)}
+                            </Text>
+                            {sub.cancelled ? (
+                              <TouchableOpacity
+                                onPress={() => handleUncancelSub(sub.key)}
+                                style={{ backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}
+                              >
+                                <Text style={{ fontSize: 11, color: Colors.textDim }}>Restore</Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <TouchableOpacity
+                                onPress={() => Alert.alert(
+                                  'Cancel Subscription',
+                                  `Mark "${sub.description}" as cancelled? It will still show in past months but won't appear going forward.`,
+                                  [{ text: 'Not yet' }, { text: 'Cancel it', style: 'destructive', onPress: () => handleCancelSub(sub.key) }]
+                                )}
+                                style={{ backgroundColor: '#2d1515', borderWidth: 1, borderColor: '#7f1d1d50', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}
+                              >
+                                <Text style={{ fontSize: 11, color: Colors.danger }}>Cancel</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Monthly Total</Text>
-                    <Text style={[styles.metricValue, { color: Colors.danger }]}>
-                      ${detectedSubscriptions.reduce((s, x) => s + x.amount, 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Annual Cost</Text>
-                    <Text style={[styles.metricValue, { color: Colors.danger }]}>
-                      ${(detectedSubscriptions.reduce((s, x) => s + x.amount, 0) * 12).toFixed(0)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
+                );
+              })}
             </>
           )}
-        </View>
+        </View>}
 
         {/* Yearly / Quarterly Overview */}
         <View style={styles.section}>
