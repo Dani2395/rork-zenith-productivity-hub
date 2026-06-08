@@ -1958,6 +1958,102 @@ export default function BudgetScreen() {
             )}
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
+
+              {/* Budget category breakdown for selected month */}
+              {(() => {
+                const modalSpentByBudget: Record<number, number> = {};
+                for (const t of selectedMonthExpenses) {
+                  if (t.budgetId != null) {
+                    modalSpentByBudget[t.budgetId] = (modalSpentByBudget[t.budgetId] ?? 0) + t.amount;
+                  }
+                }
+                const activeBudgets = budgets.filter(b => (modalSpentByBudget[b.id] ?? 0) > 0 || b.amount > 0);
+                if (activeBudgets.length === 0) return null;
+                return (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>💰 Budget Categories</Text>
+                    {activeBudgets.map((budget, idx) => {
+                      const spent = modalSpentByBudget[budget.id] ?? 0;
+                      const percent = Math.min(100, Math.round((spent / budget.amount) * 100));
+                      const isOver = spent > budget.amount;
+                      return (
+                        <View key={`mb-${budget.id}-${idx}`} style={styles.budgetCard}>
+                          <View style={styles.budgetHeader}>
+                            <View style={styles.budgetInfo}>
+                              <Text style={styles.budgetIcon}>{budget.icon}</Text>
+                              <View>
+                                <Text style={styles.budgetName}>{budget.name}</Text>
+                                <Text style={styles.budgetSpent}>
+                                  ${spent.toFixed(0)} / ${budget.amount.toFixed(0)}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: isOver ? Colors.danger : Colors.textDim }}>
+                              {percent}%
+                            </Text>
+                          </View>
+                          <View style={styles.progressBar}>
+                            <View style={[styles.progressFill, { width: `${Math.min(100, percent)}%`, backgroundColor: isOver ? Colors.danger : Colors.primary }]} />
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
+
+              {/* Debt tracker */}
+              {debts.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>💳 Debt Tracker</Text>
+                  {debts.map((debt, idx) => (
+                    <View key={`md-${debt.id}-${idx}`} style={styles.debtCard}>
+                      <View style={styles.debtHeader}>
+                        <View style={styles.debtInfo}>
+                          <Text style={styles.debtName}>💳 {debt.name}</Text>
+                          <Text style={styles.debtAmount}>${debt.amount.toFixed(2)}</Text>
+                          <Text style={styles.debtDetails}>
+                            {debt.interest}% APR • ${debt.payment}/mo • Due: {debt.due}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Savings goals */}
+              {savings.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>🎯 Savings Goals</Text>
+                  {savings.map((goal, idx) => {
+                    const progress = Math.min(100, (goal.current / goal.target) * 100);
+                    return (
+                      <View key={`ms-${goal.id}-${idx}`} style={styles.savingsCard}>
+                        <View style={styles.savingsHeader}>
+                          <View style={styles.savingsInfo}>
+                            <Text style={styles.savingsName}>🎯 {goal.name}</Text>
+                            <Text style={styles.savingsAmount}>
+                              ${goal.current.toFixed(0)} / ${goal.target.toFixed(0)}
+                            </Text>
+                            <Text style={styles.savingsDetails}>
+                              ${goal.monthly}/mo • Deadline: {goal.deadline}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: Colors.success }}>
+                            {progress.toFixed(0)}%
+                          </Text>
+                        </View>
+                        <View style={styles.progressBar}>
+                          <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: Colors.success }]} />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Transactions */}
               {selectedMonthExpenses.length === 0 && selectedMonthIncomes.length === 0 && (
                 <Text style={{ color: Colors.textDim, textAlign: 'center', marginVertical: 24, fontSize: 14 }}>
                   No transactions yet for this month.{'\n'}Use the buttons below to add income or expenses.
