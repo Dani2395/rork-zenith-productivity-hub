@@ -766,25 +766,51 @@ export const processCSVData = (
     const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
 
     // Reclassify positive amounts that are NOT real income.
-    // Rule: only actual transfers between own accounts get skipped (they net to zero).
-    // Payments, interest, and LOC draws are real cash movements → classify as expenses.
     if (!isExpense) {
       const d = description.toLowerCase();
 
-      // Pure internal transfers (no cash actually spent) → skip to avoid double-counting
-      const isInternalTransfer =
-        (/\btransfer\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
+      // Skip pure internal transfers — they net to zero across accounts
+      // BUT: "Net Deposit After ... LOC Payment" is real payroll coming through after LOC deduction
+      const isRealPayrollDeposit =
+        /\bnet\s+deposit\b/.test(d) ||
+        /\bdeposit\b.*\bpayroll\b/.test(d) ||
+        /\bpayroll\b/.test(d) ||
+        /\bdirect\s*dep/.test(d) ||
+        /\bsalary\b/.test(d);
+
+      // Pure internal transfer: skip only if NOT a payroll deposit
+      const isInternalTransfer = !isRealPayrollDeposit && (
+        (/\btransfer\b/.test(d)) ||
         /\bxfer\b/.test(d) ||
-        /\bfrom\s+(checking|savings|account)\b/.test(d) ||
-        /\bto\s+(checking|savings|account)\b/.test(d);
+        /\bfrom\s+(checking|savings|account|shares)\b/.test(d) ||
+        /\bto\s+(checking|savings|account)\b/.test(d)
+      );
 
       if (isInternalTransfer) {
         skipped++;
         continue;
       }
 
+      // LOC sub-account section: when a CSV contains both checking AND the linked LOC
+      // sub-account, LOC advances appear TWICE (once in checking as income, once in the
+      // LOC section as a credit). Skip the LOC-section duplicate — identified by having
+      // the advance AMOUNT appended to the description (e.g. "Chkg Line Of Credit Advance 656.52")
+      const isLocSectionDuplicate =
+        /\bline\s+of\s+credit\s+adv(ance)?\s+[\d.,]+/.test(d) ||
+        /\bnet\s+deposit\s+transfer\s+to\s+checking\b/.test(d);
+
+      if (isLocSectionDuplicate) {
+        skipped++;
+        continue;
+      }
+
       // Everything below is real cash leaving or debt being added — treat as expense
       const isActualExpense =
+        // LOC advances (first occurrence in checking section, no amount suffix)
+        (/\bline\s+of\s+credit\s+advance\b/.test(d) && !isRealPayrollDeposit) ||
+        /\bchkg\s+line\s+of\s+credit\b/.test(d) ||
+        /\bheloc\b/.test(d) ||
+        /\bcredit\s+card\s+cash\s+advance\b/.test(d) ||
         // Credit card payments — all variations banks use
         /\bpayment\b/.test(d) ||
         /autopay/.test(d) ||
@@ -799,20 +825,14 @@ export const processCSVData = (
         /\bfinance\s+charge\b/.test(d) ||
         /\bfee\b/.test(d) ||
         /\bpenalty\b/.test(d) ||
-        // Line of credit / HELOC draws — debt taken on
-        /line\s+of\s+credit/.test(d) ||
-        /\bloc\s+(advance|draw|deposit)\b/.test(d) ||
-        /\bheloc\b/.test(d) ||
-        /credit\s+line\s+(advance|draw|deposit)/.test(d) ||
-        /\badvance\b/.test(d) ||
-        // Refunds/reversals still come off income (already filtered)
+        // Refunds/credit adjustments
         /\brefund\b/.test(d) ||
         /\breversal\b/.test(d) ||
         /\bcredit\s+adj/.test(d) ||
-        // Zelle / Venmo / Cash App (not payroll) — treat as expense (money sent)
-        (/\bzelle\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
-        (/\bvenmo\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
-        (/\bcash\s*app\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d));
+        // Zelle / Venmo / Cash App (not payroll) — money sent out
+        (/\bzelle\b/.test(d) && !isRealPayrollDeposit) ||
+        (/\bvenmo\b/.test(d) && !isRealPayrollDeposit) ||
+        (/\bcash\s*app\b/.test(d) && !isRealPayrollDeposit);
 
       if (isActualExpense) {
         isExpense = true;
