@@ -699,6 +699,29 @@ export const processCSVData = (
     const dateStr = parts[cols.dateCol]?.replace(/^"|"$/g, '').trim();
     const description = cols.descCol >= 0 ? parts[cols.descCol]?.replace(/^"|"$/g, '').trim() : '';
 
+    // Skip summary/balance rows — these are statement totals, not real transactions.
+    // Importing them would count the entire month's balance as a single transaction.
+    const descLower = (description ?? '').toLowerCase();
+    const isSummaryRow =
+      /\bprevious\s+balance\b/.test(descLower) ||
+      /\bending\s+balance\b/.test(descLower) ||
+      /\bbeginning\s+balance\b/.test(descLower) ||
+      /\bstatement\s+balance\b/.test(descLower) ||
+      /\bopening\s+balance\b/.test(descLower) ||
+      /\bnew\s+balance\b/.test(descLower) ||
+      /\bminimum\s+payment\s+due\b/.test(descLower) ||
+      /\bcredit\s+limit\b/.test(descLower) ||
+      /\bavailable\s+credit\b/.test(descLower) ||
+      /^totals?\s*$/.test(descLower) ||
+      /^total\s+(deposits?|credits?|withdrawals?|debits?)/.test(descLower) ||
+      // Rows where the "date" cell is clearly not a date (e.g., account name/number row)
+      (!dateStr || !/\d/.test(dateStr));
+
+    if (isSummaryRow) {
+      skipped++;
+      continue;
+    }
+
     const parseSignedAmount = (raw: string | undefined): number => {
       const s = (raw ?? '').replace(/^"|"$/g, '').trim();
       // Parentheses notation: (100.00) → -100.00
@@ -762,11 +785,15 @@ export const processCSVData = (
 
       // Everything below is real cash leaving or debt being added — treat as expense
       const isActualExpense =
-        // Credit card payments (money you paid out this month)
+        // Credit card payments — all variations banks use
         /\bpayment\b/.test(d) ||
         /autopay/.test(d) ||
         /\bpay\s+thank/.test(d) ||
         /thank\s+you/.test(d) ||
+        /online\s+pmt/.test(d) ||
+        /mobile\s+pmt/.test(d) ||
+        /\bpmt\b/.test(d) ||
+        /\bcredit\s+card\s+pmt\b/.test(d) ||
         // Interest & fees — always an expense
         /\binterest\b/.test(d) ||
         /\bfinance\s+charge\b/.test(d) ||
