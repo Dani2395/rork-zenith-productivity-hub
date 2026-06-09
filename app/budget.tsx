@@ -2362,31 +2362,26 @@ export default function BudgetScreen() {
             return months.size <= 2 && amount > 35;
           };
 
-          // Find the "subscription amount" for a key = the amount that recurs across the most months
-          const getSubAmount = (key: string): number => {
+          // A charge amount is "recurring" (subscription) if it appears in 2+ different months
+          // Returns a Set of rounded amounts that are recurring for this key
+          const getRecurringAmounts = (key: string): Set<number> => {
             const txs = allTxsBySubKey[key] ?? [];
-            if (txs.length === 0) return 0;
-            // bucket amounts within $2 of each other, find which bucket appears in most months
-            const buckets: Record<number, Set<string>> = {};
+            // bucket amounts within $3 of each other; each bucket maps to the set of months it appeared in
+            const buckets: { center: number; months: Set<string> }[] = [];
             for (const t of txs) {
-              const rounded = Math.round(t.amount);
-              // find existing bucket within $2
-              const bucketKey = Object.keys(buckets).map(Number).find(k => Math.abs(k - rounded) <= 2) ?? rounded;
-              if (!buckets[bucketKey]) buckets[bucketKey] = new Set();
-              buckets[bucketKey].add(t.date.substring(0, 7));
+              const existing = buckets.find(b => Math.abs(b.center - t.amount) <= 3);
+              if (existing) { existing.months.add(t.date.substring(0, 7)); }
+              else { buckets.push({ center: t.amount, months: new Set([t.date.substring(0, 7)]) }); }
             }
-            let bestAmt = txs[0].amount;
-            let bestMonths = 0;
-            for (const [amtKey, months] of Object.entries(buckets)) {
-              if (months.size > bestMonths) { bestMonths = months.size; bestAmt = Number(amtKey); }
-            }
-            return bestAmt;
+            // Any bucket appearing in 2+ months = recurring subscription amount
+            return new Set(buckets.filter(b => b.months.size >= 2).map(b => b.center));
           };
 
           // Collect all subscription keys with at least one transaction
           const subEntries: {
             key: string; description: string; amount: number; group: string; emoji: string; color: string;
-            accountCount: number; oneTimePurchases: { description: string; amount: number; date: string }[];
+            subCharges: { description: string; amount: number }[];
+            oneTimePurchases: { description: string; amount: number }[];
           }[] = [];
 
           for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
@@ -2394,30 +2389,42 @@ export default function BudgetScreen() {
               const txs = allTxsBySubKey[kw] ?? [];
               if (txs.length === 0) continue;
               const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
-              const subAmt = getSubAmount(kw);
+              const recurringAmounts = getRecurringAmounts(kw);
 
-              // Split most-recent-month transactions into subscription charges vs one-time purchases
+              // Get this month's charges
               const latestMonth = sorted[0].date.substring(0, 7);
               const monthTxs = txs.filter((t: Transaction) => t.date.startsWith(latestMonth));
-              const subCharges = monthTxs.filter((t: Transaction) => Math.abs(t.amount - subAmt) <= 2);
-              const oneTimePurchases = monthTxs
-                .filter((t: Transaction) => Math.abs(t.amount - subAmt) > 2)
-                .map((t: Transaction) => ({ description: t.description ?? kw, amount: t.amount, date: t.date }));
 
-              // accountCount = how many subscription-amount charges this month (2 = two accounts)
-              const accountCount = Math.max(1, subCharges.length);
-              const desc = subCharges[0]?.description ?? sorted[0].description ?? kw;
+              // A charge this month is a subscription if its amount matches a recurring amount bucket
+              // Otherwise it's a one-time purchase (e.g. buying a Kindle book)
+              const subCharges: { description: string; amount: number }[] = [];
+              const oneTimePurchases: { description: string; amount: number }[] = [];
 
-              subEntries.push({ key: kw, description: desc, amount: subAmt, group: groupName, emoji, color, accountCount, oneTimePurchases });
+              for (const t of monthTxs) {
+                const isRecurring = recurringAmounts.size === 0 // if no history yet, treat all as subscriptions
+                  || [...recurringAmounts].some(r => Math.abs(r - t.amount) <= 3);
+                if (isRecurring) subCharges.push({ description: t.description ?? kw, amount: t.amount });
+                else oneTimePurchases.push({ description: t.description ?? kw, amount: t.amount });
+              }
+
+              if (subCharges.length === 0 && monthTxs.length > 0) {
+                // No recurring charges this month — show the charge anyway
+                subCharges.push({ description: sorted[0].description ?? kw, amount: sorted[0].amount });
+              }
+
+              // Display amount = average of sub charges this month
+              const displayAmt = subCharges.reduce((s, c) => s + c.amount, 0) / subCharges.length;
+
+              subEntries.push({ key: kw, description: subCharges[0].description, amount: displayAmt, group: groupName, emoji, color, subCharges, oneTimePurchases });
             }
           }
 
-          // Compute total monthly cost
+          // Compute total monthly cost — sum of all subscription charges this month
           let totalMonthly = 0;
           for (const entry of subEntries) {
             if (cancelledSubs[entry.key]) continue;
-            const perAccount = isYearly(entry.key, entry.amount) ? entry.amount / 12 : entry.amount;
-            totalMonthly += perAccount * entry.accountCount;
+            const total = entry.subCharges.reduce((s, c) => s + c.amount, 0);
+            totalMonthly += isYearly(entry.key, entry.amount) ? total / 12 : total;
           }
 
           // Group by category
@@ -2444,43 +2451,50 @@ export default function BudgetScreen() {
                   {entries.map(entry => {
                     const yearly = isYearly(entry.key, entry.amount);
                     const cancelled = !!cancelledSubs[entry.key];
-                    const cleanName = entry.description.length > 32 ? entry.description.substring(0, 32) : entry.description;
+                    const multiAccount = entry.subCharges.length > 1;
                     return (
                       <View key={entry.key} style={{ marginBottom: 10 }}>
-                        {/* Subscription charge row */}
-                        <View style={{ backgroundColor: '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center' }}>
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
-                              <Text style={{ color: cancelled ? Colors.textDim : '#fff', fontSize: 14, fontWeight: '600', textDecorationLine: cancelled ? 'line-through' : 'none' }}>
-                                {cleanName}
-                              </Text>
-                              <View style={{ backgroundColor: yearly ? '#f59e0b22' : '#34d39922', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                <Text style={{ color: yearly ? '#f59e0b' : Colors.success, fontSize: 10, fontWeight: '700' }}>
-                                  {yearly ? 'YEARLY' : 'MONTHLY'}
+                        {/* Each subscription charge shown individually */}
+                        {entry.subCharges.map((charge, ci) => {
+                          const label = charge.description.length > 32 ? charge.description.substring(0, 32) : charge.description;
+                          return (
+                            <View key={ci} style={{ backgroundColor: '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: ci < entry.subCharges.length - 1 ? 4 : 0 }}>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                                  <Text style={{ color: cancelled ? Colors.textDim : '#fff', fontSize: 14, fontWeight: '600', textDecorationLine: cancelled ? 'line-through' : 'none' }}>
+                                    {label}
+                                  </Text>
+                                  <View style={{ backgroundColor: yearly ? '#f59e0b22' : '#34d39922', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                    <Text style={{ color: yearly ? '#f59e0b' : Colors.success, fontSize: 10, fontWeight: '700' }}>
+                                      {yearly ? 'YEARLY' : 'MONTHLY'}
+                                    </Text>
+                                  </View>
+                                  {multiAccount && (
+                                    <View style={{ backgroundColor: 'rgba(167,139,250,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '700' }}>ACCOUNT {ci + 1} OF {entry.subCharges.length}</Text>
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={{ color: cancelled ? Colors.textDim : Colors.primary, fontSize: 16, fontWeight: '700' }}>
+                                  ${charge.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}
                                 </Text>
                               </View>
-                              {entry.accountCount > 1 && (
-                                <View style={{ backgroundColor: 'rgba(167,139,250,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                  <Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '700' }}>{entry.accountCount} ACCOUNTS</Text>
-                                </View>
+                              {ci === 0 && (
+                                <TouchableOpacity
+                                  onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
+                                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: cancelled ? Colors.success + '22' : Colors.danger + '22' }}
+                                >
+                                  <Text style={{ color: cancelled ? Colors.success : Colors.danger, fontSize: 12, fontWeight: '600' }}>
+                                    {cancelled ? 'Restore' : 'Cancel'}
+                                  </Text>
+                                </TouchableOpacity>
                               )}
                             </View>
-                            <Text style={{ color: cancelled ? Colors.textDim : Colors.primary, fontSize: 16, fontWeight: '700' }}>
-                              ${entry.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}{entry.accountCount > 1 ? ` × ${entry.accountCount}` : ''}
-                            </Text>
-                          </View>
-                          <TouchableOpacity
-                            onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
-                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: cancelled ? Colors.success + '22' : Colors.danger + '22' }}
-                          >
-                            <Text style={{ color: cancelled ? Colors.success : Colors.danger, fontSize: 12, fontWeight: '600' }}>
-                              {cancelled ? 'Restore' : 'Cancel'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        {/* One-time purchase rows (e.g. buying a Kindle book or Audible title) */}
+                          );
+                        })}
+                        {/* One-time purchases (e.g. buying a Kindle book) */}
                         {entry.oneTimePurchases.map((p, i) => (
-                          <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, marginTop: 4, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: 'rgba(148,163,184,0.3)' }}>
+                          <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, marginTop: 4, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: 'rgba(148,163,184,0.25)' }}>
                             <View style={{ flex: 1 }}>
                               <Text style={{ color: Colors.textDim, fontSize: 12 }} numberOfLines={1}>{p.description}</Text>
                               <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginTop: 2 }}>${p.amount.toFixed(2)}</Text>
