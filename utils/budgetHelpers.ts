@@ -704,7 +704,7 @@ export const processCSVData = (
   console.log('processCSVData: Total non-empty lines:', lines.length);
 
   if (lines.length < 2) {
-    return { imported: [], skipped: 0, errors: ['File has no data rows.'] };
+    return { imported: [], skipped: 0, errors: ['File has no data rows.'], startingBalance: null, endingBalance: null };
   }
 
   const headerFields = parseCSVLine(lines[0]);
@@ -795,6 +795,14 @@ export const processCSVData = (
       (!dateStr || !/\d/.test(dateStr));
 
     if (isSummaryRow) {
+      // Capture balance from Beginning/Ending Balance rows before skipping them
+      if (cols.balanceCol >= 0) {
+        const summaryBal = parseBalance(parts[cols.balanceCol]);
+        if (summaryBal !== null) {
+          if (startingBalance === null) startingBalance = summaryBal;
+          endingBalance = summaryBal;
+        }
+      }
       skipped++;
       continue;
     }
@@ -861,6 +869,14 @@ export const processCSVData = (
       continue;
     }
 
+    // Skip LOC sub-account entries entirely — the advance brings borrowed funds in,
+    // the repayment sends them back; neither is real income or spending. The actual
+    // purchases that triggered the overdraft are already counted as expenses.
+    const isLOCEntry =
+      /\bchkg\s+line\s+of\s+credit\b/.test(descLower) ||
+      /\btransfer\s+to\s+chkg\s+line\s+of\s+credit\b/.test(descLower);
+    if (isLOCEntry) { skipped++; continue; }
+
     // Use type column override when present; otherwise infer from sign
     let isExpense = typeColOverride !== null ? typeColOverride === 'expense' : amountNum < 0;
     const amount = Math.abs(amountNum);
@@ -877,7 +893,11 @@ export const processCSVData = (
         /\bdeposit\b.*\bpayroll\b/.test(d) ||
         /\bpayroll\b/.test(d) ||
         /\bdirect\s*dep/.test(d) ||
-        /\bsalary\b/.test(d);
+        /\bsalary\b/.test(d) ||
+        // "Deposit - ACH/RTP Paid From ..." entries are always real incoming money
+        /^deposit\s*[-–]/.test(d) ||
+        /\bach\s+paid\s+from\b/.test(d) ||
+        /\brtp\s+paid\s+from\b/.test(d);
 
       // Pure internal transfer: skip only if NOT a payroll deposit
       const isInternalTransfer = !isRealPayrollDeposit && (
@@ -905,16 +925,19 @@ export const processCSVData = (
         continue;
       }
 
-      // Everything below is real cash leaving or debt being added — treat as expense
+      // Is this a checking/savings account CSV? (has a running balance column)
+      const isCheckingCSV = cols.balanceCol >= 0;
+
+      // Everything below is real cash leaving or debt being added — treat as expense.
+      // Note: items guarded by !isCheckingCSV only apply to credit-card CSVs where
+      // a positive amount means a charge (sign-flipped). In a checking account, a
+      // positive amount is always money coming IN, so we trust the sign.
       const isActualExpense =
-        // LOC advances (first occurrence in checking section, no amount suffix)
-        (/\bline\s+of\s+credit\s+advance\b/.test(d) && !isRealPayrollDeposit) ||
-        /\bchkg\s+line\s+of\s+credit\b/.test(d) ||
         /\bheloc\b/.test(d) ||
         /\bcredit\s+card\s+cash\s+advance\b/.test(d) ||
-        // Credit card payments — all variations banks use
-        /\bpayment\b/.test(d) ||
-        /autopay/.test(d) ||
+        // Credit card payments — all variations banks use (not payroll deposits)
+        (/\bpayment\b/.test(d) && !isRealPayrollDeposit) ||
+        (/autopay/.test(d) && !isRealPayrollDeposit) ||
         /\bpay\s+thank/.test(d) ||
         /thank\s+you/.test(d) ||
         /online\s+pmt/.test(d) ||
@@ -926,14 +949,14 @@ export const processCSVData = (
         /\bfinance\s+charge\b/.test(d) ||
         /\bfee\b/.test(d) ||
         /\bpenalty\b/.test(d) ||
-        // Refunds/credit adjustments
-        /\brefund\b/.test(d) ||
-        /\breversal\b/.test(d) ||
-        /\bcredit\s+adj/.test(d) ||
-        // Zelle / Venmo / Cash App (not payroll) — money sent out
-        (/\bzelle\b/.test(d) && !isRealPayrollDeposit) ||
-        (/\bvenmo\b/.test(d) && !isRealPayrollDeposit) ||
-        (/\bcash\s*app\b/.test(d) && !isRealPayrollDeposit);
+        // In checking accounts, refunds/credits/Cash App are money coming IN — keep as income.
+        // In credit-card CSVs (no balance column), positive = charge, so these need flipping.
+        (!isCheckingCSV && /\brefund\b/.test(d)) ||
+        (!isCheckingCSV && /\breversal\b/.test(d)) ||
+        (!isCheckingCSV && /\bcredit\s+adj/.test(d)) ||
+        (!isCheckingCSV && /\bzelle\b/.test(d) && !isRealPayrollDeposit) ||
+        (!isCheckingCSV && /\bvenmo\b/.test(d) && !isRealPayrollDeposit) ||
+        (!isCheckingCSV && /\bcash\s*app\b/.test(d) && !isRealPayrollDeposit);
 
       if (isActualExpense) {
         isExpense = true;
