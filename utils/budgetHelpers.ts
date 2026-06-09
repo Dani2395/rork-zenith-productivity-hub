@@ -819,10 +819,20 @@ export const processCSVData = (
       }
     }
 
-    // Always classify interest charges as expense regardless of sign
+    // Always classify interest charges, fees, and POS/debit purchases as expense regardless of sign
     if (!isExpense) {
       const d = description.toLowerCase();
-      if (/\binterest\b/.test(d) || /\bfinance\s+charge\b/.test(d)) {
+      if (
+        /\binterest\b/.test(d) ||
+        /\bfinance\s+charge\b/.test(d) ||
+        /\bpos\s+(debit|purchase|transaction)\b/.test(d) ||
+        /\bdebit\s+(card\s+)?(purchase|transaction)\b/.test(d) ||
+        /\bvisa\s+(debit|purchase)\b/.test(d) ||
+        /\bcheck\s+card\b/.test(d) ||
+        /\bpin\s+(purchase|debit)\b/.test(d) ||
+        // Purchases at known expense merchants even when amount is positive
+        MERCHANT_CATEGORIES && Object.keys(MERCHANT_CATEGORIES).some(k => d.includes(k))
+      ) {
         isExpense = true;
       }
     }
@@ -844,21 +854,32 @@ export const processCSVData = (
     });
   }
 
-  // Sign-flip detection: some credit card formats (Citi, Discover, Capital One) export
-  // purchases as positive and payments as negative — opposite of what we expect.
-  // Detect this by checking if most "income" rows look like merchant purchases.
+  // Sign-flip detection: some credit card formats (Citi, Discover, Capital One, etc.)
+  // export purchases as positive and payments as negative — opposite of what we expect.
+  // Two signals to detect this:
+  //   1. >40% of "income" rows match known merchant keywords (food, stores, streaming)
+  //   2. >70% of ALL transactions are classified as income (real life is mostly expenses)
   if (imported.length > 3) {
     const incomeRows = imported.filter(t => t.type === 'income');
-    const merchantKeywords = ['food', 'dining', 'grocery', 'groceries', 'shopping', 'gas', 'restaurant',
+    const expenseRows = imported.filter(t => t.type === 'expense');
+    const totalRows = imported.length;
+
+    const merchantKeywords = [
+      'food', 'dining', 'grocery', 'groceries', 'shopping', 'gas', 'restaurant',
       'amazon', 'walmart', 'target', 'uber', 'lyft', 'netflix', 'spotify', 'apple', 'google',
-      'starbucks', 'mcdonald', 'doordash', 'instacart', 'pharmacy', 'cvs', 'walgreen'];
+      'starbucks', 'mcdonald', 'doordash', 'instacart', 'pharmacy', 'cvs', 'walgreen',
+      'purchase', 'pos debit', 'pos purchase', 'visa purchase', 'mc purchase', 'debit purchase',
+    ];
     const merchantIncomeCount = incomeRows.filter(t => {
       const d = (t.description ?? '').toLowerCase();
       return merchantKeywords.some(kw => d.includes(kw));
     }).length;
-    // If >40% of "income" rows are clearly merchant purchases, signs are flipped
-    if (incomeRows.length > 0 && merchantIncomeCount / incomeRows.length > 0.4) {
-      console.log('processCSVData: sign-flip detected, inverting income/expense classification');
+
+    const signalMerchant = incomeRows.length > 0 && merchantIncomeCount / incomeRows.length > 0.4;
+    const signalRatio = incomeRows.length > 2 && incomeRows.length / totalRows > 0.7;
+
+    if (signalMerchant || signalRatio) {
+      console.log('processCSVData: sign-flip detected (merchant:', signalMerchant, 'ratio:', signalRatio, '), inverting');
       imported = imported.map(t => ({ ...t, type: t.type === 'income' ? 'expense' : 'income' }));
       // Re-run the payment/transfer filter on newly-flipped income rows
       imported = imported.filter(t => {
@@ -866,7 +887,7 @@ export const processCSVData = (
         const d = (t.description ?? '').toLowerCase();
         return !(
           /\bpayment\b/.test(d) || /autopay/.test(d) || /thank\s+you/.test(d) ||
-          /\btransfer\b/.test(d) || /\bxfer\b/.test(d) ||
+          /\bpmt\b/.test(d) || /\btransfer\b/.test(d) || /\bxfer\b/.test(d) ||
           /\bfrom\s+(checking|savings|account)\b/.test(d) ||
           /\brefund\b/.test(d) || /\breversal\b/.test(d)
         );
