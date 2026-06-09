@@ -104,6 +104,13 @@ export default function BudgetScreen() {
   const [_isUploading, setIsUploading] = useState(false);
   const [statementEndingBalance, setStatementEndingBalance] = useState<number | null>(null);
 
+  // Load persisted ending balance on mount
+  useEffect(() => {
+    AsyncStorage.getItem('statementEndingBalance').then(v => {
+      if (v !== null) setStatementEndingBalance(parseFloat(v));
+    });
+  }, []);
+
   const [insightsModalVisible, setInsightsModalVisible] = useState(false);
   const [expenseInsights, setExpenseInsights] = useState<ExpenseInsight[]>([]);
 
@@ -880,6 +887,7 @@ export default function BudgetScreen() {
       console.log('processCSVText: Import results:', { imported: result.imported.length, skipped: result.skipped, errors: result.errors, endingBalance: result.endingBalance });
       if (result.endingBalance !== null) {
         setStatementEndingBalance(result.endingBalance);
+        AsyncStorage.setItem('statementEndingBalance', String(result.endingBalance));
       }
 
       if (result.imported.length > 0) {
@@ -1171,22 +1179,19 @@ export default function BudgetScreen() {
             </View>
           </View>
           <View style={styles.netContainer}>
-            {statementEndingBalance !== null ? (
-              <>
-                <Text style={styles.netLabel}>Left Over in Account</Text>
-                <Text style={[styles.netAmount, { color: statementEndingBalance >= 0 ? Colors.success : Colors.danger }]}>
-                  ${statementEndingBalance.toFixed(2)}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.netLabel}>{netCashflow >= 0 ? 'Saved This Month' : 'Spent Down'}</Text>
-                <Text style={[styles.netAmount, { color: netCashflow >= 0 ? Colors.success : Colors.danger }]}>
-                  ${Math.abs(netCashflow).toFixed(2)}
-                </Text>
-              </>
-            )}
+            <Text style={styles.netLabel}>Cashflow</Text>
+            <Text style={[styles.netAmount, { color: netCashflow >= 0 ? Colors.success : Colors.danger }]}>
+              {netCashflow >= 0 ? '+' : '-'}${Math.abs(netCashflow).toFixed(2)}
+            </Text>
           </View>
+          {statementEndingBalance !== null && (
+            <View style={[styles.netContainer, { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)', marginTop: 4, paddingTop: 12 }]}>
+              <Text style={styles.netLabel}>Left Over in Account</Text>
+              <Text style={[styles.netAmount, { color: Colors.success }]}>
+                ${statementEndingBalance.toFixed(2)}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Zero-Based Budget Assignment Panel */}
