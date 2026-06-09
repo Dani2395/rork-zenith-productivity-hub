@@ -873,8 +873,10 @@ export const processCSVData = (
     // Skip LOC sub-account entries — these are internal bank mechanics,
     // not real income or spending.
     const isLOCEntry =
-      /\bchkg\s+line\s+of\s+credit\b/.test(descLower) ||
-      /\btransfer\s+to\s+chkg\s+line\s+of\s+credit\b/.test(descLower);
+      /\bchkg\s+line\s+of\b/.test(descLower) ||
+      /\bline\s+of\s+credit\b/.test(descLower) ||
+      /\bloc\s+advance\b/.test(descLower) ||
+      /\bloc\s+repay/.test(descLower);
     if (isLOCEntry) { skipped++; continue; }
 
     // Use type column override when present; otherwise infer from sign
