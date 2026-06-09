@@ -743,6 +743,10 @@ export const processCSVData = (
     return match?.id;
   };
 
+  // Track max date to detect sub-account sections (dates reset/go backward)
+  let maxDateSeen = '';
+  let subAccountSectionDetected = false;
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -825,96 +829,104 @@ export const processCSVData = (
     const amount = Math.abs(amountNum);
     const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
 
-    // Reclassify positive amounts that are NOT real income.
+    // Date-regression detection: if we see a date that is more than 14 days before
+    // the running maximum date, we've entered a sub-account section in the same CSV
+    // (e.g., a Line of Credit section appended after checking). Stop processing to
+    // avoid double-counting those transactions.
+    if (!subAccountSectionDetected) {
+      if (date > maxDateSeen) {
+        maxDateSeen = date;
+      } else if (maxDateSeen && date < maxDateSeen) {
+        const msPerDay = 86400000;
+        const daysDiff = (new Date(maxDateSeen).getTime() - new Date(date).getTime()) / msPerDay;
+        if (daysDiff > 14) {
+          subAccountSectionDetected = true;
+          console.log(`processCSVData: date regression detected at row ${i} — date ${date} is ${Math.round(daysDiff)} days before max ${maxDateSeen}. Stopping to skip sub-account section.`);
+          skipped++;
+          continue;
+        }
+      }
+    }
+    if (subAccountSectionDetected) {
+      skipped++;
+      continue;
+    }
+
+    // Only reclassify transactions that came in as positive (potential income).
+    // Negative amounts (debit column) are always expenses — don't touch them.
     if (!isExpense) {
       const d = description.toLowerCase();
 
-      // Skip pure internal transfers — they net to zero across accounts
-      // BUT: "Net Deposit After ... LOC Payment" is real payroll coming through after LOC deduction
-      const isRealPayrollDeposit =
-        /\bnet\s+deposit\b/.test(d) ||
-        /\bdeposit\b.*\bpayroll\b/.test(d) ||
+      // 1. LOC sub-account duplicate rows — check FIRST before any other rule
+      if (
+        /\bline\s+of\s+credit\s+adv(ance)?\s+[\d.,]+/.test(d) ||  // "LOC Advance 656.52" (amount in name = duplicate)
+        /\bnet\s+deposit\s+transfer\s+to\s+checking\b/.test(d) ||   // LOC section duplicate of checking payroll net
+        /\btransfer\s+from\s+checking\b/.test(d)                    // LOC section payment (already in checking)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      // 2. Real income — keep as-is, skip all further checks
+      const isRealIncome =
         /\bpayroll\b/.test(d) ||
         /\bdirect\s*dep/.test(d) ||
-        /\bsalary\b/.test(d);
+        /\bsalary\b/.test(d) ||
+        /\bnet\s+deposit\b/.test(d) ||   // "Net Deposit After LOC Payment" = paycheck net
+        /\bach\s+paid\s+from\b/.test(d);  // "ACH Paid From [employer]"
 
-      // Pure internal transfer: skip only if NOT a payroll deposit
-      const isInternalTransfer = !isRealPayrollDeposit && (
-        (/\btransfer\b/.test(d)) ||
-        /\bxfer\b/.test(d) ||
+      if (isRealIncome) {
+        // leave isExpense = false, fall through to import as income
+      }
+      // 3. Internal transfers between own accounts — net to zero, skip
+      else if (
+        /\btransfer\s+(from|to)\b/.test(d) ||
         /\bfrom\s+(checking|savings|account|shares)\b/.test(d) ||
-        /\bto\s+(checking|savings|account)\b/.test(d)
-      );
-
-      if (isInternalTransfer) {
+        /\bto\s+(checking|savings|account)\b/.test(d) ||
+        /\bxfer\b/.test(d)
+      ) {
         skipped++;
         continue;
       }
-
-      // LOC sub-account section: when a CSV contains both checking AND the linked LOC
-      // sub-account, LOC advances appear TWICE (once in checking as income, once in the
-      // LOC section as a credit). Skip the LOC-section duplicate — identified by having
-      // the advance AMOUNT appended to the description (e.g. "Chkg Line Of Credit Advance 656.52")
-      const isLocSectionDuplicate =
-        /\bline\s+of\s+credit\s+adv(ance)?\s+[\d.,]+/.test(d) ||
-        /\bnet\s+deposit\s+transfer\s+to\s+checking\b/.test(d);
-
-      if (isLocSectionDuplicate) {
-        skipped++;
-        continue;
-      }
-
-      // Everything below is real cash leaving or debt being added — treat as expense
-      const isActualExpense =
-        // LOC advances (first occurrence in checking section, no amount suffix)
-        (/\bline\s+of\s+credit\s+advance\b/.test(d) && !isRealPayrollDeposit) ||
-        /\bchkg\s+line\s+of\s+credit\b/.test(d) ||
+      // 4. Debt / LOC draws — real money but it's borrowed, count as expense
+      else if (
+        /\bline\s+of\s+credit\b/.test(d) ||
+        /\bchkg\s+loc\b/.test(d) ||
         /\bheloc\b/.test(d) ||
-        /\bcredit\s+card\s+cash\s+advance\b/.test(d) ||
-        // Credit card payments — all variations banks use
+        /\bcredit\s+card\s+cash\s+advance\b/.test(d)
+      ) {
+        isExpense = true;
+      }
+      // 5. Payments, fees, interest on a positive credit line = expense
+      else if (
         /\bpayment\b/.test(d) ||
         /autopay/.test(d) ||
-        /\bpay\s+thank/.test(d) ||
         /thank\s+you/.test(d) ||
-        /online\s+pmt/.test(d) ||
-        /mobile\s+pmt/.test(d) ||
         /\bpmt\b/.test(d) ||
-        /\bcredit\s+card\s+pmt\b/.test(d) ||
-        // Interest & fees — always an expense
         /\binterest\b/.test(d) ||
         /\bfinance\s+charge\b/.test(d) ||
         /\bfee\b/.test(d) ||
         /\bpenalty\b/.test(d) ||
-        // Refunds/credit adjustments
         /\brefund\b/.test(d) ||
         /\breversal\b/.test(d) ||
         /\bcredit\s+adj/.test(d) ||
-        // Zelle / Venmo / Cash App (not payroll) — money sent out
-        (/\bzelle\b/.test(d) && !isRealPayrollDeposit) ||
-        (/\bvenmo\b/.test(d) && !isRealPayrollDeposit) ||
-        (/\bcash\s*app\b/.test(d) && !isRealPayrollDeposit);
-
-      if (isActualExpense) {
+        (/\bzelle\b/.test(d)) ||
+        (/\bvenmo\b/.test(d)) ||
+        (/\bcash\s*app\b/.test(d))
+      ) {
         isExpense = true;
       }
     }
 
-    // Always classify interest charges, fees, and POS/debit purchases as expense regardless of sign
+    // POS/debit purchases are always expenses regardless of sign
     if (!isExpense) {
       const d = description.toLowerCase();
       if (
-        /\binterest\b/.test(d) ||
-        /\bfinance\s+charge\b/.test(d) ||
         /\bpos\s+(debit|purchase|transaction)\b/.test(d) ||
         /\bdebit\s+(card\s+)?(purchase|transaction)\b/.test(d) ||
         /\bvisa\s+(debit|purchase)\b/.test(d) ||
         /\bcheck\s+card\b/.test(d) ||
-        /\bpin\s+(purchase|debit)\b/.test(d) ||
-        // Purchases at known expense merchants even when amount is positive.
-        // Only use keys that map to expense categories — exclude Income/Transfers.
-        Object.entries(MERCHANT_CATEGORIES).some(([k, cat]) =>
-          cat !== 'Income' && cat !== 'Transfers' && d.includes(k)
-        )
+        /\bpin\s+(purchase|debit)\b/.test(d)
       ) {
         isExpense = true;
       }
