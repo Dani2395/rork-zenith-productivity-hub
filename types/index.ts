@@ -159,13 +159,24 @@ export interface Transaction {
   type: 'income' | 'expense';
 }
 
+export interface DebtPayment {
+  date: string;
+  amount: number;
+  principal: number;
+  interest: number;
+}
+
 export interface Debt {
   id: number;
   name: string;
   amount: number;
+  originalAmount: number;
   interest: number;
   payment: number;
   due: string;
+  dueDay: number;
+  amountPaid: number;
+  paymentHistory: DebtPayment[];
 }
 
 export interface Savings {
