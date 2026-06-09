@@ -700,12 +700,12 @@ const findBestMonthCluster = (monthCounts: Record<string, number>): Set<string> 
 export const processCSVData = (
   text: string,
   budgets: Array<{ id: number; name: string }>,
-): { imported: ParsedTransaction[]; skipped: number; errors: string[]; startingBalance: number | null; endingBalance: number | null } => {
+): { imported: ParsedTransaction[]; skipped: number; errors: string[]; startingBalance: number | null; endingBalance: number | null; monthlyEndingBalances: Record<string, number> } => {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   console.log('processCSVData: Total non-empty lines:', lines.length);
 
   if (lines.length < 2) {
-    return { imported: [], skipped: 0, errors: ['File has no data rows.'], startingBalance: null, endingBalance: null };
+    return { imported: [], skipped: 0, errors: ['File has no data rows.'], startingBalance: null, endingBalance: null, monthlyEndingBalances: {} };
   }
 
   const headerFields = parseCSVLine(lines[0]);
@@ -744,6 +744,8 @@ export const processCSVData = (
   const errors: string[] = [];
   let startingBalance: number | null = null;
   let endingBalance: number | null = null;
+  const monthlyEndingBalances: Record<string, number> = {};
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   const parseBalance = (raw: string | undefined): number | null => {
     const s = (raw ?? '').replace(/^"|"$/g, '').replace(/,/g, '').trim();
@@ -1010,6 +1012,13 @@ export const processCSVData = (
       if (bal !== null) {
         if (startingBalance === null) startingBalance = bal;
         endingBalance = bal;
+        if (date) {
+          const d = new Date(date + 'T12:00:00');
+          if (!isNaN(d.getTime())) {
+            const mk = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+            monthlyEndingBalances[mk] = bal;
+          }
+        }
       }
     }
 
@@ -1094,7 +1103,7 @@ export const processCSVData = (
 
   console.log('processCSVData: final import count:', imported.length, 'skipped:', skipped);
   console.log('processCSVData: startingBalance:', startingBalance, 'endingBalance:', endingBalance);
-  return { imported, skipped, errors, startingBalance, endingBalance };
+  return { imported, skipped, errors, startingBalance, endingBalance, monthlyEndingBalances };
 };
 
 // ── Expense Analysis / Financial Advisor ─────────────────────────────────────

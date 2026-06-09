@@ -943,17 +943,13 @@ export default function BudgetScreen() {
       if (result.endingBalance !== null) {
         setStatementEndingBalance(result.endingBalance);
         AsyncStorage.setItem('statementEndingBalance', String(result.endingBalance));
-        if (result.imported.length > 0) {
-          const lastTx = result.imported.reduce((latest, t) => t.date > latest.date ? t : latest, result.imported[0]);
-          const d = new Date(lastTx.date + 'T12:00:00');
-          const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-          const monthKey = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
-          setMonthlyEndingBalances(prev => {
-            const updated = { ...prev, [monthKey]: result.endingBalance as number };
-            AsyncStorage.setItem('monthlyEndingBalances', JSON.stringify(updated));
-            return updated;
-          });
-        }
+      }
+      if (Object.keys(result.monthlyEndingBalances).length > 0) {
+        setMonthlyEndingBalances(prev => {
+          const updated = { ...prev, ...result.monthlyEndingBalances };
+          AsyncStorage.setItem('monthlyEndingBalances', JSON.stringify(updated));
+          return updated;
+        });
       }
 
       if (result.imported.length > 0) {
