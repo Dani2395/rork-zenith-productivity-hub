@@ -2363,19 +2363,21 @@ export default function BudgetScreen() {
           };
 
           // Collect all subscription keys with at least one transaction
-          const subEntries: { key: string; description: string; amount: number; group: string; emoji: string; color: string; monthlyCount: number; isDuplicate: boolean }[] = [];
+          const subEntries: { key: string; description: string; amount: number; group: string; emoji: string; color: string; monthlyCount: number; isDuplicate: boolean; hasMultipleAccounts: boolean }[] = [];
           for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
             for (const kw of keywords) {
               const txs = allTxsBySubKey[kw] ?? [];
               if (txs.length === 0) continue;
               const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
               const latest = sorted[0];
-              // Count how many distinct months this sub appeared in
-              const distinctMonths = new Set(txs.map((t: Transaction) => t.date.substring(0, 7))).size;
-              // Count charges in the most recent month to detect "2x this month"
               const latestMonth = latest.date.substring(0, 7);
-              const monthlyCount = txs.filter((t: Transaction) => t.date.startsWith(latestMonth)).length;
-              subEntries.push({ key: kw, description: latest.description ?? kw, amount: latest.amount, group: groupName, emoji, color, monthlyCount, isDuplicate: duplicateSubs.has(kw) });
+              const monthTxs = txs.filter((t: Transaction) => t.date.startsWith(latestMonth));
+              const monthlyCount = monthTxs.length;
+              // True duplicate = same amount AND same date (accidental double-charge)
+              const hasTrueDuplicate = duplicateSubs.has(kw);
+              // Multiple accounts = different days or different amounts in same month
+              const hasMultipleAccounts = monthlyCount > 1 && !hasTrueDuplicate;
+              subEntries.push({ key: kw, description: latest.description ?? kw, amount: latest.amount, group: groupName, emoji, color, monthlyCount, isDuplicate: hasTrueDuplicate, hasMultipleAccounts });
             }
           }
 
@@ -2404,10 +2406,10 @@ export default function BudgetScreen() {
                 <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 4 }}>Est. Monthly Cost</Text>
                 <Text style={{ color: Colors.primary, fontSize: 32, fontWeight: '700' }}>${totalMonthly.toFixed(2)}</Text>
                 <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{subEntries.filter(e => !cancelledSubs[e.key]).length} active • ${(totalMonthly * 12).toFixed(0)}/yr</Text>
-                {subEntries.some(e => e.isDuplicate || e.monthlyCount > 1) && (
-                  <View style={{ marginTop: 10, backgroundColor: 'rgba(251,191,36,0.12)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {subEntries.some(e => e.isDuplicate) && (
+                  <View style={{ marginTop: 10, backgroundColor: 'rgba(251,191,36,0.12)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
                     <Text style={{ color: '#fbbf24', fontSize: 12, fontWeight: '700' }}>
-                      ⚠️ {subEntries.filter(e => e.isDuplicate || e.monthlyCount > 1).length} possible duplicate charge{subEntries.filter(e => e.isDuplicate || e.monthlyCount > 1).length > 1 ? 's' : ''} detected
+                      ⚠️ {subEntries.filter(e => e.isDuplicate).length} possible accidental double-charge detected
                     </Text>
                   </View>
                 )}
@@ -2422,10 +2424,9 @@ export default function BudgetScreen() {
                     const yearly = isYearly(entry.key, entry.amount);
                     const cancelled = !!cancelledSubs[entry.key];
                     const cleanName = entry.description.length > 30 ? entry.description.substring(0, 30) : entry.description;
-                    const hasDuplicate = entry.isDuplicate || entry.monthlyCount > 1;
                     return (
                       <View key={entry.key} style={{ marginBottom: 10 }}>
-                        <View style={{ backgroundColor: hasDuplicate ? 'rgba(251,191,36,0.06)' : '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: hasDuplicate ? 1 : 0, borderColor: hasDuplicate ? 'rgba(251,191,36,0.35)' : 'transparent' }}>
+                        <View style={{ backgroundColor: entry.isDuplicate ? 'rgba(251,191,36,0.06)' : '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: entry.isDuplicate ? 1 : 0, borderColor: entry.isDuplicate ? 'rgba(251,191,36,0.35)' : 'transparent' }}>
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                               <Text style={{ color: cancelled ? Colors.textDim : '#fff', fontSize: 14, fontWeight: '600', textDecorationLine: cancelled ? 'line-through' : 'none' }}>
@@ -2436,18 +2437,28 @@ export default function BudgetScreen() {
                                   {yearly ? 'YEARLY' : 'MONTHLY'}
                                 </Text>
                               </View>
-                              {hasDuplicate && (
-                                <View style={{ backgroundColor: 'rgba(251,191,36,0.2)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                  <Text style={{ color: '#fbbf24', fontSize: 10, fontWeight: '800' }}>⚠️ {entry.monthlyCount}x CHARGED</Text>
+                              {entry.hasMultipleAccounts && (
+                                <View style={{ backgroundColor: 'rgba(96,165,250,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ color: '#60a5fa', fontSize: 10, fontWeight: '700' }}>{entry.monthlyCount} ACCOUNTS</Text>
+                                </View>
+                              )}
+                              {entry.isDuplicate && (
+                                <View style={{ backgroundColor: 'rgba(251,191,36,0.2)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ color: '#fbbf24', fontSize: 10, fontWeight: '800' }}>⚠️ DOUBLE CHARGE</Text>
                                 </View>
                               )}
                             </View>
                             <Text style={{ color: cancelled ? Colors.textDim : Colors.primary, fontSize: 16, fontWeight: '700' }}>
                               ${entry.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}
                             </Text>
-                            {hasDuplicate && (
+                            {entry.hasMultipleAccounts && (
+                              <Text style={{ color: '#60a5fa', fontSize: 11, marginTop: 3 }}>
+                                {entry.monthlyCount} separate accounts this month
+                              </Text>
+                            )}
+                            {entry.isDuplicate && (
                               <Text style={{ color: '#fbbf24', fontSize: 11, marginTop: 3 }}>
-                                Charged {entry.monthlyCount}x this month — possible duplicate!
+                                Same charge appeared twice — possible accidental duplicate
                               </Text>
                             )}
                           </View>
