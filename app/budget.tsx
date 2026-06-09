@@ -803,9 +803,12 @@ export default function BudgetScreen() {
 
     const debt = debtPaymentTarget;
     const monthlyRate = debt.interest / 100 / 12;
-    const interestCharge = parseFloat((debt.amount * monthlyRate).toFixed(2));
+    const interestCharge = parseFloat(Math.min(payAmt, debt.amount * monthlyRate).toFixed(2));
     const principalCharge = parseFloat(Math.max(0, payAmt - interestCharge).toFixed(2));
-    const newBalance = parseFloat(Math.max(0, debt.amount - principalCharge).toFixed(2));
+    // Always reduce balance by full payment — the user paid it, it comes off the debt
+    const newBalance = parseFloat(Math.max(0, debt.amount - payAmt).toFixed(2));
+    // Preserve originalAmount — reconstruct it for debts created before this field existed
+    const originalAmount = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
 
     const payment: DebtPayment = {
       date: new Date().toISOString().split('T')[0],
@@ -816,6 +819,7 @@ export default function BudgetScreen() {
 
     updateDebt(debt.id, {
       amount: newBalance,
+      originalAmount,
       amountPaid: (debt.amountPaid ?? 0) + payAmt,
       paymentHistory: [...(debt.paymentHistory ?? []), payment],
     });
@@ -824,6 +828,7 @@ export default function BudgetScreen() {
       setSelectedDebt(prev => prev ? {
         ...prev,
         amount: newBalance,
+        originalAmount,
         amountPaid: (prev.amountPaid ?? 0) + payAmt,
         paymentHistory: [...(prev.paymentHistory ?? []), payment],
       } : null);
@@ -1860,7 +1865,7 @@ export default function BudgetScreen() {
             <Text style={styles.emptyText}>No debts tracked</Text>
           ) : (
             debts.map((debt, idx) => {
-              const original = debt.originalAmount || debt.amount;
+              const original = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
               const paid = debt.amountPaid || 0;
               const progress = Math.min(100, (paid / original) * 100);
               const monthlyRate = debt.interest / 100 / 12;
@@ -2798,17 +2803,18 @@ export default function BudgetScreen() {
                   const debt = debtPaymentTarget;
                   const payAmt = parseFloat(debtPaymentAmount) || 0;
                   const monthlyRate = debt.interest / 100 / 12;
-                  const interestCharge = parseFloat((debt.amount * monthlyRate).toFixed(2));
+                  const interestCharge = parseFloat(Math.min(payAmt, debt.amount * monthlyRate).toFixed(2));
                   const principalCharge = parseFloat(Math.max(0, payAmt - interestCharge).toFixed(2));
+                  const newBal = Math.max(0, debt.amount - payAmt);
                   return (
                     <View style={{ marginBottom: 12, padding: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10 }}>
                       <Text style={{ color: Colors.text, fontWeight: '700', fontSize: 15, marginBottom: 6 }}>{debt.name}</Text>
                       <Text style={{ color: Colors.textDim, fontSize: 13 }}>Current balance: <Text style={{ color: Colors.danger }}>${debt.amount.toFixed(2)}</Text></Text>
-                      {payAmt > 0 && debt.interest > 0 && (
+                      {payAmt > 0 && (
                         <View style={{ marginTop: 10, gap: 4 }}>
-                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Interest portion: <Text style={{ color: Colors.danger }}>${interestCharge.toFixed(2)}</Text></Text>
-                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Principal portion: <Text style={{ color: Colors.success }}>${principalCharge.toFixed(2)}</Text></Text>
-                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>New balance: <Text style={{ color: Colors.text }}>${Math.max(0, debt.amount - principalCharge).toFixed(2)}</Text></Text>
+                          {debt.interest > 0 && <Text style={{ color: Colors.textDim, fontSize: 13 }}>Interest portion: <Text style={{ color: Colors.danger }}>${interestCharge.toFixed(2)}</Text></Text>}
+                          {debt.interest > 0 && <Text style={{ color: Colors.textDim, fontSize: 13 }}>Principal portion: <Text style={{ color: Colors.success }}>${principalCharge.toFixed(2)}</Text></Text>}
+                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>New balance: <Text style={{ color: Colors.text, fontWeight: '700' }}>${newBal.toFixed(2)}</Text></Text>
                         </View>
                       )}
                     </View>
@@ -2855,7 +2861,7 @@ export default function BudgetScreen() {
             </View>
             {selectedDebt && (() => {
               const debt = selectedDebt;
-              const original = debt.originalAmount || debt.amount;
+              const original = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
               const paid = debt.amountPaid || 0;
               const progress = Math.min(100, (paid / original) * 100);
               const monthlyRate = debt.interest / 100 / 12;
@@ -3310,7 +3316,7 @@ export default function BudgetScreen() {
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>💳 Debt Tracker</Text>
                   {debts.map((debt, idx) => {
-                    const original = debt.originalAmount || debt.amount;
+                    const original = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
                     const paid = debt.amountPaid || 0;
                     const progress = Math.min(100, (paid / original) * 100);
                     const monthlyRate = debt.interest / 100 / 12;
