@@ -2743,28 +2743,40 @@ export default function BudgetScreen() {
             </View>
 
             {selectedMonthData && (
-              <View style={styles.monthSummaryRow}>
-                <View style={styles.monthSummaryItem}>
-                  <Text style={styles.monthSummaryLabel}>Income</Text>
-                  <Text style={[styles.monthSummaryValue, { color: Colors.success }]}>
-                    +${selectedMonthData.income.toFixed(2)}
-                  </Text>
+              <>
+                <View style={styles.monthSummaryRow}>
+                  <View style={styles.monthSummaryItem}>
+                    <Text style={styles.monthSummaryLabel}>Income</Text>
+                    <Text style={[styles.monthSummaryValue, { color: Colors.success }]}>
+                      +${selectedMonthData.income.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.monthSummaryDivider} />
+                  <View style={styles.monthSummaryItem}>
+                    <Text style={styles.monthSummaryLabel}>Expenses</Text>
+                    <Text style={[styles.monthSummaryValue, { color: Colors.danger }]}>
+                      -${selectedMonthData.expenses.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.monthSummaryDivider} />
+                  <View style={styles.monthSummaryItem}>
+                    <Text style={styles.monthSummaryLabel}>Cashflow</Text>
+                    <Text style={[styles.monthSummaryValue, { color: selectedMonthData.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                      {selectedMonthData.cashflow >= 0 ? '+' : ''}${selectedMonthData.cashflow.toFixed(2)}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.monthSummaryDivider} />
-                <View style={styles.monthSummaryItem}>
-                  <Text style={styles.monthSummaryLabel}>Expenses</Text>
-                  <Text style={[styles.monthSummaryValue, { color: Colors.danger }]}>
-                    -${selectedMonthData.expenses.toFixed(2)}
-                  </Text>
-                </View>
-                <View style={styles.monthSummaryDivider} />
-                <View style={styles.monthSummaryItem}>
-                  <Text style={styles.monthSummaryLabel}>Cashflow</Text>
-                  <Text style={[styles.monthSummaryValue, { color: selectedMonthData.cashflow >= 0 ? Colors.success : Colors.danger }]}>
-                    {selectedMonthData.cashflow >= 0 ? '+' : ''}${selectedMonthData.cashflow.toFixed(2)}
-                  </Text>
-                </View>
-              </View>
+                {selectedMonthKey && monthlyEndingBalances[selectedMonthKey] !== undefined && (
+                  <View style={[styles.monthSummaryRow, { marginTop: 8 }]}>
+                    <View style={styles.monthSummaryItem}>
+                      <Text style={styles.monthSummaryLabel}>Left Over in Account</Text>
+                      <Text style={[styles.monthSummaryValue, { color: Colors.success }]}>
+                        ${monthlyEndingBalances[selectedMonthKey].toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </>
             )}
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
