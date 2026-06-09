@@ -742,48 +742,60 @@ export const processCSVData = (
     const amount = Math.abs(amountNum);
     const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
 
-    // Reclassify positive amounts that are clearly payments/transfers/refunds (not real income).
-    // These inflate income totals when multiple accounts are uploaded (e.g. credit card payments
-    // appear as a credit on the card statement even though the cash already left checking).
+    // Reclassify positive amounts that are NOT real income.
+    // Rule: only actual transfers between own accounts get skipped (they net to zero).
+    // Payments, interest, and LOC draws are real cash movements → classify as expenses.
     if (!isExpense) {
       const d = description.toLowerCase();
-      const isPaymentOrTransfer =
-        // Credit card payments
-        /\bpayment\b/.test(d) ||
-        /autopay/.test(d) ||
-        /\bpay\s+thank/.test(d) ||
-        /thank\s+you/.test(d) ||
-        // Transfers between own accounts
-        /\btransfer\b/.test(d) ||
+
+      // Pure internal transfers (no cash actually spent) → skip to avoid double-counting
+      const isInternalTransfer =
+        (/\btransfer\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
         /\bxfer\b/.test(d) ||
         /\bfrom\s+(checking|savings|account)\b/.test(d) ||
-        /\bto\s+(checking|savings|account)\b/.test(d) ||
-        // (line of credit handled below as debt expense)
-        // Zelle / Venmo / cash-app person-to-person (not payroll)
-        (/\bzelle\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
-        (/\bvenmo\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
-        (/\bcash\s*app\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
-        // Refunds/reversals — keep as expense offset, skip as income
-        /\brefund\b/.test(d) ||
-        /\breversal\b/.test(d) ||
-        /\bcredit\s+adj/.test(d) ||
-        // ATM / cash deposits that are just moving cash
-        /\batm\s+(deposit|cash)\b/.test(d);
+        /\bto\s+(checking|savings|account)\b/.test(d);
 
-      if (isPaymentOrTransfer) {
+      if (isInternalTransfer) {
         skipped++;
         continue;
       }
 
-      // Line of credit / HELOC draws are debt being taken on, not income — classify as expense
-      const d2 = description.toLowerCase();
-      if (
-        /line\s+of\s+credit/.test(d2) ||
-        /\bloc\s+(advance|draw|deposit)\b/.test(d2) ||
-        /\bheloc\b/.test(d2) ||
-        /credit\s+line\s+(advance|draw|deposit)/.test(d2) ||
-        /\badvance\b/.test(d2)
-      ) {
+      // Everything below is real cash leaving or debt being added — treat as expense
+      const isActualExpense =
+        // Credit card payments (money you paid out this month)
+        /\bpayment\b/.test(d) ||
+        /autopay/.test(d) ||
+        /\bpay\s+thank/.test(d) ||
+        /thank\s+you/.test(d) ||
+        // Interest & fees — always an expense
+        /\binterest\b/.test(d) ||
+        /\bfinance\s+charge\b/.test(d) ||
+        /\bfee\b/.test(d) ||
+        /\bpenalty\b/.test(d) ||
+        // Line of credit / HELOC draws — debt taken on
+        /line\s+of\s+credit/.test(d) ||
+        /\bloc\s+(advance|draw|deposit)\b/.test(d) ||
+        /\bheloc\b/.test(d) ||
+        /credit\s+line\s+(advance|draw|deposit)/.test(d) ||
+        /\badvance\b/.test(d) ||
+        // Refunds/reversals still come off income (already filtered)
+        /\brefund\b/.test(d) ||
+        /\breversal\b/.test(d) ||
+        /\bcredit\s+adj/.test(d) ||
+        // Zelle / Venmo / Cash App (not payroll) — treat as expense (money sent)
+        (/\bzelle\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
+        (/\bvenmo\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
+        (/\bcash\s*app\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d));
+
+      if (isActualExpense) {
+        isExpense = true;
+      }
+    }
+
+    // Always classify interest charges as expense regardless of sign
+    if (!isExpense) {
+      const d = description.toLowerCase();
+      if (/\binterest\b/.test(d) || /\bfinance\s+charge\b/.test(d)) {
         isExpense = true;
       }
     }
