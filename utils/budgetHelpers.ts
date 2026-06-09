@@ -758,6 +758,12 @@ export const processCSVData = (
         /\bxfer\b/.test(d) ||
         /\bfrom\s+(checking|savings|account)\b/.test(d) ||
         /\bto\s+(checking|savings|account)\b/.test(d) ||
+        // Line of credit / HELOC advances — borrowing is debt, not income
+        /line\s+of\s+credit/.test(d) ||
+        /\bloc\s+(advance|draw|deposit)\b/.test(d) ||
+        /\bheloc\b/.test(d) ||
+        /credit\s+line\s+(advance|draw|deposit)/.test(d) ||
+        /\badvance\b/.test(d) ||
         // Zelle / Venmo / cash-app person-to-person (not payroll)
         (/\bzelle\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
         (/\bvenmo\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
