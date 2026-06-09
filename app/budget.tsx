@@ -103,6 +103,7 @@ export default function BudgetScreen() {
   const [uploadStatus, setUploadStatus] = useState('');
   const [_isUploading, setIsUploading] = useState(false);
   const [statementEndingBalance, setStatementEndingBalance] = useState<number | null>(null);
+  const [monthlyEndingBalances, setMonthlyEndingBalances] = useState<Record<string, number>>({});
 
   // Load persisted ending balance on mount
   useEffect(() => {
@@ -142,6 +143,8 @@ export default function BudgetScreen() {
     AsyncStorage.getItem('monthlyIncomeGoal').then(v => { if (v) setMonthlyIncomeGoal(v); });
     AsyncStorage.getItem('subsBudgetGoal').then(v => { if (v) setSubsBudgetGoal(v); });
     AsyncStorage.getItem('cancelledSubs').then(v => { if (v) { try { setCancelledSubs(JSON.parse(v)); } catch {} } });
+    AsyncStorage.getItem('monthlyEndingBalances').then(v => { if (v) { try { setMonthlyEndingBalances(JSON.parse(v)); } catch {} } });
+    AsyncStorage.getItem('statementEndingBalance').then(v => { if (v !== null) setStatementEndingBalance(parseFloat(v)); });
   }, []);
 
   const saveIncomeGoal = async (value: string) => {
@@ -888,6 +891,17 @@ export default function BudgetScreen() {
       if (result.endingBalance !== null) {
         setStatementEndingBalance(result.endingBalance);
         AsyncStorage.setItem('statementEndingBalance', String(result.endingBalance));
+        if (result.imported.length > 0) {
+          const lastTx = result.imported.reduce((latest, t) => t.date > latest.date ? t : latest, result.imported[0]);
+          const d = new Date(lastTx.date + 'T12:00:00');
+          const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+          const monthKey = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+          setMonthlyEndingBalances(prev => {
+            const updated = { ...prev, [monthKey]: result.endingBalance as number };
+            AsyncStorage.setItem('monthlyEndingBalances', JSON.stringify(updated));
+            return updated;
+          });
+        }
       }
 
       if (result.imported.length > 0) {
@@ -2136,6 +2150,12 @@ export default function BudgetScreen() {
                                               {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
                                             </Text>
                                           </View>
+                                          {monthlyEndingBalances[month.key] !== undefined && (
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Left Over:</Text>
+                                              <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                            </View>
+                                          )}
                                         </>
                                       ) : (
                                         <Text style={{ color: Colors.textDim, fontSize: 11, textAlign: 'center', paddingVertical: 8 }}>No data yet</Text>
@@ -2215,6 +2235,12 @@ export default function BudgetScreen() {
                                             {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
                                           </Text>
                                         </View>
+                                        {monthlyEndingBalances[month.key] !== undefined && (
+                                          <View style={styles.monthCardRow}>
+                                            <Text style={styles.monthCardLabel}>Left Over:</Text>
+                                            <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                          </View>
+                                        )}
                                       </TouchableOpacity>
                                     ))}
                                   </View>
