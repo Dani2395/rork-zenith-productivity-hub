@@ -126,6 +126,7 @@ export default function BudgetScreen() {
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [monthDetailVisible, setMonthDetailVisible] = useState(false);
+  const [activePage, setActivePage] = useState<'budget' | 'subscriptions'>('budget');
   const [budgetDetailVisible, setBudgetDetailVisible] = useState(false);
   const [selectedBudgetForDetail, setSelectedBudgetForDetail] = useState<Budget | null>(null);
   const [expandedQuarters, setExpandedQuarters] = useState<Set<string>>(() => {
@@ -1216,6 +1217,23 @@ export default function BudgetScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Tab Bar */}
+      <View style={{ flexDirection: 'row', margin: 12, gap: 8, padding: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12 }}>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', backgroundColor: activePage === 'budget' ? Colors.primary : 'transparent' }}
+          onPress={() => setActivePage('budget')}
+        >
+          <Text style={{ color: activePage === 'budget' ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>Budget</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', backgroundColor: activePage === 'subscriptions' ? Colors.primary : 'transparent' }}
+          onPress={() => setActivePage('subscriptions')}
+        >
+          <Text style={{ color: activePage === 'subscriptions' ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>Subscriptions</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activePage === 'budget' ? (
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>📊 {activeMonthLabel}</Text>
@@ -2334,6 +2352,100 @@ export default function BudgetScreen() {
           )}
         </View>
       </ScrollView>
+      ) : (
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Subscriptions View */}
+        {(() => {
+          const isYearly = (key: string, amount: number): boolean => {
+            const txs = allTxsBySubKey[key] ?? [];
+            const months = new Set(txs.map((t: Transaction) => t.date.substring(0, 7)));
+            return months.size <= 2 && amount > 35;
+          };
+
+          // Collect all subscription keys with at least one transaction
+          const subEntries: { key: string; description: string; amount: number; group: string; emoji: string; color: string }[] = [];
+          for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
+            for (const kw of keywords) {
+              const txs = allTxsBySubKey[kw] ?? [];
+              if (txs.length === 0) continue;
+              // Get most recent transaction for amount/description
+              const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+              const latest = sorted[0];
+              subEntries.push({ key: kw, description: latest.description ?? kw, amount: latest.amount, group: groupName, emoji, color });
+            }
+          }
+
+          // Compute total monthly cost (active recurring subs, counting yearly as monthly equiv)
+          let totalMonthly = 0;
+          for (const entry of subEntries) {
+            if (cancelledSubs[entry.key]) continue;
+            if (isYearly(entry.key, entry.amount)) {
+              totalMonthly += entry.amount / 12;
+            } else {
+              totalMonthly += entry.amount;
+            }
+          }
+
+          // Group by category
+          const grouped: Record<string, typeof subEntries> = {};
+          for (const entry of subEntries) {
+            if (!grouped[entry.group]) grouped[entry.group] = [];
+            grouped[entry.group].push(entry);
+          }
+
+          return (
+            <View style={{ padding: 16 }}>
+              {/* Total monthly header */}
+              <View style={{ backgroundColor: '#1a1a24', borderRadius: 16, padding: 20, marginBottom: 16, alignItems: 'center' }}>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 4 }}>Est. Monthly Cost</Text>
+                <Text style={{ color: Colors.primary, fontSize: 32, fontWeight: '700' }}>${totalMonthly.toFixed(2)}</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{subEntries.filter(e => !cancelledSubs[e.key]).length} active subscriptions</Text>
+              </View>
+
+              {Object.entries(grouped).map(([groupName, entries]) => (
+                <View key={groupName} style={{ marginBottom: 20 }}>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 }}>
+                    {SUB_GROUPS[groupName]?.emoji} {groupName}
+                  </Text>
+                  {entries.map(entry => {
+                    const yearly = isYearly(entry.key, entry.amount);
+                    const cancelled = !!cancelledSubs[entry.key];
+                    const cleanName = entry.description.length > 30 ? entry.description.substring(0, 30) : entry.description;
+                    return (
+                      <View key={entry.key} style={{ backgroundColor: '#1a1a24', borderRadius: 12, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <Text style={{ color: cancelled ? Colors.textDim : '#fff', fontSize: 14, fontWeight: '600', textDecorationLine: cancelled ? 'line-through' : 'none' }}>
+                              {cleanName}
+                            </Text>
+                            <View style={{ backgroundColor: yearly ? '#f59e0b22' : '#34d39922', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ color: yearly ? '#f59e0b' : Colors.success, fontSize: 10, fontWeight: '700' }}>
+                                {yearly ? 'YEARLY' : 'MONTHLY'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ color: cancelled ? Colors.textDim : Colors.primary, fontSize: 16, fontWeight: '700' }}>
+                            ${entry.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
+                          style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: cancelled ? Colors.success + '22' : Colors.danger + '22' }}
+                        >
+                          <Text style={{ color: cancelled ? Colors.success : Colors.danger, fontSize: 12, fontWeight: '600' }}>
+                            {cancelled ? 'Restore' : 'Cancel'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+      </ScrollView>
+      )}
 
       <Modal
         visible={budgetModalVisible}
