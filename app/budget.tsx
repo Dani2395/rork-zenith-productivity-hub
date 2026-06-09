@@ -126,6 +126,7 @@ export default function BudgetScreen() {
 
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [monthDetailVisible, setMonthDetailVisible] = useState(false);
+  const [activePage, setActivePage] = useState<'budget' | 'subscriptions'>('budget');
   const [budgetDetailVisible, setBudgetDetailVisible] = useState(false);
   const [selectedBudgetForDetail, setSelectedBudgetForDetail] = useState<Budget | null>(null);
   const [expandedQuarters, setExpandedQuarters] = useState<Set<string>>(() => {
@@ -802,9 +803,12 @@ export default function BudgetScreen() {
 
     const debt = debtPaymentTarget;
     const monthlyRate = debt.interest / 100 / 12;
-    const interestCharge = parseFloat((debt.amount * monthlyRate).toFixed(2));
+    const interestCharge = parseFloat(Math.min(payAmt, debt.amount * monthlyRate).toFixed(2));
     const principalCharge = parseFloat(Math.max(0, payAmt - interestCharge).toFixed(2));
-    const newBalance = parseFloat(Math.max(0, debt.amount - principalCharge).toFixed(2));
+    // Always reduce balance by full payment — the user paid it, it comes off the debt
+    const newBalance = parseFloat(Math.max(0, debt.amount - payAmt).toFixed(2));
+    // Preserve originalAmount — reconstruct it for debts created before this field existed
+    const originalAmount = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
 
     const payment: DebtPayment = {
       date: new Date().toISOString().split('T')[0],
@@ -815,6 +819,7 @@ export default function BudgetScreen() {
 
     updateDebt(debt.id, {
       amount: newBalance,
+      originalAmount,
       amountPaid: (debt.amountPaid ?? 0) + payAmt,
       paymentHistory: [...(debt.paymentHistory ?? []), payment],
     });
@@ -823,6 +828,7 @@ export default function BudgetScreen() {
       setSelectedDebt(prev => prev ? {
         ...prev,
         amount: newBalance,
+        originalAmount,
         amountPaid: (prev.amountPaid ?? 0) + payAmt,
         paymentHistory: [...(prev.paymentHistory ?? []), payment],
       } : null);
@@ -943,17 +949,13 @@ export default function BudgetScreen() {
       if (result.endingBalance !== null) {
         setStatementEndingBalance(result.endingBalance);
         AsyncStorage.setItem('statementEndingBalance', String(result.endingBalance));
-        if (result.imported.length > 0) {
-          const lastTx = result.imported.reduce((latest, t) => t.date > latest.date ? t : latest, result.imported[0]);
-          const d = new Date(lastTx.date + 'T12:00:00');
-          const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-          const monthKey = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
-          setMonthlyEndingBalances(prev => {
-            const updated = { ...prev, [monthKey]: result.endingBalance as number };
-            AsyncStorage.setItem('monthlyEndingBalances', JSON.stringify(updated));
-            return updated;
-          });
-        }
+      }
+      if (Object.keys(result.monthlyEndingBalances).length > 0) {
+        setMonthlyEndingBalances(prev => {
+          const updated = { ...prev, ...result.monthlyEndingBalances };
+          AsyncStorage.setItem('monthlyEndingBalances', JSON.stringify(updated));
+          return updated;
+        });
       }
 
       if (result.imported.length > 0) {
@@ -1220,6 +1222,23 @@ export default function BudgetScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Tab Bar */}
+      <View style={{ flexDirection: 'row', margin: 12, gap: 8, padding: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12 }}>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', backgroundColor: activePage === 'budget' ? Colors.primary : 'transparent' }}
+          onPress={() => setActivePage('budget')}
+        >
+          <Text style={{ color: activePage === 'budget' ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>Budget</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', backgroundColor: activePage === 'subscriptions' ? Colors.primary : 'transparent' }}
+          onPress={() => setActivePage('subscriptions')}
+        >
+          <Text style={{ color: activePage === 'subscriptions' ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>Subscriptions</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activePage === 'budget' ? (
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>📊 {activeMonthLabel}</Text>
@@ -1846,7 +1865,7 @@ export default function BudgetScreen() {
             <Text style={styles.emptyText}>No debts tracked</Text>
           ) : (
             debts.map((debt, idx) => {
-              const original = debt.originalAmount || debt.amount;
+              const original = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
               const paid = debt.amountPaid || 0;
               const progress = Math.min(100, (paid / original) * 100);
               const monthlyRate = debt.interest / 100 / 12;
@@ -2338,6 +2357,168 @@ export default function BudgetScreen() {
           )}
         </View>
       </ScrollView>
+      ) : (
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Subscriptions View */}
+        {(() => {
+          const isYearly = (key: string, amount: number): boolean => {
+            const txs = allTxsBySubKey[key] ?? [];
+            const months = new Set(txs.map((t: Transaction) => t.date.substring(0, 7)));
+            return months.size <= 2 && amount > 35;
+          };
+
+          // A charge amount is "recurring" (subscription) if it appears in 2+ different months
+          // Returns a Set of rounded amounts that are recurring for this key
+          const getRecurringAmounts = (key: string): Set<number> => {
+            const txs = allTxsBySubKey[key] ?? [];
+            // bucket amounts within $3 of each other; each bucket maps to the set of months it appeared in
+            const buckets: { center: number; months: Set<string> }[] = [];
+            for (const t of txs) {
+              const existing = buckets.find(b => Math.abs(b.center - t.amount) <= 3);
+              if (existing) { existing.months.add(t.date.substring(0, 7)); }
+              else { buckets.push({ center: t.amount, months: new Set([t.date.substring(0, 7)]) }); }
+            }
+            // Any bucket appearing in 2+ months = recurring subscription amount
+            return new Set(buckets.filter(b => b.months.size >= 2).map(b => b.center));
+          };
+
+          // Collect all subscription keys with at least one transaction
+          const subEntries: {
+            key: string; description: string; amount: number; group: string; emoji: string; color: string;
+            subCharges: { description: string; amount: number }[];
+            oneTimePurchases: { description: string; amount: number }[];
+          }[] = [];
+
+          for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
+            for (const kw of keywords) {
+              const txs = allTxsBySubKey[kw] ?? [];
+              if (txs.length === 0) continue;
+              const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+              const recurringAmounts = getRecurringAmounts(kw);
+
+              // Get this month's charges
+              const latestMonth = sorted[0].date.substring(0, 7);
+              const monthTxs = txs.filter((t: Transaction) => t.date.startsWith(latestMonth));
+
+              // A charge this month is a subscription if its amount matches a recurring amount bucket
+              // Otherwise it's a one-time purchase (e.g. buying a Kindle book)
+              const subCharges: { description: string; amount: number }[] = [];
+              const oneTimePurchases: { description: string; amount: number }[] = [];
+
+              for (const t of monthTxs) {
+                const isRecurring = recurringAmounts.size === 0 // if no history yet, treat all as subscriptions
+                  || [...recurringAmounts].some(r => Math.abs(r - t.amount) <= 3);
+                if (isRecurring) subCharges.push({ description: t.description ?? kw, amount: t.amount });
+                else oneTimePurchases.push({ description: t.description ?? kw, amount: t.amount });
+              }
+
+              if (subCharges.length === 0 && monthTxs.length > 0) {
+                // No recurring charges this month — show the charge anyway
+                subCharges.push({ description: sorted[0].description ?? kw, amount: sorted[0].amount });
+              }
+
+              // Display amount = average of sub charges this month
+              const displayAmt = subCharges.reduce((s, c) => s + c.amount, 0) / subCharges.length;
+
+              subEntries.push({ key: kw, description: subCharges[0].description, amount: displayAmt, group: groupName, emoji, color, subCharges, oneTimePurchases });
+            }
+          }
+
+          // Compute total monthly cost — sum of all subscription charges this month
+          let totalMonthly = 0;
+          for (const entry of subEntries) {
+            if (cancelledSubs[entry.key]) continue;
+            const total = entry.subCharges.reduce((s, c) => s + c.amount, 0);
+            totalMonthly += isYearly(entry.key, entry.amount) ? total / 12 : total;
+          }
+
+          // Group by category
+          const grouped: Record<string, typeof subEntries> = {};
+          for (const entry of subEntries) {
+            if (!grouped[entry.group]) grouped[entry.group] = [];
+            grouped[entry.group].push(entry);
+          }
+
+          return (
+            <View style={{ padding: 16 }}>
+              {/* Total monthly header */}
+              <View style={{ backgroundColor: '#1a1a24', borderRadius: 16, padding: 20, marginBottom: 16, alignItems: 'center' }}>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 4 }}>Est. Monthly Cost</Text>
+                <Text style={{ color: Colors.primary, fontSize: 32, fontWeight: '700' }}>${totalMonthly.toFixed(2)}</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{subEntries.filter(e => !cancelledSubs[e.key]).length} active • ${(totalMonthly * 12).toFixed(0)}/yr</Text>
+              </View>
+
+              {Object.entries(grouped).map(([groupName, entries]) => (
+                <View key={groupName} style={{ marginBottom: 20 }}>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 }}>
+                    {SUB_GROUPS[groupName]?.emoji} {groupName}
+                  </Text>
+                  {entries.map(entry => {
+                    const yearly = isYearly(entry.key, entry.amount);
+                    const cancelled = !!cancelledSubs[entry.key];
+                    const multiAccount = entry.subCharges.length > 1;
+                    return (
+                      <View key={entry.key} style={{ marginBottom: 10 }}>
+                        {/* Each subscription charge shown individually */}
+                        {entry.subCharges.map((charge, ci) => {
+                          const label = charge.description.length > 32 ? charge.description.substring(0, 32) : charge.description;
+                          return (
+                            <View key={ci} style={{ backgroundColor: '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: ci < entry.subCharges.length - 1 ? 4 : 0 }}>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                                  <Text style={{ color: cancelled ? Colors.textDim : '#fff', fontSize: 14, fontWeight: '600', textDecorationLine: cancelled ? 'line-through' : 'none' }}>
+                                    {label}
+                                  </Text>
+                                  <View style={{ backgroundColor: yearly ? '#f59e0b22' : '#34d39922', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                    <Text style={{ color: yearly ? '#f59e0b' : Colors.success, fontSize: 10, fontWeight: '700' }}>
+                                      {yearly ? 'YEARLY' : 'MONTHLY'}
+                                    </Text>
+                                  </View>
+                                  {multiAccount && (
+                                    <View style={{ backgroundColor: 'rgba(167,139,250,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '700' }}>ACCOUNT {ci + 1} OF {entry.subCharges.length}</Text>
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={{ color: cancelled ? Colors.textDim : Colors.primary, fontSize: 16, fontWeight: '700' }}>
+                                  ${charge.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}
+                                </Text>
+                              </View>
+                              {ci === 0 && (
+                                <TouchableOpacity
+                                  onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
+                                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: cancelled ? Colors.success + '22' : Colors.danger + '22' }}
+                                >
+                                  <Text style={{ color: cancelled ? Colors.success : Colors.danger, fontSize: 12, fontWeight: '600' }}>
+                                    {cancelled ? 'Restore' : 'Cancel'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          );
+                        })}
+                        {/* One-time purchases (e.g. buying a Kindle book) */}
+                        {entry.oneTimePurchases.map((p, i) => (
+                          <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, marginTop: 4, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: 'rgba(148,163,184,0.25)' }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 12 }} numberOfLines={1}>{p.description}</Text>
+                              <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginTop: 2 }}>${p.amount.toFixed(2)}</Text>
+                            </View>
+                            <View style={{ backgroundColor: 'rgba(148,163,184,0.12)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 10, fontWeight: '700' }}>ONE-TIME</Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          );
+        })()}
+      </ScrollView>
+      )}
 
       <Modal
         visible={budgetModalVisible}
@@ -2622,17 +2803,18 @@ export default function BudgetScreen() {
                   const debt = debtPaymentTarget;
                   const payAmt = parseFloat(debtPaymentAmount) || 0;
                   const monthlyRate = debt.interest / 100 / 12;
-                  const interestCharge = parseFloat((debt.amount * monthlyRate).toFixed(2));
+                  const interestCharge = parseFloat(Math.min(payAmt, debt.amount * monthlyRate).toFixed(2));
                   const principalCharge = parseFloat(Math.max(0, payAmt - interestCharge).toFixed(2));
+                  const newBal = Math.max(0, debt.amount - payAmt);
                   return (
                     <View style={{ marginBottom: 12, padding: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10 }}>
                       <Text style={{ color: Colors.text, fontWeight: '700', fontSize: 15, marginBottom: 6 }}>{debt.name}</Text>
                       <Text style={{ color: Colors.textDim, fontSize: 13 }}>Current balance: <Text style={{ color: Colors.danger }}>${debt.amount.toFixed(2)}</Text></Text>
-                      {payAmt > 0 && debt.interest > 0 && (
+                      {payAmt > 0 && (
                         <View style={{ marginTop: 10, gap: 4 }}>
-                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Interest portion: <Text style={{ color: Colors.danger }}>${interestCharge.toFixed(2)}</Text></Text>
-                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Principal portion: <Text style={{ color: Colors.success }}>${principalCharge.toFixed(2)}</Text></Text>
-                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>New balance: <Text style={{ color: Colors.text }}>${Math.max(0, debt.amount - principalCharge).toFixed(2)}</Text></Text>
+                          {debt.interest > 0 && <Text style={{ color: Colors.textDim, fontSize: 13 }}>Interest portion: <Text style={{ color: Colors.danger }}>${interestCharge.toFixed(2)}</Text></Text>}
+                          {debt.interest > 0 && <Text style={{ color: Colors.textDim, fontSize: 13 }}>Principal portion: <Text style={{ color: Colors.success }}>${principalCharge.toFixed(2)}</Text></Text>}
+                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>New balance: <Text style={{ color: Colors.text, fontWeight: '700' }}>${newBal.toFixed(2)}</Text></Text>
                         </View>
                       )}
                     </View>
@@ -2679,7 +2861,7 @@ export default function BudgetScreen() {
             </View>
             {selectedDebt && (() => {
               const debt = selectedDebt;
-              const original = debt.originalAmount || debt.amount;
+              const original = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
               const paid = debt.amountPaid || 0;
               const progress = Math.min(100, (paid / original) * 100);
               const monthlyRate = debt.interest / 100 / 12;
@@ -3134,7 +3316,7 @@ export default function BudgetScreen() {
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>💳 Debt Tracker</Text>
                   {debts.map((debt, idx) => {
-                    const original = debt.originalAmount || debt.amount;
+                    const original = debt.originalAmount || (debt.amount + (debt.amountPaid ?? 0));
                     const paid = debt.amountPaid || 0;
                     const progress = Math.min(100, (paid / original) * 100);
                     const monthlyRate = debt.interest / 100 / 12;
