@@ -602,13 +602,14 @@ export const parseCSVLine = (line: string): string[] => {
   return fields;
 };
 
-export const detectColumns = (headerFields: string[]): { dateCol: number; descCol: number; amountCol: number; debitCol: number; creditCol: number; typeCol: number } => {
+export const detectColumns = (headerFields: string[]): { dateCol: number; descCol: number; amountCol: number; debitCol: number; creditCol: number; typeCol: number; balanceCol: number } => {
   let dateCol = -1;
   let descCol = -1;
   let amountCol = -1;
   let debitCol = -1;
   let creditCol = -1;
   let typeCol = -1;
+  let balanceCol = -1;
 
   headerFields.forEach((h, i) => {
     const lower = h.toLowerCase().replace(/["']/g, '').trim();
@@ -624,6 +625,8 @@ export const detectColumns = (headerFields: string[]): { dateCol: number; descCo
       descCol = i;
     } else if (typeCol === -1 && (lower === 'type' || lower === 'transaction type' || lower === 'dr/cr' || lower === 'dr / cr' || lower === 'indicator')) {
       typeCol = i;
+    } else if (balanceCol === -1 && (lower === 'balance' || lower === 'running balance' || lower === 'running bal' || lower === 'ledger balance' || lower === 'available balance' || lower === 'account balance' || lower === 'ending balance')) {
+      balanceCol = i;
     }
   });
 
@@ -635,7 +638,7 @@ export const detectColumns = (headerFields: string[]): { dateCol: number; descCo
     amountCol = headerFields.length > 2 ? 2 : (headerFields.length > 1 ? 1 : 0);
   }
 
-  return { dateCol, descCol, amountCol, debitCol, creditCol, typeCol };
+  return { dateCol, descCol, amountCol, debitCol, creditCol, typeCol, balanceCol };
 };
 
 export interface ParsedTransaction {
@@ -696,7 +699,7 @@ const findBestMonthCluster = (monthCounts: Record<string, number>): Set<string> 
 export const processCSVData = (
   text: string,
   budgets: Array<{ id: number; name: string }>,
-): { imported: ParsedTransaction[]; skipped: number; errors: string[] } => {
+): { imported: ParsedTransaction[]; skipped: number; errors: string[]; startingBalance: number | null; endingBalance: number | null } => {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   console.log('processCSVData: Total non-empty lines:', lines.length);
 
@@ -738,6 +741,17 @@ export const processCSVData = (
   let imported: ParsedTransaction[] = [];
   let skipped = 0;
   const errors: string[] = [];
+  let startingBalance: number | null = null;
+  let endingBalance: number | null = null;
+
+  const parseBalance = (raw: string | undefined): number | null => {
+    const s = (raw ?? '').replace(/^"|"$/g, '').replace(/,/g, '').trim();
+    if (!s) return null;
+    // Strip currency symbol
+    const cleaned = s.replace(/^\$/, '').trim();
+    const val = parseFloat(cleaned);
+    return isNaN(val) ? null : val;
+  };
 
   const findMatchingBudget = (category: string | undefined): number | undefined => {
     if (!category) return undefined;
@@ -955,6 +969,15 @@ export const processCSVData = (
       ? `${cleanedName} (${category})`
       : cleanedName || (isExpense ? 'Expense' : 'Income');
 
+    // Track running balance from the balance column
+    if (cols.balanceCol >= 0) {
+      const bal = parseBalance(parts[cols.balanceCol]);
+      if (bal !== null) {
+        if (startingBalance === null) startingBalance = bal;
+        endingBalance = bal;
+      }
+    }
+
     imported.push({
       amount,
       description: finalDescription,
@@ -1035,7 +1058,8 @@ export const processCSVData = (
   }
 
   console.log('processCSVData: final import count:', imported.length, 'skipped:', skipped);
-  return { imported, skipped, errors };
+  console.log('processCSVData: startingBalance:', startingBalance, 'endingBalance:', endingBalance);
+  return { imported, skipped, errors, startingBalance, endingBalance };
 };
 
 // ── Expense Analysis / Financial Advisor ─────────────────────────────────────

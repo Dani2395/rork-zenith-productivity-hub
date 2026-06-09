@@ -102,6 +102,7 @@ export default function BudgetScreen() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [_isUploading, setIsUploading] = useState(false);
+  const [statementEndingBalance, setStatementEndingBalance] = useState<number | null>(null);
 
   const [insightsModalVisible, setInsightsModalVisible] = useState(false);
   const [expenseInsights, setExpenseInsights] = useState<ExpenseInsight[]>([]);
@@ -876,7 +877,10 @@ export default function BudgetScreen() {
       console.log('processCSVText: CSV preview:', text.substring(0, 500));
 
       const result = processCSVData(text, budgets);
-      console.log('processCSVText: Import results:', { imported: result.imported.length, skipped: result.skipped, errors: result.errors });
+      console.log('processCSVText: Import results:', { imported: result.imported.length, skipped: result.skipped, errors: result.errors, endingBalance: result.endingBalance });
+      if (result.endingBalance !== null) {
+        setStatementEndingBalance(result.endingBalance);
+      }
 
       if (result.imported.length > 0) {
         const months = new Set(result.imported.map(t => t.date.substring(0, 7)));
@@ -1167,10 +1171,21 @@ export default function BudgetScreen() {
             </View>
           </View>
           <View style={styles.netContainer}>
-            <Text style={styles.netLabel}>Net Cashflow</Text>
-            <Text style={[styles.netAmount, { color: netCashflow >= 0 ? Colors.success : Colors.danger }]}>
-              {netCashflow >= 0 ? '+' : ''}${netCashflow.toFixed(2)}
-            </Text>
+            {statementEndingBalance !== null ? (
+              <>
+                <Text style={styles.netLabel}>Left Over in Account</Text>
+                <Text style={[styles.netAmount, { color: statementEndingBalance >= 0 ? Colors.success : Colors.danger }]}>
+                  ${statementEndingBalance.toFixed(2)}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.netLabel}>{netCashflow >= 0 ? 'Saved This Month' : 'Spent Down'}</Text>
+                <Text style={[styles.netAmount, { color: netCashflow >= 0 ? Colors.success : Colors.danger }]}>
+                  ${Math.abs(netCashflow).toFixed(2)}
+                </Text>
+              </>
+            )}
           </View>
         </View>
 
