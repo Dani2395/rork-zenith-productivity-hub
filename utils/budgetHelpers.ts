@@ -602,12 +602,14 @@ export const parseCSVLine = (line: string): string[] => {
   return fields;
 };
 
-export const detectColumns = (headerFields: string[]): { dateCol: number; descCol: number; amountCol: number; debitCol: number; creditCol: number } => {
+export const detectColumns = (headerFields: string[]): { dateCol: number; descCol: number; amountCol: number; debitCol: number; creditCol: number; typeCol: number; balanceCol: number } => {
   let dateCol = -1;
   let descCol = -1;
   let amountCol = -1;
   let debitCol = -1;
   let creditCol = -1;
+  let typeCol = -1;
+  let balanceCol = -1;
 
   headerFields.forEach((h, i) => {
     const lower = h.toLowerCase().replace(/["']/g, '').trim();
@@ -621,6 +623,10 @@ export const detectColumns = (headerFields: string[]): { dateCol: number; descCo
       amountCol = i;
     } else if (descCol === -1 && (lower.includes('desc') || lower.includes('memo') || lower.includes('narrative') || lower.includes('detail') || lower.includes('payee') || lower.includes('name') || lower.includes('transaction'))) {
       descCol = i;
+    } else if (typeCol === -1 && (lower === 'type' || lower === 'transaction type' || lower === 'dr/cr' || lower === 'dr / cr' || lower === 'indicator')) {
+      typeCol = i;
+    } else if (balanceCol === -1 && (lower === 'balance' || lower === 'running balance' || lower === 'running bal' || lower === 'ledger balance' || lower === 'available balance' || lower === 'account balance' || lower === 'ending balance')) {
+      balanceCol = i;
     }
   });
 
@@ -632,7 +638,7 @@ export const detectColumns = (headerFields: string[]): { dateCol: number; descCo
     amountCol = headerFields.length > 2 ? 2 : (headerFields.length > 1 ? 1 : 0);
   }
 
-  return { dateCol, descCol, amountCol, debitCol, creditCol };
+  return { dateCol, descCol, amountCol, debitCol, creditCol, typeCol, balanceCol };
 };
 
 export interface ParsedTransaction {
@@ -693,12 +699,12 @@ const findBestMonthCluster = (monthCounts: Record<string, number>): Set<string> 
 export const processCSVData = (
   text: string,
   budgets: Array<{ id: number; name: string }>,
-): { imported: ParsedTransaction[]; skipped: number; errors: string[] } => {
+): { imported: ParsedTransaction[]; skipped: number; errors: string[]; startingBalance: number | null; endingBalance: number | null } => {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   console.log('processCSVData: Total non-empty lines:', lines.length);
 
   if (lines.length < 2) {
-    return { imported: [], skipped: 0, errors: ['File has no data rows.'] };
+    return { imported: [], skipped: 0, errors: ['File has no data rows.'], startingBalance: null, endingBalance: null };
   }
 
   const headerFields = parseCSVLine(lines[0]);
@@ -735,6 +741,17 @@ export const processCSVData = (
   let imported: ParsedTransaction[] = [];
   let skipped = 0;
   const errors: string[] = [];
+  let startingBalance: number | null = null;
+  let endingBalance: number | null = null;
+
+  const parseBalance = (raw: string | undefined): number | null => {
+    const s = (raw ?? '').replace(/^"|"$/g, '').replace(/,/g, '').trim();
+    if (!s) return null;
+    // Strip currency symbol
+    const cleaned = s.replace(/^\$/, '').trim();
+    const val = parseFloat(cleaned);
+    return isNaN(val) ? null : val;
+  };
 
   const findMatchingBudget = (category: string | undefined): number | undefined => {
     if (!category) return undefined;
@@ -778,6 +795,14 @@ export const processCSVData = (
       (!dateStr || !/\d/.test(dateStr));
 
     if (isSummaryRow) {
+      // Capture balance from Beginning/Ending Balance rows before skipping them
+      if (cols.balanceCol >= 0) {
+        const summaryBal = parseBalance(parts[cols.balanceCol]);
+        if (summaryBal !== null) {
+          if (startingBalance === null) startingBalance = summaryBal;
+          endingBalance = summaryBal;
+        }
+      }
       skipped++;
       continue;
     }
@@ -792,8 +817,25 @@ export const processCSVData = (
       if (/^[\d.,]+-$/.test(s)) {
         return -(parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
       }
+      // DR/CR suffix: 100.00DR → -100.00 (debit = money out), 100.00CR → +100.00 (credit = money in)
+      const drCrMatch = s.match(/^([\d.,]+)\s*(DR|CR|db|cr)$/i);
+      if (drCrMatch) {
+        const val = parseFloat(drCrMatch[1].replace(/,/g, '')) || 0;
+        return /cr/i.test(drCrMatch[2]) ? val : -val;
+      }
       return parseFloat(s.replace(/[^0-9.\x2D]/g, '')) || 0;
     };
+
+    // Resolve type column value (Chase: "Debit"/"Credit", TD: "DR"/"CR", etc.)
+    let typeColOverride: 'income' | 'expense' | null = null;
+    if (cols.typeCol >= 0) {
+      const typeVal = (parts[cols.typeCol] ?? '').replace(/^"|"$/g, '').trim().toLowerCase();
+      if (typeVal === 'credit' || typeVal === 'cr' || typeVal === 'deposit' || typeVal === '+') {
+        typeColOverride = 'income';
+      } else if (typeVal === 'debit' || typeVal === 'dr' || typeVal === 'withdrawal' || typeVal === 'purchase' || typeVal === '-') {
+        typeColOverride = 'expense';
+      }
+    }
 
     let amountNum = 0;
     if (cols.debitCol >= 0 || cols.creditCol >= 0) {
@@ -808,6 +850,12 @@ export const processCSVData = (
       }
     } else if (cols.amountCol >= 0) {
       amountNum = parseSignedAmount(parts[cols.amountCol]);
+      // If a type column is present and the amount is positive (unsigned), use the type to determine sign
+      if (typeColOverride === 'expense' && amountNum > 0) {
+        amountNum = -amountNum;
+      } else if (typeColOverride === 'income' && amountNum < 0) {
+        amountNum = -amountNum;
+      }
     }
 
     if (!dateStr) {
@@ -821,7 +869,16 @@ export const processCSVData = (
       continue;
     }
 
-    let isExpense = amountNum < 0;
+    // Skip LOC sub-account entries entirely — the advance brings borrowed funds in,
+    // the repayment sends them back; neither is real income or spending. The actual
+    // purchases that triggered the overdraft are already counted as expenses.
+    const isLOCEntry =
+      /\bchkg\s+line\s+of\s+credit\b/.test(descLower) ||
+      /\btransfer\s+to\s+chkg\s+line\s+of\s+credit\b/.test(descLower);
+    if (isLOCEntry) { skipped++; continue; }
+
+    // Use type column override when present; otherwise infer from sign
+    let isExpense = typeColOverride !== null ? typeColOverride === 'expense' : amountNum < 0;
     const amount = Math.abs(amountNum);
     const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
 
@@ -836,7 +893,11 @@ export const processCSVData = (
         /\bdeposit\b.*\bpayroll\b/.test(d) ||
         /\bpayroll\b/.test(d) ||
         /\bdirect\s*dep/.test(d) ||
-        /\bsalary\b/.test(d);
+        /\bsalary\b/.test(d) ||
+        // "Deposit - ACH/RTP Paid From ..." entries are always real incoming money
+        /^deposit\s*[-–]/.test(d) ||
+        /\bach\s+paid\s+from\b/.test(d) ||
+        /\brtp\s+paid\s+from\b/.test(d);
 
       // Pure internal transfer: skip only if NOT a payroll deposit
       const isInternalTransfer = !isRealPayrollDeposit && (
@@ -864,16 +925,19 @@ export const processCSVData = (
         continue;
       }
 
-      // Everything below is real cash leaving or debt being added — treat as expense
+      // Is this a checking/savings account CSV? (has a running balance column)
+      const isCheckingCSV = cols.balanceCol >= 0;
+
+      // Everything below is real cash leaving or debt being added — treat as expense.
+      // Note: items guarded by !isCheckingCSV only apply to credit-card CSVs where
+      // a positive amount means a charge (sign-flipped). In a checking account, a
+      // positive amount is always money coming IN, so we trust the sign.
       const isActualExpense =
-        // LOC advances (first occurrence in checking section, no amount suffix)
-        (/\bline\s+of\s+credit\s+advance\b/.test(d) && !isRealPayrollDeposit) ||
-        /\bchkg\s+line\s+of\s+credit\b/.test(d) ||
         /\bheloc\b/.test(d) ||
         /\bcredit\s+card\s+cash\s+advance\b/.test(d) ||
-        // Credit card payments — all variations banks use
-        /\bpayment\b/.test(d) ||
-        /autopay/.test(d) ||
+        // Credit card payments — all variations banks use (not payroll deposits)
+        (/\bpayment\b/.test(d) && !isRealPayrollDeposit) ||
+        (/autopay/.test(d) && !isRealPayrollDeposit) ||
         /\bpay\s+thank/.test(d) ||
         /thank\s+you/.test(d) ||
         /online\s+pmt/.test(d) ||
@@ -885,14 +949,14 @@ export const processCSVData = (
         /\bfinance\s+charge\b/.test(d) ||
         /\bfee\b/.test(d) ||
         /\bpenalty\b/.test(d) ||
-        // Refunds/credit adjustments
-        /\brefund\b/.test(d) ||
-        /\breversal\b/.test(d) ||
-        /\bcredit\s+adj/.test(d) ||
-        // Zelle / Venmo / Cash App (not payroll) — money sent out
-        (/\bzelle\b/.test(d) && !isRealPayrollDeposit) ||
-        (/\bvenmo\b/.test(d) && !isRealPayrollDeposit) ||
-        (/\bcash\s*app\b/.test(d) && !isRealPayrollDeposit);
+        // In checking accounts, refunds/credits/Cash App are money coming IN — keep as income.
+        // In credit-card CSVs (no balance column), positive = charge, so these need flipping.
+        (!isCheckingCSV && /\brefund\b/.test(d)) ||
+        (!isCheckingCSV && /\breversal\b/.test(d)) ||
+        (!isCheckingCSV && /\bcredit\s+adj/.test(d)) ||
+        (!isCheckingCSV && /\bzelle\b/.test(d) && !isRealPayrollDeposit) ||
+        (!isCheckingCSV && /\bvenmo\b/.test(d) && !isRealPayrollDeposit) ||
+        (!isCheckingCSV && /\bcash\s*app\b/.test(d) && !isRealPayrollDeposit);
 
       if (isActualExpense) {
         isExpense = true;
@@ -927,6 +991,15 @@ export const processCSVData = (
     const finalDescription = category
       ? `${cleanedName} (${category})`
       : cleanedName || (isExpense ? 'Expense' : 'Income');
+
+    // Track running balance from the balance column
+    if (cols.balanceCol >= 0) {
+      const bal = parseBalance(parts[cols.balanceCol]);
+      if (bal !== null) {
+        if (startingBalance === null) startingBalance = bal;
+        endingBalance = bal;
+      }
+    }
 
     imported.push({
       amount,
@@ -1008,7 +1081,8 @@ export const processCSVData = (
   }
 
   console.log('processCSVData: final import count:', imported.length, 'skipped:', skipped);
-  return { imported, skipped, errors };
+  console.log('processCSVData: startingBalance:', startingBalance, 'endingBalance:', endingBalance);
+  return { imported, skipped, errors, startingBalance, endingBalance };
 };
 
 // ── Expense Analysis / Financial Advisor ─────────────────────────────────────
