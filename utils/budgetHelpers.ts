@@ -870,17 +870,12 @@ export const processCSVData = (
       continue;
     }
 
-    // Skip LOC sub-account entries and credit card payment transfers.
-    // These shuffle money between accounts — the actual spending is already
-    // counted on the card or in the purchase rows.
+    // Skip LOC sub-account entries — these are internal bank mechanics,
+    // not real income or spending.
     const isLOCEntry =
       /\bchkg\s+line\s+of\s+credit\b/.test(descLower) ||
       /\btransfer\s+to\s+chkg\s+line\s+of\s+credit\b/.test(descLower);
-    const isCCPayment =
-      /\btransfer\s+to\s+credit\s+card\b/.test(descLower) ||
-      /\bcredit\s+card\s+payment\b/.test(descLower) ||
-      /\bcredit\s+card\s+pmt\b/.test(descLower);
-    if (isLOCEntry || isCCPayment) { skipped++; continue; }
+    if (isLOCEntry) { skipped++; continue; }
 
     // Use type column override when present; otherwise infer from sign
     let isExpense = typeColOverride !== null ? typeColOverride === 'expense' : amountNum < 0;
