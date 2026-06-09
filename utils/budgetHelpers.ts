@@ -234,6 +234,66 @@ export const MERCHANT_CATEGORIES: Record<string, string> = {
   'mta': 'Transportation',
   'cta': 'Transportation',
   'bart': 'Transportation',
+  // Gas stations missing from original list
+  'pilot': 'Gas & Auto',
+  'flying j': 'Gas & Auto',
+  'loves ': 'Gas & Auto',
+  'love\'s': 'Gas & Auto',
+  'cefco': 'Gas & Auto',
+  '7-eleven': 'Gas & Auto',
+  '7eleven': 'Gas & Auto',
+  // Restaurants missing from original list
+  'golden corral': 'Food & Dining',
+  'kyuramen': 'Food & Dining',
+  'dave\'s hot chicken': 'Food & Dining',
+  'daves hot chicken': 'Food & Dining',
+  'star cinema grill': 'Food & Dining',
+  'wild fork': 'Food & Dining',
+  'champions seafood': 'Food & Dining',
+  'black rock cof': 'Food & Dining',
+  'black rock coffee': 'Food & Dining',
+  'krispy kreme': 'Food & Dining',
+  'papa john': 'Food & Dining',
+  'papa johns': 'Food & Dining',
+  'brusters': 'Food & Dining',
+  'bruster': 'Food & Dining',
+  'oishi sushi': 'Food & Dining',
+  'pho golden': 'Food & Dining',
+  'jinya ramen': 'Food & Dining',
+  'saltgrass': 'Food & Dining',
+  'midway': 'Food & Dining',
+  'coca cola': 'Food & Dining',
+  // Health / Medical
+  'ysi': 'Health',
+  'lakeside': 'Health',
+  '24 hour fitness': 'Health',
+  '24hour fitness': 'Health',
+  // Entertainment / Cinema
+  'star cinema': 'Entertainment',
+  'tst* star cinema': 'Entertainment',
+  'xscape': 'Entertainment',
+  'amc ': 'Entertainment',
+  // Shopping / Subscriptions
+  'klarna': 'Shopping',
+  'norton': 'Bills & Utilities',
+  'ancestry': 'Bills & Utilities',
+  'anc*ancestry': 'Bills & Utilities',
+  'grammarly': 'Bills & Utilities',
+  'blind wave': 'Entertainment',
+  'hidive': 'Entertainment',
+  'webnovel': 'Entertainment',
+  'twinkl': 'Education',
+  'mimo': 'Education',
+  'acorns': 'Savings & Investing',
+  'robinhood': 'Savings & Investing',
+  'empower': 'Savings & Investing',
+  'tilt': 'Bills & Utilities',
+  'dave ': 'Bills & Utilities',
+  'davesubfee': 'Bills & Utilities',
+  'klarna*etsy': 'Shopping',
+  'nayax': 'Food & Dining',
+  'wmt plus': 'Bills & Utilities',
+  'walmart+': 'Bills & Utilities',
 };
 
 export const cleanDescription = (raw: string): string => {
@@ -766,25 +826,51 @@ export const processCSVData = (
     const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
 
     // Reclassify positive amounts that are NOT real income.
-    // Rule: only actual transfers between own accounts get skipped (they net to zero).
-    // Payments, interest, and LOC draws are real cash movements → classify as expenses.
     if (!isExpense) {
       const d = description.toLowerCase();
 
-      // Pure internal transfers (no cash actually spent) → skip to avoid double-counting
-      const isInternalTransfer =
-        (/\btransfer\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
+      // Skip pure internal transfers — they net to zero across accounts
+      // BUT: "Net Deposit After ... LOC Payment" is real payroll coming through after LOC deduction
+      const isRealPayrollDeposit =
+        /\bnet\s+deposit\b/.test(d) ||
+        /\bdeposit\b.*\bpayroll\b/.test(d) ||
+        /\bpayroll\b/.test(d) ||
+        /\bdirect\s*dep/.test(d) ||
+        /\bsalary\b/.test(d);
+
+      // Pure internal transfer: skip only if NOT a payroll deposit
+      const isInternalTransfer = !isRealPayrollDeposit && (
+        (/\btransfer\b/.test(d)) ||
         /\bxfer\b/.test(d) ||
-        /\bfrom\s+(checking|savings|account)\b/.test(d) ||
-        /\bto\s+(checking|savings|account)\b/.test(d);
+        /\bfrom\s+(checking|savings|account|shares)\b/.test(d) ||
+        /\bto\s+(checking|savings|account)\b/.test(d)
+      );
 
       if (isInternalTransfer) {
         skipped++;
         continue;
       }
 
+      // LOC sub-account section: when a CSV contains both checking AND the linked LOC
+      // sub-account, LOC advances appear TWICE (once in checking as income, once in the
+      // LOC section as a credit). Skip the LOC-section duplicate — identified by having
+      // the advance AMOUNT appended to the description (e.g. "Chkg Line Of Credit Advance 656.52")
+      const isLocSectionDuplicate =
+        /\bline\s+of\s+credit\s+adv(ance)?\s+[\d.,]+/.test(d) ||
+        /\bnet\s+deposit\s+transfer\s+to\s+checking\b/.test(d);
+
+      if (isLocSectionDuplicate) {
+        skipped++;
+        continue;
+      }
+
       // Everything below is real cash leaving or debt being added — treat as expense
       const isActualExpense =
+        // LOC advances (first occurrence in checking section, no amount suffix)
+        (/\bline\s+of\s+credit\s+advance\b/.test(d) && !isRealPayrollDeposit) ||
+        /\bchkg\s+line\s+of\s+credit\b/.test(d) ||
+        /\bheloc\b/.test(d) ||
+        /\bcredit\s+card\s+cash\s+advance\b/.test(d) ||
         // Credit card payments — all variations banks use
         /\bpayment\b/.test(d) ||
         /autopay/.test(d) ||
@@ -799,30 +885,34 @@ export const processCSVData = (
         /\bfinance\s+charge\b/.test(d) ||
         /\bfee\b/.test(d) ||
         /\bpenalty\b/.test(d) ||
-        // Line of credit / HELOC draws — debt taken on
-        /line\s+of\s+credit/.test(d) ||
-        /\bloc\s+(advance|draw|deposit)\b/.test(d) ||
-        /\bheloc\b/.test(d) ||
-        /credit\s+line\s+(advance|draw|deposit)/.test(d) ||
-        /\badvance\b/.test(d) ||
-        // Refunds/reversals still come off income (already filtered)
+        // Refunds/credit adjustments
         /\brefund\b/.test(d) ||
         /\breversal\b/.test(d) ||
         /\bcredit\s+adj/.test(d) ||
-        // Zelle / Venmo / Cash App (not payroll) — treat as expense (money sent)
-        (/\bzelle\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
-        (/\bvenmo\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
-        (/\bcash\s*app\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d));
+        // Zelle / Venmo / Cash App (not payroll) — money sent out
+        (/\bzelle\b/.test(d) && !isRealPayrollDeposit) ||
+        (/\bvenmo\b/.test(d) && !isRealPayrollDeposit) ||
+        (/\bcash\s*app\b/.test(d) && !isRealPayrollDeposit);
 
       if (isActualExpense) {
         isExpense = true;
       }
     }
 
-    // Always classify interest charges as expense regardless of sign
+    // Always classify interest charges, fees, and POS/debit purchases as expense regardless of sign
     if (!isExpense) {
       const d = description.toLowerCase();
-      if (/\binterest\b/.test(d) || /\bfinance\s+charge\b/.test(d)) {
+      if (
+        /\binterest\b/.test(d) ||
+        /\bfinance\s+charge\b/.test(d) ||
+        /\bpos\s+(debit|purchase|transaction)\b/.test(d) ||
+        /\bdebit\s+(card\s+)?(purchase|transaction)\b/.test(d) ||
+        /\bvisa\s+(debit|purchase)\b/.test(d) ||
+        /\bcheck\s+card\b/.test(d) ||
+        /\bpin\s+(purchase|debit)\b/.test(d) ||
+        // Purchases at known expense merchants even when amount is positive
+        MERCHANT_CATEGORIES && Object.keys(MERCHANT_CATEGORIES).some(k => d.includes(k))
+      ) {
         isExpense = true;
       }
     }
@@ -844,21 +934,32 @@ export const processCSVData = (
     });
   }
 
-  // Sign-flip detection: some credit card formats (Citi, Discover, Capital One) export
-  // purchases as positive and payments as negative — opposite of what we expect.
-  // Detect this by checking if most "income" rows look like merchant purchases.
+  // Sign-flip detection: some credit card formats (Citi, Discover, Capital One, etc.)
+  // export purchases as positive and payments as negative — opposite of what we expect.
+  // Two signals to detect this:
+  //   1. >40% of "income" rows match known merchant keywords (food, stores, streaming)
+  //   2. >70% of ALL transactions are classified as income (real life is mostly expenses)
   if (imported.length > 3) {
     const incomeRows = imported.filter(t => t.type === 'income');
-    const merchantKeywords = ['food', 'dining', 'grocery', 'groceries', 'shopping', 'gas', 'restaurant',
+    const expenseRows = imported.filter(t => t.type === 'expense');
+    const totalRows = imported.length;
+
+    const merchantKeywords = [
+      'food', 'dining', 'grocery', 'groceries', 'shopping', 'gas', 'restaurant',
       'amazon', 'walmart', 'target', 'uber', 'lyft', 'netflix', 'spotify', 'apple', 'google',
-      'starbucks', 'mcdonald', 'doordash', 'instacart', 'pharmacy', 'cvs', 'walgreen'];
+      'starbucks', 'mcdonald', 'doordash', 'instacart', 'pharmacy', 'cvs', 'walgreen',
+      'purchase', 'pos debit', 'pos purchase', 'visa purchase', 'mc purchase', 'debit purchase',
+    ];
     const merchantIncomeCount = incomeRows.filter(t => {
       const d = (t.description ?? '').toLowerCase();
       return merchantKeywords.some(kw => d.includes(kw));
     }).length;
-    // If >40% of "income" rows are clearly merchant purchases, signs are flipped
-    if (incomeRows.length > 0 && merchantIncomeCount / incomeRows.length > 0.4) {
-      console.log('processCSVData: sign-flip detected, inverting income/expense classification');
+
+    const signalMerchant = incomeRows.length > 0 && merchantIncomeCount / incomeRows.length > 0.4;
+    const signalRatio = incomeRows.length > 2 && incomeRows.length / totalRows > 0.7;
+
+    if (signalMerchant || signalRatio) {
+      console.log('processCSVData: sign-flip detected (merchant:', signalMerchant, 'ratio:', signalRatio, '), inverting');
       imported = imported.map(t => ({ ...t, type: t.type === 'income' ? 'expense' : 'income' }));
       // Re-run the payment/transfer filter on newly-flipped income rows
       imported = imported.filter(t => {
@@ -866,7 +967,7 @@ export const processCSVData = (
         const d = (t.description ?? '').toLowerCase();
         return !(
           /\bpayment\b/.test(d) || /autopay/.test(d) || /thank\s+you/.test(d) ||
-          /\btransfer\b/.test(d) || /\bxfer\b/.test(d) ||
+          /\bpmt\b/.test(d) || /\btransfer\b/.test(d) || /\bxfer\b/.test(d) ||
           /\bfrom\s+(checking|savings|account)\b/.test(d) ||
           /\brefund\b/.test(d) || /\breversal\b/.test(d)
         );

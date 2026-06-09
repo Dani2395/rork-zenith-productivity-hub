@@ -41,7 +41,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useData } from '@/contexts/DataContext';
 import { Budget, Transaction, Debt, Savings } from '@/types';
-import { processCSVData, analyzeExpenses, ExpenseInsight } from '@/utils/budgetHelpers';
+import { processCSVData, analyzeExpenses, ExpenseInsight, MERCHANT_CATEGORIES } from '@/utils/budgetHelpers';
 import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
 import { updateBudgetWidget } from '@/widgets/widgetTaskHandler';
 
@@ -2723,45 +2723,101 @@ export default function BudgetScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
 
-              {/* Budget category breakdown for selected month */}
-              {(() => {
-                const modalSpentByBudget: Record<number, number> = {};
-                for (const t of selectedMonthExpenses) {
-                  if (t.budgetId != null) {
-                    modalSpentByBudget[t.budgetId] = (modalSpentByBudget[t.budgetId] ?? 0) + t.amount;
-                  }
-                }
-                const activeBudgets = budgets.filter(b => (modalSpentByBudget[b.id] ?? 0) > 0 || b.amount > 0);
-                if (activeBudgets.length === 0) return null;
+              {/* Income sources */}
+              {selectedMonthIncomes.length > 0 && (() => {
                 return (
                   <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>💰 Budget Categories</Text>
-                    {activeBudgets.map((budget, idx) => {
-                      const spent = modalSpentByBudget[budget.id] ?? 0;
-                      const percent = Math.min(100, Math.round((spent / budget.amount) * 100));
-                      const isOver = spent > budget.amount;
+                    <Text style={styles.sectionTitle}>💰 Income</Text>
+                    {selectedMonthIncomes.map((t, i) => (
+                      <View key={`inc-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: i < selectedMonthIncomes.length - 1 ? 1 : 0, borderBottomColor: Colors.border }}>
+                        <Text style={{ fontSize: 13, color: Colors.text, flex: 1 }} numberOfLines={1}>{t.description}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.success, marginLeft: 8 }}>+${t.amount.toFixed(2)}</Text>
+                      </View>
+                    ))}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.border }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>Total Income</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.success }}>+${selectedMonthIncomes.reduce((s, t) => s + t.amount, 0).toFixed(2)}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Auto-category expense breakdown */}
+              {selectedMonthExpenses.length > 0 && (() => {
+                const CATEGORY_ICONS: Record<string, string> = {
+                  'Food & Dining': '🍔', 'Groceries': '🛒', 'Gas & Auto': '⛽',
+                  'Health': '🏥', 'Shopping': '🛍️', 'Bills & Utilities': '📱',
+                  'Entertainment': '🎬', 'Travel': '✈️', 'Housing': '🏠',
+                  'Transportation': '🚗', 'Insurance': '🛡️', 'Pets': '🐾',
+                  'Education': '📚', 'Savings & Investing': '📈', 'Transfers': '🔄',
+                  'Kids': '👶', 'Home': '🔧', 'Other': '📦',
+                };
+                const byCategory: Record<string, number> = {};
+                for (const t of selectedMonthExpenses) {
+                  const desc = (t.description ?? '').toLowerCase();
+                  let cat = 'Other';
+                  for (const [kw, c] of Object.entries(MERCHANT_CATEGORIES)) {
+                    if (desc.includes(kw) && c !== 'Income' && c !== 'Transfers') { cat = c; break; }
+                  }
+                  byCategory[cat] = (byCategory[cat] ?? 0) + t.amount;
+                }
+                const sorted = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+                const total = sorted.reduce((s, [, v]) => s + v, 0);
+                return (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>💸 Expenses by Category</Text>
+                    {sorted.map(([cat, amt], i) => {
+                      const pct = Math.round((amt / total) * 100);
+                      const icon = CATEGORY_ICONS[cat] ?? '📦';
                       return (
-                        <View key={`mb-${budget.id}-${idx}`} style={styles.budgetCard}>
-                          <View style={styles.budgetHeader}>
-                            <View style={styles.budgetInfo}>
-                              <Text style={styles.budgetIcon}>{budget.icon}</Text>
-                              <View>
-                                <Text style={styles.budgetName}>{budget.name}</Text>
-                                <Text style={styles.budgetSpent}>
-                                  ${spent.toFixed(0)} / ${budget.amount.toFixed(0)}
-                                </Text>
-                              </View>
+                        <View key={`cat-${i}`} style={{ marginBottom: 10 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text style={{ fontSize: 13, color: Colors.text, fontWeight: '600' }}>{icon} {cat}</Text>
+                            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 11, color: Colors.textDim }}>{pct}%</Text>
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.danger }}>${amt.toFixed(2)}</Text>
                             </View>
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: isOver ? Colors.danger : Colors.textDim }}>
-                              {percent}%
-                            </Text>
                           </View>
-                          <View style={styles.progressBar}>
-                            <View style={[styles.progressFill, { width: `${Math.min(100, percent)}%`, backgroundColor: isOver ? Colors.danger : Colors.primary }]} />
+                          <View style={{ height: 5, backgroundColor: Colors.border, borderRadius: 3 }}>
+                            <View style={{ height: 5, width: `${pct}%` as any, backgroundColor: Colors.primary, borderRadius: 3 }} />
                           </View>
                         </View>
                       );
                     })}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.border }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>Total Expenses</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.danger }}>${total.toFixed(2)}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Subscriptions detected this month */}
+              {(() => {
+                const ym = selectedMonthKey ? (() => {
+                  const parts = selectedMonthKey.split(' ');
+                  if (parts.length === 2) {
+                    const months: Record<string,string> = { January:'01',February:'02',March:'03',April:'04',May:'05',June:'06',July:'07',August:'08',September:'09',October:'10',November:'11',December:'12' };
+                    return `${parts[1]}-${months[parts[0]] ?? '01'}`;
+                  }
+                  return null;
+                })() : null;
+                if (!ym) return null;
+                const monthSubs = subsForMonth.filter(s => !s.cancelled);
+                if (monthSubs.length === 0) return null;
+                return (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>📡 Subscriptions</Text>
+                    {monthSubs.map((sub, i) => (
+                      <View key={`ms-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7, borderBottomWidth: i < monthSubs.length - 1 ? 1 : 0, borderBottomColor: Colors.border }}>
+                        <Text style={{ fontSize: 13, color: Colors.text, flex: 1 }} numberOfLines={1}>{sub.description}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#a78bfa', marginLeft: 8 }}>${sub.amount.toFixed(2)}</Text>
+                      </View>
+                    ))}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.border }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>Total Subscriptions</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#a78bfa' }}>${monthSubs.reduce((s, sub) => s + sub.amount, 0).toFixed(2)}</Text>
+                    </View>
                   </View>
                 );
               })()}
