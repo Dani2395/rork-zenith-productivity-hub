@@ -2362,34 +2362,62 @@ export default function BudgetScreen() {
             return months.size <= 2 && amount > 35;
           };
 
+          // Find the "subscription amount" for a key = the amount that recurs across the most months
+          const getSubAmount = (key: string): number => {
+            const txs = allTxsBySubKey[key] ?? [];
+            if (txs.length === 0) return 0;
+            // bucket amounts within $2 of each other, find which bucket appears in most months
+            const buckets: Record<number, Set<string>> = {};
+            for (const t of txs) {
+              const rounded = Math.round(t.amount);
+              // find existing bucket within $2
+              const bucketKey = Object.keys(buckets).map(Number).find(k => Math.abs(k - rounded) <= 2) ?? rounded;
+              if (!buckets[bucketKey]) buckets[bucketKey] = new Set();
+              buckets[bucketKey].add(t.date.substring(0, 7));
+            }
+            let bestAmt = txs[0].amount;
+            let bestMonths = 0;
+            for (const [amtKey, months] of Object.entries(buckets)) {
+              if (months.size > bestMonths) { bestMonths = months.size; bestAmt = Number(amtKey); }
+            }
+            return bestAmt;
+          };
+
           // Collect all subscription keys with at least one transaction
-          const subEntries: { key: string; description: string; amount: number; group: string; emoji: string; color: string; monthlyCount: number; isDuplicate: boolean; hasMultipleAccounts: boolean }[] = [];
+          const subEntries: {
+            key: string; description: string; amount: number; group: string; emoji: string; color: string;
+            accountCount: number; oneTimePurchases: { description: string; amount: number; date: string }[];
+          }[] = [];
+
           for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
             for (const kw of keywords) {
               const txs = allTxsBySubKey[kw] ?? [];
               if (txs.length === 0) continue;
               const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
-              const latest = sorted[0];
-              const latestMonth = latest.date.substring(0, 7);
+              const subAmt = getSubAmount(kw);
+
+              // Split most-recent-month transactions into subscription charges vs one-time purchases
+              const latestMonth = sorted[0].date.substring(0, 7);
               const monthTxs = txs.filter((t: Transaction) => t.date.startsWith(latestMonth));
-              const monthlyCount = monthTxs.length;
-              // True duplicate = same amount AND same date (accidental double-charge)
-              const hasTrueDuplicate = duplicateSubs.has(kw);
-              // Multiple accounts = different days or different amounts in same month
-              const hasMultipleAccounts = monthlyCount > 1 && !hasTrueDuplicate;
-              subEntries.push({ key: kw, description: latest.description ?? kw, amount: latest.amount, group: groupName, emoji, color, monthlyCount, isDuplicate: hasTrueDuplicate, hasMultipleAccounts });
+              const subCharges = monthTxs.filter((t: Transaction) => Math.abs(t.amount - subAmt) <= 2);
+              const oneTimePurchases = monthTxs
+                .filter((t: Transaction) => Math.abs(t.amount - subAmt) > 2)
+                .map((t: Transaction) => ({ description: t.description ?? kw, amount: t.amount, date: t.date }));
+
+              // accountCount = how many subscription-amount charges this month (2 = two accounts)
+              const accountCount = Math.max(1, subCharges.length);
+              const desc = subCharges[0]?.description ?? sorted[0].description ?? kw;
+
+              subEntries.push({ key: kw, description: desc, amount: subAmt, group: groupName, emoji, color, accountCount, oneTimePurchases });
             }
           }
 
-          // Compute total monthly cost (active recurring subs, counting yearly as monthly equiv)
+          // Compute total monthly cost
           let totalMonthly = 0;
           for (const entry of subEntries) {
             if (cancelledSubs[entry.key]) continue;
-            if (isYearly(entry.key, entry.amount)) {
-              totalMonthly += entry.amount / 12;
-            } else {
-              totalMonthly += entry.amount;
-            }
+            const perAccount = isYearly(entry.key, entry.amount) ? entry.amount / 12 : entry.amount;
+            totalMonthly += perAccount * entry.accountCount;
           }
 
           // Group by category
@@ -2406,13 +2434,6 @@ export default function BudgetScreen() {
                 <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 4 }}>Est. Monthly Cost</Text>
                 <Text style={{ color: Colors.primary, fontSize: 32, fontWeight: '700' }}>${totalMonthly.toFixed(2)}</Text>
                 <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{subEntries.filter(e => !cancelledSubs[e.key]).length} active • ${(totalMonthly * 12).toFixed(0)}/yr</Text>
-                {subEntries.some(e => e.isDuplicate) && (
-                  <View style={{ marginTop: 10, backgroundColor: 'rgba(251,191,36,0.12)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}>
-                    <Text style={{ color: '#fbbf24', fontSize: 12, fontWeight: '700' }}>
-                      ⚠️ {subEntries.filter(e => e.isDuplicate).length} possible accidental double-charge detected
-                    </Text>
-                  </View>
-                )}
               </View>
 
               {Object.entries(grouped).map(([groupName, entries]) => (
@@ -2423,10 +2444,11 @@ export default function BudgetScreen() {
                   {entries.map(entry => {
                     const yearly = isYearly(entry.key, entry.amount);
                     const cancelled = !!cancelledSubs[entry.key];
-                    const cleanName = entry.description.length > 30 ? entry.description.substring(0, 30) : entry.description;
+                    const cleanName = entry.description.length > 32 ? entry.description.substring(0, 32) : entry.description;
                     return (
                       <View key={entry.key} style={{ marginBottom: 10 }}>
-                        <View style={{ backgroundColor: entry.isDuplicate ? 'rgba(251,191,36,0.06)' : '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: entry.isDuplicate ? 1 : 0, borderColor: entry.isDuplicate ? 'rgba(251,191,36,0.35)' : 'transparent' }}>
+                        {/* Subscription charge row */}
+                        <View style={{ backgroundColor: '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center' }}>
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                               <Text style={{ color: cancelled ? Colors.textDim : '#fff', fontSize: 14, fontWeight: '600', textDecorationLine: cancelled ? 'line-through' : 'none' }}>
@@ -2437,30 +2459,15 @@ export default function BudgetScreen() {
                                   {yearly ? 'YEARLY' : 'MONTHLY'}
                                 </Text>
                               </View>
-                              {entry.hasMultipleAccounts && (
-                                <View style={{ backgroundColor: 'rgba(96,165,250,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                  <Text style={{ color: '#60a5fa', fontSize: 10, fontWeight: '700' }}>{entry.monthlyCount} ACCOUNTS</Text>
-                                </View>
-                              )}
-                              {entry.isDuplicate && (
-                                <View style={{ backgroundColor: 'rgba(251,191,36,0.2)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                  <Text style={{ color: '#fbbf24', fontSize: 10, fontWeight: '800' }}>⚠️ DOUBLE CHARGE</Text>
+                              {entry.accountCount > 1 && (
+                                <View style={{ backgroundColor: 'rgba(167,139,250,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '700' }}>{entry.accountCount} ACCOUNTS</Text>
                                 </View>
                               )}
                             </View>
                             <Text style={{ color: cancelled ? Colors.textDim : Colors.primary, fontSize: 16, fontWeight: '700' }}>
-                              ${entry.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}
+                              ${entry.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}{entry.accountCount > 1 ? ` × ${entry.accountCount}` : ''}
                             </Text>
-                            {entry.hasMultipleAccounts && (
-                              <Text style={{ color: '#60a5fa', fontSize: 11, marginTop: 3 }}>
-                                {entry.monthlyCount} separate accounts this month
-                              </Text>
-                            )}
-                            {entry.isDuplicate && (
-                              <Text style={{ color: '#fbbf24', fontSize: 11, marginTop: 3 }}>
-                                Same charge appeared twice — possible accidental duplicate
-                              </Text>
-                            )}
                           </View>
                           <TouchableOpacity
                             onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
@@ -2471,6 +2478,18 @@ export default function BudgetScreen() {
                             </Text>
                           </TouchableOpacity>
                         </View>
+                        {/* One-time purchase rows (e.g. buying a Kindle book or Audible title) */}
+                        {entry.oneTimePurchases.map((p, i) => (
+                          <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, marginTop: 4, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: 'rgba(148,163,184,0.3)' }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 12 }} numberOfLines={1}>{p.description}</Text>
+                              <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginTop: 2 }}>${p.amount.toFixed(2)}</Text>
+                            </View>
+                            <View style={{ backgroundColor: 'rgba(148,163,184,0.12)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 10, fontWeight: '700' }}>ONE-TIME</Text>
+                            </View>
+                          </View>
+                        ))}
                       </View>
                     );
                   })}
