@@ -40,7 +40,7 @@ import styles from '@/styles/budgetStyles';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useData } from '@/contexts/DataContext';
-import { Budget, Transaction, Debt, Savings } from '@/types';
+import { Budget, Transaction, Debt, DebtPayment, Savings } from '@/types';
 import { processCSVData, analyzeExpenses, ExpenseInsight, MERCHANT_CATEGORIES } from '@/utils/budgetHelpers';
 import { extractTextFromPDF, isPDFContent } from '@/utils/pdfExtractor';
 import { updateBudgetWidget } from '@/widgets/widgetTaskHandler';
@@ -92,6 +92,12 @@ export default function BudgetScreen() {
   const [debtInterest, setDebtInterest] = useState('');
   const [debtPayment, setDebtPayment] = useState('');
   const [debtDue, setDebtDue] = useState('');
+  const [debtDueDay, setDebtDueDay] = useState<number>(1);
+  const [debtPaymentModalVisible, setDebtPaymentModalVisible] = useState(false);
+  const [debtPaymentTarget, setDebtPaymentTarget] = useState<Debt | null>(null);
+  const [debtPaymentAmount, setDebtPaymentAmount] = useState('');
+  const [debtDetailVisible, setDebtDetailVisible] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
 
   const [savingsName, setSavingsName] = useState('');
   const [savingsTarget, setSavingsTarget] = useState('');
@@ -736,6 +742,7 @@ export default function BudgetScreen() {
       setDebtInterest(debt.interest.toString());
       setDebtPayment(debt.payment.toString());
       setDebtDue(debt.due);
+      setDebtDueDay(debt.dueDay || 1);
     } else {
       setEditingId(null);
       setDebtName('');
@@ -743,19 +750,25 @@ export default function BudgetScreen() {
       setDebtInterest('');
       setDebtPayment('');
       setDebtDue('');
+      setDebtDueDay(1);
     }
     setDebtModalVisible(true);
   };
 
   const handleSaveDebt = () => {
     if (!debtName.trim() || !debtAmount) return;
+    const amt = parseFloat(debtAmount);
 
     const debtData: Omit<Debt, 'id'> = {
       name: debtName.trim(),
-      amount: parseFloat(debtAmount),
+      amount: amt,
+      originalAmount: editingId ? (debts.find(d => d.id === editingId)?.originalAmount ?? amt) : amt,
       interest: parseFloat(debtInterest) || 0,
       payment: parseFloat(debtPayment) || 0,
       due: debtDue,
+      dueDay: debtDueDay,
+      amountPaid: editingId ? (debts.find(d => d.id === editingId)?.amountPaid ?? 0) : 0,
+      paymentHistory: editingId ? (debts.find(d => d.id === editingId)?.paymentHistory ?? []) : [],
     };
 
     if (editingId) {
@@ -780,6 +793,45 @@ export default function BudgetScreen() {
         },
       },
     ]);
+  };
+
+  const handleMakePayment = () => {
+    if (!debtPaymentTarget) return;
+    const payAmt = parseFloat(debtPaymentAmount);
+    if (isNaN(payAmt) || payAmt <= 0) return;
+
+    const debt = debtPaymentTarget;
+    const monthlyRate = debt.interest / 100 / 12;
+    const interestCharge = parseFloat((debt.amount * monthlyRate).toFixed(2));
+    const principalCharge = parseFloat(Math.max(0, payAmt - interestCharge).toFixed(2));
+    const newBalance = parseFloat(Math.max(0, debt.amount - principalCharge).toFixed(2));
+
+    const payment: DebtPayment = {
+      date: new Date().toISOString().split('T')[0],
+      amount: payAmt,
+      principal: principalCharge,
+      interest: interestCharge,
+    };
+
+    updateDebt(debt.id, {
+      amount: newBalance,
+      amountPaid: (debt.amountPaid ?? 0) + payAmt,
+      paymentHistory: [...(debt.paymentHistory ?? []), payment],
+    });
+
+    if (selectedDebt?.id === debt.id) {
+      setSelectedDebt(prev => prev ? {
+        ...prev,
+        amount: newBalance,
+        amountPaid: (prev.amountPaid ?? 0) + payAmt,
+        paymentHistory: [...(prev.paymentHistory ?? []), payment],
+      } : null);
+    }
+
+    setDebtPaymentModalVisible(false);
+    setDebtPaymentAmount('');
+    setDebtPaymentTarget(null);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const openSavingsModal = (savingsItem?: Savings) => {
@@ -1793,38 +1845,66 @@ export default function BudgetScreen() {
           {debts.length === 0 ? (
             <Text style={styles.emptyText}>No debts tracked</Text>
           ) : (
-            debts.map((debt, idx) => (
-              <TouchableOpacity
-                key={`debt-${debt.id}-${idx}`}
-                style={styles.debtCard}
-                onPress={() => openDebtModal(debt)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.debtHeader}>
-                  <View style={styles.debtInfo}>
-                    <Text style={styles.debtName}>💳 {debt.name}</Text>
-                    <Text style={styles.debtAmount}>${debt.amount.toFixed(2)}</Text>
-                    <Text style={styles.debtDetails}>
-                      {debt.interest}% APR • ${debt.payment}/mo • Due: {debt.due}
-                    </Text>
+            debts.map((debt, idx) => {
+              const original = debt.originalAmount || debt.amount;
+              const paid = debt.amountPaid || 0;
+              const progress = Math.min(100, (paid / original) * 100);
+              const monthlyRate = debt.interest / 100 / 12;
+              const nextInterest = parseFloat((debt.amount * monthlyRate).toFixed(2));
+              const nextPrincipal = parseFloat(Math.max(0, debt.payment - nextInterest).toFixed(2));
+              return (
+                <TouchableOpacity
+                  key={`debt-${debt.id}-${idx}`}
+                  style={styles.debtCard}
+                  onPress={() => { setSelectedDebt(debt); setDebtDetailVisible(true); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.debtHeader}>
+                    <View style={styles.debtInfo}>
+                      <Text style={styles.debtName}>💳 {debt.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                        <Text style={styles.debtAmount}>${debt.amount.toFixed(2)}</Text>
+                        {paid > 0 && (
+                          <Text style={{ fontSize: 11, color: Colors.textDim }}>of ${original.toFixed(2)}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.debtDetails}>
+                        {debt.interest}% APR • ${debt.payment}/mo • Due day {debt.dueDay || debt.due}
+                      </Text>
+                      {paid > 0 && (
+                        <Text style={{ fontSize: 11, color: Colors.success, marginTop: 2 }}>
+                          ${paid.toFixed(2)} paid off total
+                        </Text>
+                      )}
+                      {debt.payment > 0 && debt.interest > 0 && (
+                        <Text style={{ fontSize: 11, color: Colors.textDim, marginTop: 2 }}>
+                          Next pmt: ${nextPrincipal.toFixed(2)} principal + ${nextInterest.toFixed(2)} interest
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.budgetActions}>
+                      <TouchableOpacity onPress={() => openDebtModal(debt)} style={styles.iconButton}>
+                        <Edit2 size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteDebt(debt.id, debt.name)} style={styles.iconButton}>
+                        <Trash2 size={16} color={Colors.danger} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.budgetActions}>
-                    <TouchableOpacity
-                      onPress={() => openDebtModal(debt)}
-                      style={styles.iconButton}
-                    >
-                      <Edit2 size={16} color={Colors.primary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleDeleteDebt(debt.id, debt.name)}
-                      style={styles.iconButton}
-                    >
-                      <Trash2 size={16} color={Colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
+                  {paid > 0 && (
+                    <View style={{ marginTop: 8, height: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3 }}>
+                      <View style={{ width: `${progress}%`, height: 6, backgroundColor: Colors.success, borderRadius: 3 }} />
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={{ marginTop: 10, backgroundColor: Colors.danger, borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
+                    onPress={() => { setDebtPaymentTarget(debt); setDebtPaymentAmount(debt.payment.toString()); setDebtPaymentModalVisible(true); }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Make Payment</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            })
           )}
         </View>
 
@@ -2487,13 +2567,23 @@ export default function BudgetScreen() {
               onChangeText={setDebtPayment}
               keyboardType="numeric"
             />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Due date"
-              placeholderTextColor={Colors.textDim}
-              value={debtDue}
-              onChangeText={setDebtDue}
-            />
+            <Text style={{ color: Colors.textDim, fontSize: 13, marginTop: 8, marginBottom: 6 }}>Payment Due Day of Month</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                  <TouchableOpacity
+                    key={day}
+                    onPress={() => setDebtDueDay(day)}
+                    style={{
+                      width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: debtDueDay === day ? Colors.danger : 'rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <Text style={{ color: debtDueDay === day ? '#fff' : Colors.textDim, fontSize: 13, fontWeight: '600' }}>{day}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalButtonSecondary}
@@ -2513,6 +2603,165 @@ export default function BudgetScreen() {
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Make Payment Modal */}
+      <Modal
+        visible={debtPaymentModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDebtPaymentModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={0}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
+                <Text style={styles.modalTitle}>Make Payment</Text>
+                {debtPaymentTarget && (() => {
+                  const debt = debtPaymentTarget;
+                  const payAmt = parseFloat(debtPaymentAmount) || 0;
+                  const monthlyRate = debt.interest / 100 / 12;
+                  const interestCharge = parseFloat((debt.amount * monthlyRate).toFixed(2));
+                  const principalCharge = parseFloat(Math.max(0, payAmt - interestCharge).toFixed(2));
+                  return (
+                    <View style={{ marginBottom: 12, padding: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10 }}>
+                      <Text style={{ color: Colors.text, fontWeight: '700', fontSize: 15, marginBottom: 6 }}>{debt.name}</Text>
+                      <Text style={{ color: Colors.textDim, fontSize: 13 }}>Current balance: <Text style={{ color: Colors.danger }}>${debt.amount.toFixed(2)}</Text></Text>
+                      {payAmt > 0 && debt.interest > 0 && (
+                        <View style={{ marginTop: 10, gap: 4 }}>
+                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Interest portion: <Text style={{ color: Colors.danger }}>${interestCharge.toFixed(2)}</Text></Text>
+                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Principal portion: <Text style={{ color: Colors.success }}>${principalCharge.toFixed(2)}</Text></Text>
+                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>New balance: <Text style={{ color: Colors.text }}>${Math.max(0, debt.amount - principalCharge).toFixed(2)}</Text></Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Payment amount"
+                  placeholderTextColor={Colors.textDim}
+                  value={debtPaymentAmount}
+                  onChangeText={setDebtPaymentAmount}
+                  keyboardType="numeric"
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.modalButtonSecondary} onPress={() => setDebtPaymentModalVisible(false)}>
+                    <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleMakePayment}>
+                    <LinearGradient colors={[Colors.success, '#34d399']} style={styles.modalButtonGradient}>
+                      <Text style={styles.modalButtonText}>Confirm Payment</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Debt Detail Modal */}
+      <Modal
+        visible={debtDetailVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDebtDetailVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom, maxHeight: '85%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={styles.modalTitle}>{selectedDebt?.name}</Text>
+              <TouchableOpacity onPress={() => setDebtDetailVisible(false)}>
+                <X size={22} color={Colors.textDim} />
+              </TouchableOpacity>
+            </View>
+            {selectedDebt && (() => {
+              const debt = selectedDebt;
+              const original = debt.originalAmount || debt.amount;
+              const paid = debt.amountPaid || 0;
+              const progress = Math.min(100, (paid / original) * 100);
+              const monthlyRate = debt.interest / 100 / 12;
+              const nextInterest = parseFloat((debt.amount * monthlyRate).toFixed(2));
+              const nextPrincipal = parseFloat(Math.max(0, debt.payment - nextInterest).toFixed(2));
+              return (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={{ gap: 8, marginBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: Colors.textDim, fontSize: 13 }}>Original Amount</Text>
+                      <Text style={{ color: Colors.text, fontWeight: '700' }}>${original.toFixed(2)}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: Colors.textDim, fontSize: 13 }}>Current Balance</Text>
+                      <Text style={{ color: Colors.danger, fontWeight: '700' }}>${debt.amount.toFixed(2)}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: Colors.textDim, fontSize: 13 }}>Total Paid Off</Text>
+                      <Text style={{ color: Colors.success, fontWeight: '700' }}>${paid.toFixed(2)}</Text>
+                    </View>
+                    <View style={{ height: 8, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 4, marginVertical: 4 }}>
+                      <View style={{ width: `${progress}%`, height: 8, backgroundColor: Colors.success, borderRadius: 4 }} />
+                    </View>
+                    <Text style={{ color: Colors.textDim, fontSize: 12, textAlign: 'center' }}>{progress.toFixed(1)}% paid off</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                      <Text style={{ color: Colors.textDim, fontSize: 13 }}>Interest Rate</Text>
+                      <Text style={{ color: Colors.text, fontWeight: '700' }}>{debt.interest}% APR</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: Colors.textDim, fontSize: 13 }}>Monthly Payment</Text>
+                      <Text style={{ color: Colors.text, fontWeight: '700' }}>${debt.payment.toFixed(2)}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: Colors.textDim, fontSize: 13 }}>Due Day</Text>
+                      <Text style={{ color: Colors.text, fontWeight: '700' }}>Day {debt.dueDay || debt.due} of each month</Text>
+                    </View>
+                    {debt.interest > 0 && (
+                      <View style={{ marginTop: 8, padding: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, gap: 4 }}>
+                        <Text style={{ color: Colors.text, fontWeight: '700', fontSize: 13, marginBottom: 4 }}>Next Payment Breakdown</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Goes to Interest</Text>
+                          <Text style={{ color: Colors.danger, fontWeight: '600' }}>${nextInterest.toFixed(2)}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: Colors.textDim, fontSize: 13 }}>Goes to Principal</Text>
+                          <Text style={{ color: Colors.success, fontWeight: '600' }}>${nextPrincipal.toFixed(2)}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                  {(debt.paymentHistory?.length ?? 0) > 0 && (
+                    <View>
+                      <Text style={{ color: Colors.text, fontWeight: '700', fontSize: 14, marginBottom: 10 }}>Payment History</Text>
+                      {[...(debt.paymentHistory ?? [])].reverse().map((p, i) => (
+                        <View key={i} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 2 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={{ color: Colors.textDim, fontSize: 12 }}>{p.date}</Text>
+                            <Text style={{ color: Colors.text, fontWeight: '700', fontSize: 13 }}>${p.amount.toFixed(2)}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={{ color: Colors.textDim, fontSize: 11 }}>Principal: <Text style={{ color: Colors.success }}>${p.principal.toFixed(2)}</Text></Text>
+                            <Text style={{ color: Colors.textDim, fontSize: 11 }}>Interest: <Text style={{ color: Colors.danger }}>${p.interest.toFixed(2)}</Text></Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={{ marginTop: 16, backgroundColor: Colors.danger, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+                    onPress={() => {
+                      setDebtDetailVisible(false);
+                      setDebtPaymentTarget(selectedDebt);
+                      setDebtPaymentAmount(selectedDebt?.payment.toString() ?? '');
+                      setDebtPaymentModalVisible(true);
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Make Payment</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              );
+            })()}
+          </View>
         </View>
       </Modal>
 
@@ -2884,19 +3133,37 @@ export default function BudgetScreen() {
               {debts.length > 0 && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>💳 Debt Tracker</Text>
-                  {debts.map((debt, idx) => (
-                    <View key={`md-${debt.id}-${idx}`} style={styles.debtCard}>
-                      <View style={styles.debtHeader}>
-                        <View style={styles.debtInfo}>
-                          <Text style={styles.debtName}>💳 {debt.name}</Text>
-                          <Text style={styles.debtAmount}>${debt.amount.toFixed(2)}</Text>
-                          <Text style={styles.debtDetails}>
-                            {debt.interest}% APR • ${debt.payment}/mo • Due: {debt.due}
-                          </Text>
+                  {debts.map((debt, idx) => {
+                    const original = debt.originalAmount || debt.amount;
+                    const paid = debt.amountPaid || 0;
+                    const progress = Math.min(100, (paid / original) * 100);
+                    const monthlyRate = debt.interest / 100 / 12;
+                    const nextInterest = parseFloat((debt.amount * monthlyRate).toFixed(2));
+                    const nextPrincipal = parseFloat(Math.max(0, debt.payment - nextInterest).toFixed(2));
+                    return (
+                      <TouchableOpacity key={`md-${debt.id}-${idx}`} style={styles.debtCard} onPress={() => { setSelectedDebt(debt); setDebtDetailVisible(true); }} activeOpacity={0.7}>
+                        <View style={styles.debtHeader}>
+                          <View style={styles.debtInfo}>
+                            <Text style={styles.debtName}>💳 {debt.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                              <Text style={styles.debtAmount}>${debt.amount.toFixed(2)}</Text>
+                              {paid > 0 && <Text style={{ fontSize: 11, color: Colors.textDim }}>of ${original.toFixed(2)}</Text>}
+                            </View>
+                            <Text style={styles.debtDetails}>{debt.interest}% APR • ${debt.payment}/mo • Due day {debt.dueDay || debt.due}</Text>
+                            {paid > 0 && <Text style={{ fontSize: 11, color: Colors.success, marginTop: 2 }}>${paid.toFixed(2)} paid off total</Text>}
+                            {debt.payment > 0 && debt.interest > 0 && (
+                              <Text style={{ fontSize: 11, color: Colors.textDim, marginTop: 2 }}>Next: ${nextPrincipal.toFixed(2)} principal + ${nextInterest.toFixed(2)} interest</Text>
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    </View>
-                  ))}
+                        {paid > 0 && (
+                          <View style={{ marginTop: 8, height: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3 }}>
+                            <View style={{ width: `${progress}%`, height: 6, backgroundColor: Colors.success, borderRadius: 3 }} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
