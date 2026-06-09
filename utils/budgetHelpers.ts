@@ -264,8 +264,9 @@ export const MERCHANT_CATEGORIES: Record<string, string> = {
   'midway': 'Food & Dining',
   'coca cola': 'Food & Dining',
   // Health / Medical
-  'ysi': 'Health',
-  'lakeside': 'Health',
+  'ysi': 'Housing',
+  'lakeside': 'Housing',
+  'ysi*lakeside': 'Housing',
   '24 hour fitness': 'Health',
   '24hour fitness': 'Health',
   // Entertainment / Cinema
@@ -869,13 +870,17 @@ export const processCSVData = (
       continue;
     }
 
-    // Skip LOC sub-account entries entirely — the advance brings borrowed funds in,
-    // the repayment sends them back; neither is real income or spending. The actual
-    // purchases that triggered the overdraft are already counted as expenses.
+    // Skip LOC sub-account entries and credit card payment transfers.
+    // These shuffle money between accounts — the actual spending is already
+    // counted on the card or in the purchase rows.
     const isLOCEntry =
       /\bchkg\s+line\s+of\s+credit\b/.test(descLower) ||
       /\btransfer\s+to\s+chkg\s+line\s+of\s+credit\b/.test(descLower);
-    if (isLOCEntry) { skipped++; continue; }
+    const isCCPayment =
+      /\btransfer\s+to\s+credit\s+card\b/.test(descLower) ||
+      /\bcredit\s+card\s+payment\b/.test(descLower) ||
+      /\bcredit\s+card\s+pmt\b/.test(descLower);
+    if (isLOCEntry || isCCPayment) { skipped++; continue; }
 
     // Use type column override when present; otherwise infer from sign
     let isExpense = typeColOverride !== null ? typeColOverride === 'expense' : amountNum < 0;
