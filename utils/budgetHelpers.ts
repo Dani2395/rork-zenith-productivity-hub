@@ -758,6 +758,7 @@ export const processCSVData = (
         /\bxfer\b/.test(d) ||
         /\bfrom\s+(checking|savings|account)\b/.test(d) ||
         /\bto\s+(checking|savings|account)\b/.test(d) ||
+        // (line of credit handled below as debt expense)
         // Zelle / Venmo / cash-app person-to-person (not payroll)
         (/\bzelle\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
         (/\bvenmo\b/.test(d) && !/payroll|salary|direct\s*dep/.test(d)) ||
@@ -770,11 +771,20 @@ export const processCSVData = (
         /\batm\s+(deposit|cash)\b/.test(d);
 
       if (isPaymentOrTransfer) {
-        // Treat as an expense-offset / skip rather than income so it doesn't
-        // inflate the income total. Mark as expense so it either cancels out or
-        // gets skipped in the duplicate-month filter.
         skipped++;
         continue;
+      }
+
+      // Line of credit / HELOC draws are debt being taken on, not income — classify as expense
+      const d2 = description.toLowerCase();
+      if (
+        /line\s+of\s+credit/.test(d2) ||
+        /\bloc\s+(advance|draw|deposit)\b/.test(d2) ||
+        /\bheloc\b/.test(d2) ||
+        /credit\s+line\s+(advance|draw|deposit)/.test(d2) ||
+        /\badvance\b/.test(d2)
+      ) {
+        isExpense = true;
       }
     }
 
