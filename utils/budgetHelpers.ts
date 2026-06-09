@@ -963,10 +963,22 @@ export const processCSVData = (
       }
     }
 
-    // Always classify interest charges, fees, and POS/debit purchases as expense regardless of sign
+    // Always classify interest charges, fees, and POS/debit purchases as expense regardless of sign.
+    // BUT: never override items that are confirmed incoming money (deposits, payroll, credits).
     if (!isExpense) {
       const d = description.toLowerCase();
-      if (
+      const isConfirmedIncome =
+        /^deposit\s*[-–]/.test(d) ||
+        /\bnet\s+deposit\b/.test(d) ||
+        /\bdirect\s*dep/.test(d) ||
+        /\bpayroll\b/.test(d) ||
+        /\bsalary\b/.test(d) ||
+        /\bach\s+paid\s+from\b/.test(d) ||
+        /\brtp\s+paid\s+from\b/.test(d) ||
+        /\bpos\s+credit\s+adj/.test(d) ||   // bank crediting money back to account
+        /\bcredit\s+adjustment\b/.test(d);
+
+      if (!isConfirmedIncome && (
         /\binterest\b/.test(d) ||
         /\bfinance\s+charge\b/.test(d) ||
         /\bpos\s+(debit|purchase|transaction)\b/.test(d) ||
@@ -974,12 +986,10 @@ export const processCSVData = (
         /\bvisa\s+(debit|purchase)\b/.test(d) ||
         /\bcheck\s+card\b/.test(d) ||
         /\bpin\s+(purchase|debit)\b/.test(d) ||
-        // Purchases at known expense merchants even when amount is positive.
-        // Only use keys that map to expense categories — exclude Income/Transfers.
         Object.entries(MERCHANT_CATEGORIES).some(([k, cat]) =>
           cat !== 'Income' && cat !== 'Transfers' && d.includes(k)
         )
-      ) {
+      )) {
         isExpense = true;
       }
     }
