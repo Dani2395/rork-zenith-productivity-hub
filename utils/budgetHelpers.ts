@@ -910,8 +910,11 @@ export const processCSVData = (
         /\bvisa\s+(debit|purchase)\b/.test(d) ||
         /\bcheck\s+card\b/.test(d) ||
         /\bpin\s+(purchase|debit)\b/.test(d) ||
-        // Purchases at known expense merchants even when amount is positive
-        MERCHANT_CATEGORIES && Object.keys(MERCHANT_CATEGORIES).some(k => d.includes(k))
+        // Purchases at known expense merchants even when amount is positive.
+        // Only use keys that map to expense categories — exclude Income/Transfers.
+        Object.entries(MERCHANT_CATEGORIES).some(([k, cat]) =>
+          cat !== 'Income' && cat !== 'Transfers' && d.includes(k)
+        )
       ) {
         isExpense = true;
       }
