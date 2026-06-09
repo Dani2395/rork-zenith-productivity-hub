@@ -602,12 +602,13 @@ export const parseCSVLine = (line: string): string[] => {
   return fields;
 };
 
-export const detectColumns = (headerFields: string[]): { dateCol: number; descCol: number; amountCol: number; debitCol: number; creditCol: number } => {
+export const detectColumns = (headerFields: string[]): { dateCol: number; descCol: number; amountCol: number; debitCol: number; creditCol: number; typeCol: number } => {
   let dateCol = -1;
   let descCol = -1;
   let amountCol = -1;
   let debitCol = -1;
   let creditCol = -1;
+  let typeCol = -1;
 
   headerFields.forEach((h, i) => {
     const lower = h.toLowerCase().replace(/["']/g, '').trim();
@@ -621,6 +622,8 @@ export const detectColumns = (headerFields: string[]): { dateCol: number; descCo
       amountCol = i;
     } else if (descCol === -1 && (lower.includes('desc') || lower.includes('memo') || lower.includes('narrative') || lower.includes('detail') || lower.includes('payee') || lower.includes('name') || lower.includes('transaction'))) {
       descCol = i;
+    } else if (typeCol === -1 && (lower === 'type' || lower === 'transaction type' || lower === 'dr/cr' || lower === 'dr / cr' || lower === 'indicator')) {
+      typeCol = i;
     }
   });
 
@@ -632,7 +635,7 @@ export const detectColumns = (headerFields: string[]): { dateCol: number; descCo
     amountCol = headerFields.length > 2 ? 2 : (headerFields.length > 1 ? 1 : 0);
   }
 
-  return { dateCol, descCol, amountCol, debitCol, creditCol };
+  return { dateCol, descCol, amountCol, debitCol, creditCol, typeCol };
 };
 
 export interface ParsedTransaction {
@@ -792,8 +795,25 @@ export const processCSVData = (
       if (/^[\d.,]+-$/.test(s)) {
         return -(parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
       }
+      // DR/CR suffix: 100.00DR → -100.00 (debit = money out), 100.00CR → +100.00 (credit = money in)
+      const drCrMatch = s.match(/^([\d.,]+)\s*(DR|CR|db|cr)$/i);
+      if (drCrMatch) {
+        const val = parseFloat(drCrMatch[1].replace(/,/g, '')) || 0;
+        return /cr/i.test(drCrMatch[2]) ? val : -val;
+      }
       return parseFloat(s.replace(/[^0-9.\x2D]/g, '')) || 0;
     };
+
+    // Resolve type column value (Chase: "Debit"/"Credit", TD: "DR"/"CR", etc.)
+    let typeColOverride: 'income' | 'expense' | null = null;
+    if (cols.typeCol >= 0) {
+      const typeVal = (parts[cols.typeCol] ?? '').replace(/^"|"$/g, '').trim().toLowerCase();
+      if (typeVal === 'credit' || typeVal === 'cr' || typeVal === 'deposit' || typeVal === '+') {
+        typeColOverride = 'income';
+      } else if (typeVal === 'debit' || typeVal === 'dr' || typeVal === 'withdrawal' || typeVal === 'purchase' || typeVal === '-') {
+        typeColOverride = 'expense';
+      }
+    }
 
     let amountNum = 0;
     if (cols.debitCol >= 0 || cols.creditCol >= 0) {
@@ -808,6 +828,12 @@ export const processCSVData = (
       }
     } else if (cols.amountCol >= 0) {
       amountNum = parseSignedAmount(parts[cols.amountCol]);
+      // If a type column is present and the amount is positive (unsigned), use the type to determine sign
+      if (typeColOverride === 'expense' && amountNum > 0) {
+        amountNum = -amountNum;
+      } else if (typeColOverride === 'income' && amountNum < 0) {
+        amountNum = -amountNum;
+      }
     }
 
     if (!dateStr) {
@@ -821,7 +847,8 @@ export const processCSVData = (
       continue;
     }
 
-    let isExpense = amountNum < 0;
+    // Use type column override when present; otherwise infer from sign
+    let isExpense = typeColOverride !== null ? typeColOverride === 'expense' : amountNum < 0;
     const amount = Math.abs(amountNum);
     const date = parseDate(dateStr, statementYears.length > 0 ? statementYears : undefined, yearMonthMap.size > 0 ? yearMonthMap : undefined);
 
