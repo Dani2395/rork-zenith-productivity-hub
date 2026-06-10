@@ -2367,8 +2367,8 @@ export default function BudgetScreen() {
             return months.size <= 2 && amount > 35;
           };
 
-          // A charge amount is "recurring" (subscription) if it appears in 2+ different months
-          // Returns a Set of rounded amounts that are recurring for this key
+          // A charge amount is "recurring" (subscription) if it appears in the majority of months
+          // the service was charged — this distinguishes subscriptions from one-time purchases
           const getRecurringAmounts = (key: string): Set<number> => {
             const txs = allTxsBySubKey[key] ?? [];
             // bucket amounts within $3 of each other; each bucket maps to the set of months it appeared in
@@ -2378,8 +2378,11 @@ export default function BudgetScreen() {
               if (existing) { existing.months.add(t.date.substring(0, 7)); }
               else { buckets.push({ center: t.amount, months: new Set([t.date.substring(0, 7)]) }); }
             }
-            // Any bucket appearing in 2+ months = recurring subscription amount
-            return new Set(buckets.filter(b => b.months.size >= 2).map(b => b.center));
+            // Total distinct months this service was seen
+            const totalMonths = new Set(txs.map((t: Transaction) => t.date.substring(0, 7))).size;
+            // Require amount appears in majority of months (>50%), minimum 2
+            const threshold = Math.max(2, Math.ceil(totalMonths * 0.5));
+            return new Set(buckets.filter(b => b.months.size >= threshold).map(b => b.center));
           };
 
           // Collect all subscription keys with at least one transaction
