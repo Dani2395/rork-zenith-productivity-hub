@@ -294,7 +294,25 @@ export default function WorkoutScreen() {
       {activeTab === 'workouts' ? (
         <ScrollView style={styles.workoutList} showsVerticalScrollIndicator={false}>
           {sortedWorkouts.length === 0 ? (
-            <Text style={styles.emptyText}>No workouts logged yet</Text>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>💪</Text>
+              <Text style={styles.emptyStateHeading}>Log your first workout</Text>
+              <Text style={styles.emptyStateSubtitle}>Track your progress over time</Text>
+              <TouchableOpacity
+                style={styles.emptyStateButton}
+                onPress={() => {
+                  resetForm();
+                  setModalVisible(true);
+                }}
+              >
+                <LinearGradient
+                  colors={[Colors.primary, Colors.secondary]}
+                  style={styles.emptyStateButtonGradient}
+                >
+                  <Text style={styles.emptyStateButtonText}>+ Log Workout</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           ) : (
             sortedWorkouts.map(workout => (
             <View key={workout.id} style={styles.workoutCard}>
@@ -800,6 +818,41 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 20,
     fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center' as const,
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyStateIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  emptyStateHeading: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: Colors.textDim,
+    marginBottom: 20,
+    textAlign: 'center' as const,
+  },
+  emptyStateButton: {
+    borderRadius: 12,
+    overflow: 'hidden' as const,
+  },
+  emptyStateButtonGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    alignItems: 'center' as const,
+  },
+  emptyStateButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: 'white',
   },
   workoutCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',

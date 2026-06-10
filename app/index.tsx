@@ -1106,6 +1106,76 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
 
+          {/* Today Hero Card */}
+          {(() => {
+            const todayDate = new Date();
+            const todayKey = todayDate.toISOString().split('T')[0];
+            const dayName = todayDate.toLocaleDateString('en-US', { weekday: 'long' });
+            const dateLabel = todayDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+
+            const totalHabits = habits.length;
+            const completedHabits = habits.filter(h => habitCompletions[`${h.id}-${todayKey}`]).length;
+
+            const tasksDueToday = tasks.filter(t => t.date === todayKey && !t.completed).length;
+
+            const todayMoodEntries = moods[todayKey]?.entries;
+            const todayMood = todayMoodEntries && todayMoodEntries.length > 0
+              ? todayMoodEntries[todayMoodEntries.length - 1].emoji
+              : null;
+
+            return (
+              <LinearGradient
+                colors={['#1e1b4b', '#2d1b69', '#1a1a2e']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  borderRadius: 16,
+                  marginBottom: 16,
+                  padding: 16,
+                  maxHeight: 110,
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View>
+                    <Text style={{ fontSize: 11, color: Colors.textDim, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      {dayName}
+                    </Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.text, marginTop: 2 }}>
+                      {dateLabel}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                  <View style={{
+                    flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8,
+                    paddingVertical: 6, paddingHorizontal: 8, alignItems: 'center',
+                  }}>
+                    <Text style={{ fontSize: 11, color: Colors.text, fontWeight: '600' }}>
+                      {completedHabits} / {totalHabits} Habits
+                    </Text>
+                  </View>
+                  <View style={{
+                    flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8,
+                    paddingVertical: 6, paddingHorizontal: 8, alignItems: 'center',
+                  }}>
+                    <Text style={{ fontSize: 11, color: Colors.text, fontWeight: '600' }}>
+                      {tasksDueToday} Task{tasksDueToday !== 1 ? 's' : ''} Due
+                    </Text>
+                  </View>
+                  <View style={{
+                    flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8,
+                    paddingVertical: 6, paddingHorizontal: 8, alignItems: 'center',
+                  }}>
+                    {todayMood ? (
+                      <Text style={{ fontSize: 16 }}>{todayMood}</Text>
+                    ) : (
+                      <Text style={{ fontSize: 10, color: Colors.textDim, textAlign: 'center' }}>Log mood</Text>
+                    )}
+                  </View>
+                </View>
+              </LinearGradient>
+            );
+          })()}
 
           <View style={styles.card}>
             <View style={styles.cardTitleRow}>
@@ -1118,7 +1188,13 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
             {sortedPriorities.length === 0 ? (
-              <Text style={styles.emptyText}>No priorities set</Text>
+              <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                <Text style={{ fontSize: 24, marginBottom: 6 }}>🔥</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 4 }}>
+                  What&apos;s your #1 priority today?
+                </Text>
+                <Text style={{ fontSize: 12, color: Colors.textDim }}>Tap + to add</Text>
+              </View>
             ) : (
               sortedPriorities.map((priority, index) => (
                 <TouchableOpacity
@@ -1222,7 +1298,26 @@ export default function HomeScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>⭐ Today&apos;s Habits</Text>
             {habits.length === 0 ? (
-              <Text style={styles.emptyText}>No habits</Text>
+              <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                <Text style={{ fontSize: 24, marginBottom: 6 }}>⭐</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 4 }}>
+                  Build a streak — add your first habit
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/habits')}
+                  style={{
+                    marginTop: 6,
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    backgroundColor: Colors.primary,
+                    borderRadius: 20,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: Colors.text, fontWeight: '600' }}>
+                    Go to Habits →
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               habits.slice(0, 5).map(habit => {
                 const isCompleted = habitCompletions[`${habit.id}-${today}`];

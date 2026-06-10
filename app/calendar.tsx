@@ -1051,7 +1051,7 @@ const styles = StyleSheet.create({
   },
   calendarDay: {
     width: '14.28%',
-    aspectRatio: 1,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,

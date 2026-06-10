@@ -2761,8 +2761,43 @@ export default function BudgetScreen() {
                             </View>
                           ))}
                           {sorted.length === 0 && (
-                            <View style={{ alignItems: 'center', paddingVertical: 48 }}>
-                              <Text style={{ color: Colors.textDim, fontSize: 14, textAlign: 'center' }}>No active subscriptions.{'\n'}Tap + Add or upload a bank statement.</Text>
+                            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>No active subscriptions.{'\n'}Tap + Add or upload a bank statement.</Text>
+                              <Text style={{ color: Colors.textDim, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 12, alignSelf: 'flex-start' }}>POPULAR SUBSCRIPTIONS</Text>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%' }}>
+                                {[
+                                  { name: 'Netflix', amount: '15.99' },
+                                  { name: 'Spotify', amount: '9.99' },
+                                  { name: 'Hulu', amount: '7.99' },
+                                  { name: 'YouTube Premium', amount: '13.99' },
+                                  { name: 'Apple TV+', amount: '9.99' },
+                                  { name: 'Disney+', amount: '7.99' },
+                                ].map(item => (
+                                  <TouchableOpacity
+                                    key={item.name}
+                                    onPress={() => {
+                                      setAddSubName(item.name);
+                                      setAddSubAmount(item.amount);
+                                      setAddSubModalVisible(true);
+                                    }}
+                                    style={{
+                                      width: '47%',
+                                      backgroundColor: 'rgba(99,102,241,0.1)',
+                                      borderWidth: 1,
+                                      borderColor: 'rgba(99,102,241,0.25)',
+                                      borderRadius: 10,
+                                      paddingVertical: 10,
+                                      paddingHorizontal: 12,
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                    }}
+                                  >
+                                    <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>{item.name}</Text>
+                                    <Text style={{ color: Colors.primary, fontSize: 12, fontWeight: '700', marginLeft: 4 }}>${item.amount}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
                             </View>
                           )}
                         </>
