@@ -36,6 +36,14 @@ const HABIT_EMOJIS = [
   '⭐', '🔥', '💎', '🌟', '🐕', '🌸', '🎵', '✈️',
 ];
 
+const SUGGESTED_HABITS = [
+  { emoji: '💧', name: 'Drink water' },
+  { emoji: '📚', name: 'Read 20 min' },
+  { emoji: '🏃', name: 'Exercise' },
+  { emoji: '🧘', name: 'Meditate' },
+  { emoji: '😴', name: 'Sleep by 11pm' },
+];
+
 export default function HabitsScreen() {
   const { habits, habitCompletions, addHabit, updateHabit, deleteHabit, toggleHabitCompletion } = useData();
   const [modalVisible, setModalVisible] = useState(false);
@@ -421,7 +429,33 @@ export default function HabitsScreen() {
       {activeTab === 'habits' && (
       <ScrollView style={styles.habitList} showsVerticalScrollIndicator={false}>
         {habits.length === 0 ? (
-          <Text style={styles.emptyText}>No habits created yet</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyHeading}>Start building streaks</Text>
+            <Text style={styles.emptySubtitle}>Pick one to begin, or create your own</Text>
+            <View style={styles.suggestionChips}>
+              {SUGGESTED_HABITS.map(s => (
+                <TouchableOpacity
+                  key={s.name}
+                  style={styles.suggestionChip}
+                  onPress={() => {
+                    resetForm();
+                    setHabitName(s.name);
+                    setHabitIcon(s.emoji);
+                    setModalVisible(true);
+                  }}
+                >
+                  <Text style={styles.suggestionChipEmoji}>{s.emoji}</Text>
+                  <Text style={styles.suggestionChipText}>{s.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={styles.createCustomButton}
+              onPress={() => { resetForm(); setModalVisible(true); }}
+            >
+              <Text style={styles.createCustomButtonText}>+ Create Custom</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           habits.map(habit => {
             const stats = getHabitStats(habit.id);
@@ -431,6 +465,13 @@ export default function HabitsScreen() {
 
             return (
               <View key={habit.id} style={styles.habitCard}>
+                {/* Streak badge — top-right corner */}
+                {streak > 0 && (
+                  <View style={styles.streakBadge}>
+                    <Text style={styles.streakBadgeText}>🔥 {streak}d</Text>
+                  </View>
+                )}
+
                 <View style={styles.habitHeader}>
                   {/* Left: custom icon/image or progress ring */}
                   {hasCustomIcon ? (
@@ -473,7 +514,6 @@ export default function HabitsScreen() {
                   <View style={styles.habitInfo}>
                     <Text style={styles.habitName}>{habit.name}</Text>
                     <Text style={styles.habitStats}>{stats.completed}/{stats.total} days completed</Text>
-                    {streak > 0 && <Text style={styles.streakText}>🔥 {streak} day streak!</Text>}
                   </View>
 
                   {/* Edit button */}
@@ -510,21 +550,29 @@ export default function HabitsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.weekView}>
+                {/* 7-day compact dot strip */}
+                <View style={styles.dotStrip}>
                   {[...Array(7)].map((_, i) => {
                     const date = new Date();
                     date.setDate(date.getDate() - (6 - i));
                     const dateStr = date.toISOString().split('T')[0];
-                    const isCompleted = habitCompletions[`${habit.id}-${dateStr}`];
+                    const isCompleted = !!habitCompletions[`${habit.id}-${dateStr}`];
                     const isToday = dateStr === today;
+                    const isFuture = dateStr > today;
                     return (
-                      <View key={i} style={styles.weekDay}>
-                        <Text style={styles.weekDayLabel}>
+                      <View key={i} style={styles.dotDay}>
+                        <Text style={styles.dotDayLabel}>
                           {date.toLocaleDateString('en-US', { weekday: 'narrow' })}
                         </Text>
-                        <View style={[styles.weekDayDot, isCompleted && styles.weekDayDotCompleted, isToday && styles.weekDayDotToday]}>
-                          {isCompleted && <Check size={12} color="white" />}
-                        </View>
+                        <View
+                          style={[
+                            styles.dot,
+                            isCompleted && styles.dotCompleted,
+                            !isCompleted && !isFuture && !isToday && styles.dotMissed,
+                            isToday && !isCompleted && styles.dotToday,
+                            isFuture && styles.dotFuture,
+                          ]}
+                        />
                       </View>
                     );
                   })}
@@ -681,11 +729,64 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
-  emptyText: {
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 48,
+    paddingBottom: 32,
+    paddingHorizontal: 8,
+  },
+  emptyHeading: {
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 8,
     textAlign: 'center',
-    color: Colors.textDim,
-    marginTop: 40,
+  },
+  emptySubtitle: {
     fontSize: 14,
+    color: Colors.textDim,
+    marginBottom: 28,
+    textAlign: 'center',
+  },
+  suggestionChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 24,
+  },
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  suggestionChipEmoji: {
+    fontSize: 18,
+  },
+  suggestionChipText: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '500' as const,
+  },
+  createCustomButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '18',
+  },
+  createCustomButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.primary,
   },
   habitCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -694,6 +795,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    position: 'relative',
+  },
+  // Streak badge overlaid top-right of card
+  streakBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: Colors.warning + '22',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.warning + '55',
+    zIndex: 1,
+  },
+  streakBadgeText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: Colors.warning,
   },
   habitHeader: {
     flexDirection: 'row',
@@ -822,36 +942,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  weekView: {
+  // 7-day compact dot strip
+  dotStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 16,
+    marginTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
-  weekDay: {
+  dotDay: {
     alignItems: 'center',
+    gap: 4,
   },
-  weekDayLabel: {
-    fontSize: 11,
+  dotDayLabel: {
+    fontSize: 10,
     color: Colors.textDim,
-    marginBottom: 6,
   },
-  weekDayDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  weekDayDotCompleted: {
+  dotCompleted: {
     backgroundColor: Colors.success,
   },
-  weekDayDotToday: {
-    borderWidth: 2,
+  dotMissed: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  dotToday: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1.5,
     borderColor: Colors.primary,
+  },
+  dotFuture: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   // Modal
   modalOverlay: {
