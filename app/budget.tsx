@@ -137,7 +137,6 @@ export default function BudgetScreen() {
   const [monthlyIncomeGoal, setMonthlyIncomeGoal] = useState<string>('');
   const [incomeGoalEditing, setIncomeGoalEditing] = useState(false);
   const [incomeGoalDraft, setIncomeGoalDraft] = useState('');
-  const [assignExpanded, setAssignExpanded] = useState(false);
 
   // Subscriptions state
   const [subsBudgetGoal, setSubsBudgetGoal] = useState<string>('');
@@ -1561,108 +1560,97 @@ export default function BudgetScreen() {
 
           return (
             <View style={zbStyles.card}>
-              <TouchableOpacity
-                style={zbStyles.cardHeader}
-                onPress={() => setAssignExpanded(prev => !prev)}
-                activeOpacity={0.7}
-              >
+              <View style={zbStyles.cardHeader}>
                 <View style={zbStyles.cardHeaderLeft}>
                   <DollarSign size={16} color={Colors.primary} />
                   <Text style={zbStyles.cardTitle}>Assign Every Dollar</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  {isFullyAssigned && <CheckCircle size={16} color={Colors.success} />}
-                  {assignExpanded ? <ChevronUp size={16} color={Colors.textDim} /> : <ChevronDown size={16} color={Colors.textDim} />}
-                </View>
-              </TouchableOpacity>
+                {isFullyAssigned && <CheckCircle size={16} color={Colors.success} />}
+              </View>
 
-              {assignExpanded && (
+              <Text style={zbStyles.cardSubtitle}>
+                Set your monthly income, then assign every dollar to a budget category. When nothing is left unassigned, your budget is complete.
+              </Text>
+
+              {/* Income goal row */}
+              <View style={zbStyles.incomeRow}>
+                <Text style={zbStyles.incomeLabel}>Monthly income goal</Text>
+                {incomeGoalEditing ? (
+                  <View style={zbStyles.incomeInputRow}>
+                    <Text style={zbStyles.currencyPrefix}>$</Text>
+                    <TextInput
+                      style={zbStyles.incomeInput}
+                      value={incomeGoalDraft}
+                      onChangeText={setIncomeGoalDraft}
+                      keyboardType="decimal-pad"
+                      autoFocus
+                      selectTextOnFocus
+                      placeholder="0"
+                      placeholderTextColor={Colors.textDim}
+                    />
+                    <TouchableOpacity
+                      style={zbStyles.incomeConfirm}
+                      onPress={() => {
+                        saveIncomeGoal(incomeGoalDraft);
+                        setIncomeGoalEditing(false);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                    >
+                      <Text style={zbStyles.incomeConfirmText}>Set</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={zbStyles.incomeValueBtn}
+                    onPress={() => { setIncomeGoalDraft(monthlyIncomeGoal); setIncomeGoalEditing(true); }}
+                  >
+                    <Text style={[zbStyles.incomeValue, !monthlyIncomeGoal && { color: Colors.textDim }]}>
+                      {monthlyIncomeGoal ? `$${parseFloat(monthlyIncomeGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Tap to set'}
+                    </Text>
+                    <Edit2 size={12} color={Colors.textDim} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {goal > 0 && (
                 <>
-                  <Text style={zbStyles.cardSubtitle}>
-                    Set your monthly income, then assign every dollar to a budget category. When nothing is left unassigned, your budget is complete.
-                  </Text>
-
-                  {/* Income goal row */}
-                  <View style={zbStyles.incomeRow}>
-                    <Text style={zbStyles.incomeLabel}>Monthly income goal</Text>
-                    {incomeGoalEditing ? (
-                      <View style={zbStyles.incomeInputRow}>
-                        <Text style={zbStyles.currencyPrefix}>$</Text>
-                        <TextInput
-                          style={zbStyles.incomeInput}
-                          value={incomeGoalDraft}
-                          onChangeText={setIncomeGoalDraft}
-                          keyboardType="decimal-pad"
-                          autoFocus
-                          selectTextOnFocus
-                          placeholder="0"
-                          placeholderTextColor={Colors.textDim}
-                        />
-                        <TouchableOpacity
-                          style={zbStyles.incomeConfirm}
-                          onPress={() => {
-                            saveIncomeGoal(incomeGoalDraft);
-                            setIncomeGoalEditing(false);
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          }}
-                        >
-                          <Text style={zbStyles.incomeConfirmText}>Set</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={zbStyles.incomeValueBtn}
-                        onPress={() => { setIncomeGoalDraft(monthlyIncomeGoal); setIncomeGoalEditing(true); }}
-                      >
-                        <Text style={[zbStyles.incomeValue, !monthlyIncomeGoal && { color: Colors.textDim }]}>
-                          {monthlyIncomeGoal ? `$${parseFloat(monthlyIncomeGoal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Tap to set'}
-                        </Text>
-                        <Edit2 size={12} color={Colors.textDim} />
-                      </TouchableOpacity>
-                    )}
+                  {/* Assignment bar */}
+                  <View style={zbStyles.barBg}>
+                    <View style={[zbStyles.barFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: barColor }]} />
                   </View>
 
-                  {goal > 0 && (
-                    <>
-                      {/* Assignment bar */}
-                      <View style={zbStyles.barBg}>
-                        <View style={[zbStyles.barFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: barColor }]} />
-                      </View>
+                  {/* Stats row */}
+                  <View style={zbStyles.statsRow}>
+                    <View style={zbStyles.statItem}>
+                      <Text style={[zbStyles.statValue, { color: Colors.primary }]}>${totalBudgeted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                      <Text style={zbStyles.statLabel}>Budgeted</Text>
+                    </View>
+                    <View style={zbStyles.statDivider} />
+                    <View style={zbStyles.statItem}>
+                      <Text style={[zbStyles.statValue, { color: barColor }]}>
+                        {isOverAssigned ? '-' : ''}${Math.abs(unassigned).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                      <Text style={zbStyles.statLabel}>{isOverAssigned ? 'Over budget' : isFullyAssigned ? 'Fully assigned!' : 'Left to assign'}</Text>
+                    </View>
+                    <View style={zbStyles.statDivider} />
+                    <View style={zbStyles.statItem}>
+                      <Text style={[zbStyles.statValue, { color: Colors.text }]}>{Math.round(pct * 100)}%</Text>
+                      <Text style={zbStyles.statLabel}>Assigned</Text>
+                    </View>
+                  </View>
 
-                      {/* Stats row */}
-                      <View style={zbStyles.statsRow}>
-                        <View style={zbStyles.statItem}>
-                          <Text style={[zbStyles.statValue, { color: Colors.primary }]}>${totalBudgeted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-                          <Text style={zbStyles.statLabel}>Budgeted</Text>
-                        </View>
-                        <View style={zbStyles.statDivider} />
-                        <View style={zbStyles.statItem}>
-                          <Text style={[zbStyles.statValue, { color: barColor }]}>
-                            {isOverAssigned ? '-' : ''}${Math.abs(unassigned).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </Text>
-                          <Text style={zbStyles.statLabel}>{isOverAssigned ? 'Over budget' : isFullyAssigned ? 'Fully assigned!' : 'Left to assign'}</Text>
-                        </View>
-                        <View style={zbStyles.statDivider} />
-                        <View style={zbStyles.statItem}>
-                          <Text style={[zbStyles.statValue, { color: Colors.text }]}>{Math.round(pct * 100)}%</Text>
-                          <Text style={zbStyles.statLabel}>Assigned</Text>
-                        </View>
-                      </View>
+                  {isOverAssigned && (
+                    <View style={zbStyles.warningBanner}>
+                      <TriangleAlert size={14} color={Colors.danger} />
+                      <Text style={zbStyles.warningText}>You've budgeted ${Math.abs(unassigned).toFixed(2)} more than your income goal. Reduce a category or raise your income.</Text>
+                    </View>
+                  )}
 
-                      {isOverAssigned && (
-                        <View style={zbStyles.warningBanner}>
-                          <TriangleAlert size={14} color={Colors.danger} />
-                          <Text style={zbStyles.warningText}>You've budgeted ${Math.abs(unassigned).toFixed(2)} more than your income goal. Reduce a category or raise your income.</Text>
-                        </View>
-                      )}
-
-                      {isFullyAssigned && (
-                        <View style={zbStyles.successBanner}>
-                          <CheckCircle size={14} color={Colors.success} />
-                          <Text style={zbStyles.successText}>Every dollar is assigned. Your zero-based budget is complete.</Text>
-                        </View>
-                      )}
-                    </>
+                  {isFullyAssigned && (
+                    <View style={zbStyles.successBanner}>
+                      <CheckCircle size={14} color={Colors.success} />
+                      <Text style={zbStyles.successText}>Every dollar is assigned. Your zero-based budget is complete.</Text>
+                    </View>
                   )}
                 </>
               )}
@@ -1723,7 +1711,7 @@ export default function BudgetScreen() {
           </TouchableOpacity>
           <View style={styles.uploadSecondaryRow}>
             <TouchableOpacity
-              style={[styles.uploadSecondaryButton, { borderColor: Colors.border }]}
+              style={[styles.uploadSecondaryButton, { borderColor: Colors.primary }]}
               onPress={() => setWidgetModalVisible(true)}
             >
               <Bell size={15} color={Colors.primary} />
