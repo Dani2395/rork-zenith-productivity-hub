@@ -146,12 +146,22 @@ export default function BudgetScreen() {
   const [expandedSubGroups, setExpandedSubGroups] = useState<Set<string>>(new Set(['Streaming', 'Music & Audio', 'Shopping', 'Software', 'Fitness', 'Other']));
   const [subsViewMonth, setSubsViewMonth] = useState<string>('');
   const [expandedSubKeys, setExpandedSubKeys] = useState<Set<string>>(new Set());
+  const [manualSubs, setManualSubs] = useState<{ id: string; name: string; amount: number; group: string; frequency: 'monthly' | 'yearly' }[]>([]);
+  const [dismissedSubKeys, setDismissedSubKeys] = useState<Set<string>>(new Set());
+  const [addSubModalVisible, setAddSubModalVisible] = useState(false);
+  const [addSubName, setAddSubName] = useState('');
+  const [addSubAmount, setAddSubAmount] = useState('');
+  const [addSubGroup, setAddSubGroup] = useState('Other');
+  const [addSubFrequency, setAddSubFrequency] = useState<'monthly' | 'yearly'>('monthly');
+  const [showDismissed, setShowDismissed] = useState(false);
   useEffect(() => {
     AsyncStorage.getItem('monthlyIncomeGoal').then(v => { if (v) setMonthlyIncomeGoal(v); });
     AsyncStorage.getItem('subsBudgetGoal').then(v => { if (v) setSubsBudgetGoal(v); });
     AsyncStorage.getItem('cancelledSubs').then(v => { if (v) { try { setCancelledSubs(JSON.parse(v)); } catch {} } });
     AsyncStorage.getItem('monthlyEndingBalances').then(v => { if (v) { try { setMonthlyEndingBalances(JSON.parse(v)); } catch {} } });
     AsyncStorage.getItem('statementEndingBalance').then(v => { if (v !== null) setStatementEndingBalance(parseFloat(v)); });
+    AsyncStorage.getItem('manualSubs').then(v => { if (v) { try { setManualSubs(JSON.parse(v)); } catch {} } });
+    AsyncStorage.getItem('dismissedSubKeys').then(v => { if (v) { try { setDismissedSubKeys(new Set(JSON.parse(v))); } catch {} } });
   }, []);
 
   const saveIncomeGoal = async (value: string) => {
@@ -251,6 +261,39 @@ export default function BudgetScreen() {
     delete updated[key];
     setCancelledSubs(updated);
     AsyncStorage.setItem('cancelledSubs', JSON.stringify(updated));
+  };
+
+  const handleDismissSub = (key: string) => {
+    const updated = new Set([...dismissedSubKeys, key]);
+    setDismissedSubKeys(updated);
+    AsyncStorage.setItem('dismissedSubKeys', JSON.stringify([...updated]));
+  };
+
+  const handleRestoreDismissedSub = (key: string) => {
+    const updated = new Set([...dismissedSubKeys].filter(k => k !== key));
+    setDismissedSubKeys(updated);
+    AsyncStorage.setItem('dismissedSubKeys', JSON.stringify([...updated]));
+  };
+
+  const handleAddManualSub = () => {
+    const amount = parseFloat(addSubAmount);
+    if (!addSubName.trim() || isNaN(amount) || amount <= 0) return;
+    const id = `manual_${Date.now()}`;
+    const sub = { id, name: addSubName.trim(), amount, group: addSubGroup, frequency: addSubFrequency };
+    const updated = [...manualSubs, sub];
+    setManualSubs(updated);
+    AsyncStorage.setItem('manualSubs', JSON.stringify(updated));
+    setAddSubModalVisible(false);
+    setAddSubName('');
+    setAddSubAmount('');
+    setAddSubGroup('Other');
+    setAddSubFrequency('monthly');
+  };
+
+  const handleDeleteManualSub = (id: string) => {
+    const updated = manualSubs.filter(s => s.id !== id);
+    setManualSubs(updated);
+    AsyncStorage.setItem('manualSubs', JSON.stringify(updated));
   };
 
   // For each subscription key, get every matching transaction across ALL months
@@ -2385,7 +2428,7 @@ export default function BudgetScreen() {
             return new Set(buckets.filter(b => b.months.size >= threshold).map(b => b.center));
           };
 
-          // Collect all subscription keys with at least one transaction
+          // Collect all subscription keys with at least one recurring transaction
           const subEntries: {
             key: string; description: string; amount: number; group: string; emoji: string; color: string;
             subCharges: { description: string; amount: number }[];
@@ -2394,10 +2437,14 @@ export default function BudgetScreen() {
 
           for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
             for (const kw of keywords) {
+              if (dismissedSubKeys.has(kw)) continue;
               const txs = allTxsBySubKey[kw] ?? [];
               if (txs.length === 0) continue;
               const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
               const recurringAmounts = getRecurringAmounts(kw);
+
+              // Only proceed if there are confirmed recurring amounts (2+ months)
+              if (recurringAmounts.size === 0) continue;
 
               // Get this month's charges
               const latestMonth = sorted[0].date.substring(0, 7);
@@ -2409,16 +2456,13 @@ export default function BudgetScreen() {
               const oneTimePurchases: { description: string; amount: number }[] = [];
 
               for (const t of monthTxs) {
-                const isRecurring = recurringAmounts.size === 0 // if no history yet, treat all as subscriptions
-                  || [...recurringAmounts].some(r => Math.abs(r - t.amount) <= 3);
+                const isRecurring = [...recurringAmounts].some(r => Math.abs(r - t.amount) <= 3);
                 if (isRecurring) subCharges.push({ description: t.description ?? kw, amount: t.amount });
                 else oneTimePurchases.push({ description: t.description ?? kw, amount: t.amount });
               }
 
-              if (subCharges.length === 0 && monthTxs.length > 0) {
-                // No recurring charges this month — show the charge anyway
-                subCharges.push({ description: sorted[0].description ?? kw, amount: sorted[0].amount });
-              }
+              // Skip if there are no actual recurring charges this month
+              if (subCharges.length === 0) continue;
 
               // Display amount = average of sub charges this month
               const displayAmt = subCharges.reduce((s, c) => s + c.amount, 0) / subCharges.length;
@@ -2427,12 +2471,15 @@ export default function BudgetScreen() {
             }
           }
 
-          // Compute total monthly cost — sum of all subscription charges this month
+          // Compute total monthly cost — auto-detected + manual subs
           let totalMonthly = 0;
           for (const entry of subEntries) {
             if (cancelledSubs[entry.key]) continue;
             const total = entry.subCharges.reduce((s, c) => s + c.amount, 0);
             totalMonthly += isYearly(entry.key, entry.amount) ? total / 12 : total;
+          }
+          for (const ms of manualSubs) {
+            totalMonthly += ms.frequency === 'yearly' ? ms.amount / 12 : ms.amount;
           }
 
           // Group by category
@@ -2442,15 +2489,68 @@ export default function BudgetScreen() {
             grouped[entry.group].push(entry);
           }
 
+          // Collect dismissed entries for the hidden section
+          const dismissedEntries: { key: string; description: string; group: string }[] = [];
+          for (const [groupName, { keywords }] of Object.entries(SUB_GROUPS)) {
+            for (const kw of keywords) {
+              if (!dismissedSubKeys.has(kw)) continue;
+              const txs = allTxsBySubKey[kw] ?? [];
+              if (txs.length === 0) continue;
+              const latest = [...txs].sort((a, b) => b.date.localeCompare(a.date))[0];
+              dismissedEntries.push({ key: kw, description: latest.description ?? kw, group: groupName });
+            }
+          }
+
+          const totalActive = subEntries.filter(e => !cancelledSubs[e.key]).length + manualSubs.length;
+
           return (
             <View style={{ padding: 16 }}>
               {/* Total monthly header */}
               <View style={{ backgroundColor: '#1a1a24', borderRadius: 16, padding: 20, marginBottom: 16, alignItems: 'center' }}>
                 <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 4 }}>Est. Monthly Cost</Text>
                 <Text style={{ color: Colors.primary, fontSize: 32, fontWeight: '700' }}>${totalMonthly.toFixed(2)}</Text>
-                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{subEntries.filter(e => !cancelledSubs[e.key]).length} active • ${(totalMonthly * 12).toFixed(0)}/yr</Text>
+                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{totalActive} active • ${(totalMonthly * 12).toFixed(0)}/yr</Text>
               </View>
 
+              {/* Add Subscription button */}
+              <TouchableOpacity
+                onPress={() => setAddSubModalVisible(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary + '22', borderWidth: 1, borderColor: Colors.primary + '55', borderRadius: 12, padding: 12, marginBottom: 20 }}
+              >
+                <Plus size={16} color={Colors.primary} />
+                <Text style={{ color: Colors.primary, fontSize: 14, fontWeight: '600' }}>Add Subscription Manually</Text>
+              </TouchableOpacity>
+
+              {/* Manual subscriptions */}
+              {manualSubs.length > 0 && (
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 }}>➕ Manually Added</Text>
+                  {manualSubs.map(ms => (
+                    <View key={ms.id} style={{ backgroundColor: '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 4 }}>{ms.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ color: Colors.primary, fontSize: 16, fontWeight: '700' }}>${ms.amount.toFixed(2)}{ms.frequency === 'yearly' ? '/yr' : '/mo'}</Text>
+                          <View style={{ backgroundColor: ms.frequency === 'yearly' ? '#f59e0b22' : '#34d39922', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ color: ms.frequency === 'yearly' ? '#f59e0b' : Colors.success, fontSize: 10, fontWeight: '700' }}>{ms.frequency === 'yearly' ? 'YEARLY' : 'MONTHLY'}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => Alert.alert('Remove Subscription', `Remove "${ms.name}" from your list?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Remove', style: 'destructive', onPress: () => handleDeleteManualSub(ms.id) },
+                        ])}
+                        style={{ padding: 8 }}
+                      >
+                        <X size={16} color={Colors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Auto-detected subscriptions by group */}
               {Object.entries(grouped).map(([groupName, entries]) => (
                 <View key={groupName} style={{ marginBottom: 20 }}>
                   <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 }}>
@@ -2488,14 +2588,25 @@ export default function BudgetScreen() {
                                 </Text>
                               </View>
                               {ci === 0 && (
-                                <TouchableOpacity
-                                  onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
-                                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: cancelled ? Colors.success + '22' : Colors.danger + '22' }}
-                                >
-                                  <Text style={{ color: cancelled ? Colors.success : Colors.danger, fontSize: 12, fontWeight: '600' }}>
-                                    {cancelled ? 'Restore' : 'Cancel'}
-                                  </Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <TouchableOpacity
+                                    onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
+                                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: cancelled ? Colors.success + '22' : Colors.danger + '22' }}
+                                  >
+                                    <Text style={{ color: cancelled ? Colors.success : Colors.danger, fontSize: 12, fontWeight: '600' }}>
+                                      {cancelled ? 'Restore' : 'Cancel'}
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() => Alert.alert('Hide Subscription', `Hide "${charge.description}" from this list? You can restore it from the Hidden section.`, [
+                                      { text: 'Keep', style: 'cancel' },
+                                      { text: 'Hide', style: 'destructive', onPress: () => handleDismissSub(entry.key) },
+                                    ])}
+                                    style={{ padding: 6 }}
+                                  >
+                                    <X size={14} color={Colors.textDim} />
+                                  </TouchableOpacity>
+                                </View>
                               )}
                             </View>
                           );
@@ -2517,11 +2628,138 @@ export default function BudgetScreen() {
                   })}
                 </View>
               ))}
+
+              {/* Empty state */}
+              {subEntries.length === 0 && manualSubs.length === 0 && (
+                <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                  <Text style={{ color: Colors.textDim, fontSize: 14, textAlign: 'center' }}>
+                    No recurring subscriptions detected yet.{'\n'}Upload a bank statement or add one manually above.
+                  </Text>
+                </View>
+              )}
+
+              {/* Hidden / dismissed subscriptions */}
+              {dismissedEntries.length > 0 && (
+                <View style={{ marginTop: 8, marginBottom: 20 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowDismissed(v => !v)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}
+                  >
+                    <Text style={{ color: Colors.textDim, fontSize: 13, fontWeight: '600' }}>Hidden ({dismissedEntries.length})</Text>
+                    <Text style={{ color: Colors.textDim, fontSize: 12 }}>{showDismissed ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {showDismissed && dismissedEntries.map(de => (
+                    <View key={de.key} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: Colors.textDim, fontSize: 13 }} numberOfLines={1}>{de.description}</Text>
+                        <Text style={{ color: Colors.textDim, fontSize: 11, marginTop: 2 }}>{de.group}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleRestoreDismissedSub(de.key)}
+                        style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: Colors.success + '22' }}
+                      >
+                        <Text style={{ color: Colors.success, fontSize: 12, fontWeight: '600' }}>Restore</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           );
         })()}
       </ScrollView>
       )}
+
+      {/* Add Subscription Modal */}
+      <Modal
+        visible={addSubModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddSubModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
+                <Text style={styles.modalTitle}>Add Subscription</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Service name (e.g. Netflix)"
+                  placeholderTextColor={Colors.textDim}
+                  value={addSubName}
+                  onChangeText={setAddSubName}
+                />
+                <TextInput
+                  style={[styles.modalInput, styles.amountInput]}
+                  placeholder="Amount"
+                  placeholderTextColor={Colors.textDim}
+                  value={addSubAmount}
+                  onChangeText={setAddSubAmount}
+                  keyboardType="numeric"
+                />
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Billing Frequency</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                  {(['monthly', 'yearly'] as const).map(freq => (
+                    <TouchableOpacity
+                      key={freq}
+                      onPress={() => setAddSubFrequency(freq)}
+                      style={{
+                        flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+                        backgroundColor: addSubFrequency === freq ? Colors.primary : 'transparent',
+                        borderWidth: 1,
+                        borderColor: addSubFrequency === freq ? Colors.primary : Colors.border,
+                      }}
+                    >
+                      <Text style={{ color: addSubFrequency === freq ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>
+                        {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {Object.entries(SUB_GROUPS).map(([name, def]) => (
+                      <TouchableOpacity
+                        key={name}
+                        onPress={() => setAddSubGroup(name)}
+                        style={{
+                          paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                          backgroundColor: addSubGroup === name ? Colors.primary : 'transparent',
+                          borderWidth: 1,
+                          borderColor: addSubGroup === name ? Colors.primary : Colors.border,
+                        }}
+                      >
+                        <Text style={{ color: addSubGroup === name ? '#fff' : Colors.textDim, fontSize: 13 }}>
+                          {def.emoji} {name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.modalButtonSecondary} onPress={() => setAddSubModalVisible(false)}>
+                    <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleAddManualSub}>
+                    <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.modalButtonGradient}>
+                      <Text style={styles.modalButtonText}>Add</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       <Modal
         visible={budgetModalVisible}
