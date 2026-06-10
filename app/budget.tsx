@@ -983,6 +983,27 @@ export default function BudgetScreen() {
     ]);
   };
 
+  const handleClearMonth = (monthKey: string) => {
+    const count = transactions.filter(t => t.date.startsWith(monthKey)).length;
+    Alert.alert(
+      `Delete ${monthKey}`,
+      `This will permanently delete all ${count} transaction${count !== 1 ? 's' : ''} for ${monthKey}. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            const ids = transactions.filter(t => t.date.startsWith(monthKey)).map(t => t.id);
+            ids.forEach(id => deleteTransaction(id));
+            if (monthDetailVisible && selectedMonthKey === monthKey) setMonthDetailVisible(false);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
   const openDebtModal = (debt?: Debt) => {
     if (debt) {
       setEditingId(debt.id);
@@ -1713,21 +1734,39 @@ export default function BudgetScreen() {
             <TouchableOpacity
               style={[styles.uploadSecondaryButton, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}
               onPress={() => {
-                Alert.alert(
-                  'Clear All Data',
-                  'This will delete all transactions and reset budget spending to $0. This cannot be undone.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Clear All',
-                      style: 'destructive',
-                      onPress: () => {
-                        clearAllTransactions();
-                        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      },
-                    },
-                  ]
-                );
+                const months = [...new Set(transactions.map(t => t.date.slice(0, 7)))].sort().reverse();
+                if (months.length === 0) {
+                  Alert.alert('No Data', 'There are no transactions to delete.');
+                  return;
+                }
+                const buttons: { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }[] = months.map(m => ({
+                  text: `Delete ${m} (${transactions.filter(t => t.date.startsWith(m)).length} transactions)`,
+                  style: 'destructive' as const,
+                  onPress: () => handleClearMonth(m),
+                }));
+                buttons.push({
+                  text: 'Clear ALL Data',
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      'Clear All Data',
+                      'This will delete every transaction and reset budget spending to $0. This cannot be undone.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Clear All',
+                          style: 'destructive',
+                          onPress: () => {
+                            clearAllTransactions();
+                            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          },
+                        },
+                      ]
+                    );
+                  },
+                });
+                buttons.push({ text: 'Cancel', style: 'cancel' });
+                Alert.alert('Delete Transactions', 'Choose what to delete:', buttons);
               }}
             >
               <RotateCcw size={15} color={Colors.danger} />
@@ -2474,40 +2513,50 @@ export default function BudgetScreen() {
                                 {quarter.months.map((month, idx) => {
                                   const hasMonthData = month.transactions.length > 0;
                                   return (
-                                    <TouchableOpacity
-                                      key={`${qKey}-${idx}`}
-                                      style={[styles.monthCard, !hasMonthData && styles.monthCardEmpty]}
-                                      onPress={() => hasMonthData ? openMonthDetail(month.key) : null}
-                                      activeOpacity={hasMonthData ? 0.7 : 1}
-                                    >
-                                      <Text style={[styles.monthCardTitle, !hasMonthData && { color: Colors.textDim }]}>{month.key}</Text>
-                                      {hasMonthData ? (
-                                        <>
-                                          <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Income:</Text>
-                                            <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
-                                          </View>
-                                          <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Expense:</Text>
-                                            <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
-                                          </View>
-                                          <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Cashflow:</Text>
-                                            <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
-                                              {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
-                                            </Text>
-                                          </View>
-                                          {monthlyEndingBalances[month.key] !== undefined && (
-                                            <View style={styles.monthCardRow}>
-                                              <Text style={styles.monthCardLabel}>Left Over:</Text>
-                                              <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
-                                            </View>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <Text style={{ color: Colors.textDim, fontSize: 11, textAlign: 'center', paddingVertical: 8 }}>No data yet</Text>
+                                    <View key={`${qKey}-${idx}`} style={[styles.monthCard, !hasMonthData && styles.monthCardEmpty]}>
+                                      {hasMonthData && (
+                                        <TouchableOpacity
+                                          onPress={() => handleClearMonth(month.key)}
+                                          style={{ position: 'absolute', top: 6, right: 6, padding: 4, zIndex: 1 }}
+                                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                        >
+                                          <Trash2 size={13} color={Colors.danger} />
+                                        </TouchableOpacity>
                                       )}
-                                    </TouchableOpacity>
+                                      <TouchableOpacity
+                                        onPress={() => hasMonthData ? openMonthDetail(month.key) : null}
+                                        activeOpacity={hasMonthData ? 0.7 : 1}
+                                        style={{ flex: 1 }}
+                                      >
+                                        <Text style={[styles.monthCardTitle, !hasMonthData && { color: Colors.textDim }]}>{month.key}</Text>
+                                        {hasMonthData ? (
+                                          <>
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Income:</Text>
+                                              <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
+                                            </View>
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Expense:</Text>
+                                              <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
+                                            </View>
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Cashflow:</Text>
+                                              <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                                                {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
+                                              </Text>
+                                            </View>
+                                            {monthlyEndingBalances[month.key] !== undefined && (
+                                              <View style={styles.monthCardRow}>
+                                                <Text style={styles.monthCardLabel}>Left Over:</Text>
+                                                <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                              </View>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <Text style={{ color: Colors.textDim, fontSize: 11, textAlign: 'center', paddingVertical: 8 }}>No data yet</Text>
+                                        )}
+                                      </TouchableOpacity>
+                                    </View>
                                   );
                                 })}
                               </View>
@@ -2561,34 +2610,42 @@ export default function BudgetScreen() {
                                       <Text style={[styles.emptyText, { fontSize: 12, paddingVertical: 8 }]}>No statement data for this quarter</Text>
                                     )}
                                     {quarter.months.map((month, idx) => (
-                                      <TouchableOpacity
-                                        key={`${qKey}-${idx}`}
-                                        style={styles.monthCard}
-                                        onPress={() => openMonthDetail(month.key)}
-                                        activeOpacity={0.7}
-                                      >
-                                        <Text style={styles.monthCardTitle}>{month.key}</Text>
-                                        <View style={styles.monthCardRow}>
-                                          <Text style={styles.monthCardLabel}>Income:</Text>
-                                          <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
-                                        </View>
-                                        <View style={styles.monthCardRow}>
-                                          <Text style={styles.monthCardLabel}>Expense:</Text>
-                                          <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
-                                        </View>
-                                        <View style={styles.monthCardRow}>
-                                          <Text style={styles.monthCardLabel}>Cashflow:</Text>
-                                          <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
-                                            {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
-                                          </Text>
-                                        </View>
-                                        {monthlyEndingBalances[month.key] !== undefined && (
+                                      <View key={`${qKey}-${idx}`} style={styles.monthCard}>
+                                        <TouchableOpacity
+                                          onPress={() => handleClearMonth(month.key)}
+                                          style={{ position: 'absolute', top: 6, right: 6, padding: 4, zIndex: 1 }}
+                                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                        >
+                                          <Trash2 size={13} color={Colors.danger} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          onPress={() => openMonthDetail(month.key)}
+                                          activeOpacity={0.7}
+                                          style={{ flex: 1 }}
+                                        >
+                                          <Text style={styles.monthCardTitle}>{month.key}</Text>
                                           <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Left Over:</Text>
-                                            <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                            <Text style={styles.monthCardLabel}>Income:</Text>
+                                            <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
                                           </View>
-                                        )}
-                                      </TouchableOpacity>
+                                          <View style={styles.monthCardRow}>
+                                            <Text style={styles.monthCardLabel}>Expense:</Text>
+                                            <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
+                                          </View>
+                                          <View style={styles.monthCardRow}>
+                                            <Text style={styles.monthCardLabel}>Cashflow:</Text>
+                                            <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                                              {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
+                                            </Text>
+                                          </View>
+                                          {monthlyEndingBalances[month.key] !== undefined && (
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Left Over:</Text>
+                                              <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                            </View>
+                                          )}
+                                        </TouchableOpacity>
+                                      </View>
                                     ))}
                                   </View>
                                 )}
@@ -3585,9 +3642,16 @@ export default function BudgetScreen() {
           <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={styles.modalTitle}>{selectedMonthKey}</Text>
-              <TouchableOpacity onPress={() => setMonthDetailVisible(false)}>
-                <ChevronDown size={24} color={Colors.textDim} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {selectedMonthKey && transactions.some(t => t.date.startsWith(selectedMonthKey)) && (
+                  <TouchableOpacity onPress={() => selectedMonthKey && handleClearMonth(selectedMonthKey)}>
+                    <Trash2 size={18} color={Colors.danger} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setMonthDetailVisible(false)}>
+                  <ChevronDown size={24} color={Colors.textDim} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {selectedMonthData && (
