@@ -353,7 +353,25 @@ export default function TasksScreen() {
 
       <ScrollView style={styles.taskList} showsVerticalScrollIndicator={false}>
         {filteredTasks.length === 0 ? (
-          <Text style={styles.emptyText}>No tasks found</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>✅</Text>
+            <Text style={styles.emptyStateHeading}>All clear!</Text>
+            <Text style={styles.emptyStateSubtitle}>Add a task to get started</Text>
+            <TouchableOpacity
+              style={styles.emptyStateButton}
+              onPress={() => {
+                resetForm();
+                setModalVisible(true);
+              }}
+            >
+              <LinearGradient
+                colors={[Colors.primary, Colors.secondary]}
+                style={styles.emptyStateButtonGradient}
+              >
+                <Text style={styles.emptyStateButtonText}>+ Add Task</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         ) : (
           filteredTasks.map(task => {
             const isOverdue = task.date && isPast(task.date) && !task.completed;
@@ -850,6 +868,41 @@ const styles = StyleSheet.create({
     color: Colors.textDim,
     marginTop: 40,
     fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center' as const,
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyStateHeading: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: Colors.textDim,
+    marginBottom: 20,
+    textAlign: 'center' as const,
+  },
+  emptyStateButton: {
+    borderRadius: 12,
+    overflow: 'hidden' as const,
+  },
+  emptyStateButtonGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    alignItems: 'center' as const,
+  },
+  emptyStateButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: 'white',
   },
   taskItem: {
     flexDirection: 'row',

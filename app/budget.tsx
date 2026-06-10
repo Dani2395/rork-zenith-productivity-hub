@@ -147,12 +147,37 @@ export default function BudgetScreen() {
   const [expandedSubGroups, setExpandedSubGroups] = useState<Set<string>>(new Set(['Streaming', 'Music & Audio', 'Shopping', 'Software', 'Fitness', 'Other']));
   const [subsViewMonth, setSubsViewMonth] = useState<string>('');
   const [expandedSubKeys, setExpandedSubKeys] = useState<Set<string>>(new Set());
+  const [manualSubs, setManualSubs] = useState<{ id: string; name: string; amount: number; group: string; frequency: 'monthly' | 'yearly'; billingDay?: number }[]>([]);
+  const [dismissedSubKeys, setDismissedSubKeys] = useState<Set<string>>(new Set());
+  const [addSubModalVisible, setAddSubModalVisible] = useState(false);
+  const [addSubName, setAddSubName] = useState('');
+  const [addSubAmount, setAddSubAmount] = useState('');
+  const [addSubGroup, setAddSubGroup] = useState('Other');
+  const [addSubFrequency, setAddSubFrequency] = useState<'monthly' | 'yearly'>('monthly');
+  const [addSubBillingDay, setAddSubBillingDay] = useState('1');
+  const [showDismissed, setShowDismissed] = useState(false);
+  const [showPausedSubs, setShowPausedSubs] = useState(false);
+  const [subsTab, setSubsTab] = useState<'upcoming' | 'all'>('upcoming');
+  const [subsSort, setSubsSort] = useState<'date' | 'name' | 'amount'>('date');
+  const [subsSearch, setSubsSearch] = useState('');
+  const [subOverrides, setSubOverrides] = useState<Record<string, { name?: string; amount?: number; billingDay?: number; frequency?: 'monthly' | 'yearly'; group?: string }>>({});
+  const [editSubModalVisible, setEditSubModalVisible] = useState(false);
+  const [editSubKey, setEditSubKey] = useState('');
+  const [editSubIsManual, setEditSubIsManual] = useState(false);
+  const [editSubName, setEditSubName] = useState('');
+  const [editSubAmount, setEditSubAmount] = useState('');
+  const [editSubBillingDay, setEditSubBillingDay] = useState('1');
+  const [editSubGroup, setEditSubGroup] = useState('Other');
+  const [editSubFrequency, setEditSubFrequency] = useState<'monthly' | 'yearly'>('monthly');
   useEffect(() => {
     AsyncStorage.getItem('monthlyIncomeGoal').then(v => { if (v) setMonthlyIncomeGoal(v); });
     AsyncStorage.getItem('subsBudgetGoal').then(v => { if (v) setSubsBudgetGoal(v); });
     AsyncStorage.getItem('cancelledSubs').then(v => { if (v) { try { setCancelledSubs(JSON.parse(v)); } catch {} } });
     AsyncStorage.getItem('monthlyEndingBalances').then(v => { if (v) { try { setMonthlyEndingBalances(JSON.parse(v)); } catch {} } });
     AsyncStorage.getItem('statementEndingBalance').then(v => { if (v !== null) setStatementEndingBalance(parseFloat(v)); });
+    AsyncStorage.getItem('manualSubs').then(v => { if (v) { try { setManualSubs(JSON.parse(v)); } catch {} } });
+    AsyncStorage.getItem('dismissedSubKeys').then(v => { if (v) { try { setDismissedSubKeys(new Set(JSON.parse(v))); } catch {} } });
+    AsyncStorage.getItem('subOverrides').then(v => { if (v) { try { setSubOverrides(JSON.parse(v)); } catch {} } });
   }, []);
 
   const saveIncomeGoal = async (value: string) => {
@@ -252,6 +277,98 @@ export default function BudgetScreen() {
     delete updated[key];
     setCancelledSubs(updated);
     AsyncStorage.setItem('cancelledSubs', JSON.stringify(updated));
+  };
+
+  const handleDismissSub = (key: string) => {
+    const updated = new Set([...dismissedSubKeys, key]);
+    setDismissedSubKeys(updated);
+    AsyncStorage.setItem('dismissedSubKeys', JSON.stringify([...updated]));
+  };
+
+  const handleRestoreDismissedSub = (key: string) => {
+    const updated = new Set([...dismissedSubKeys].filter(k => k !== key));
+    setDismissedSubKeys(updated);
+    AsyncStorage.setItem('dismissedSubKeys', JSON.stringify([...updated]));
+  };
+
+  const handleAddManualSub = () => {
+    const amount = parseFloat(addSubAmount);
+    if (!addSubName.trim() || isNaN(amount) || amount <= 0) return;
+    const billingDay = Math.min(28, Math.max(1, parseInt(addSubBillingDay, 10) || 1));
+    const id = `manual_${Date.now()}`;
+    const sub = { id, name: addSubName.trim(), amount, group: addSubGroup, frequency: addSubFrequency, billingDay };
+    const updated = [...manualSubs, sub];
+    setManualSubs(updated);
+    AsyncStorage.setItem('manualSubs', JSON.stringify(updated));
+    setAddSubModalVisible(false);
+    setAddSubName('');
+    setAddSubAmount('');
+    setAddSubGroup('Other');
+    setAddSubFrequency('monthly');
+    setAddSubBillingDay('1');
+  };
+
+  const handleDeleteManualSub = (id: string) => {
+    const updated = manualSubs.filter(s => s.id !== id);
+    setManualSubs(updated);
+    AsyncStorage.setItem('manualSubs', JSON.stringify(updated));
+  };
+
+  const handleToggleSubActive = (id: string, isManual: boolean) => {
+    if (cancelledSubs[id]) {
+      handleUncancelSub(id);
+    } else if (isManual) {
+      const updated = { ...cancelledSubs, [id]: '0000-00' };
+      setCancelledSubs(updated);
+      AsyncStorage.setItem('cancelledSubs', JSON.stringify(updated));
+    } else {
+      handleCancelSub(id);
+    }
+  };
+
+  const handleOpenEditSub = (id: string, isManual: boolean) => {
+    setEditSubKey(id);
+    setEditSubIsManual(isManual);
+    if (isManual) {
+      const ms = manualSubs.find(s => s.id === id);
+      if (!ms) return;
+      setEditSubName(ms.name);
+      setEditSubAmount(ms.amount.toString());
+      setEditSubBillingDay((ms.billingDay ?? 1).toString());
+      setEditSubGroup(ms.group);
+      setEditSubFrequency(ms.frequency);
+    } else {
+      const override = subOverrides[id] ?? {};
+      const txs = allTxsBySubKey[id] ?? [];
+      const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+      const lastDate = sorted[0]?.date ?? '';
+      const day = override.billingDay ?? (lastDate ? parseInt(lastDate.split('-')[2], 10) : 1);
+      setEditSubName(override.name ?? (sorted[0]?.description ?? id));
+      setEditSubAmount((override.amount ?? (sorted[0]?.amount ?? 0)).toString());
+      setEditSubBillingDay(day.toString());
+      setEditSubGroup(override.group ?? 'Other');
+      setEditSubFrequency(override.frequency ?? 'monthly');
+    }
+    setEditSubModalVisible(true);
+  };
+
+  const handleSaveEditSub = () => {
+    const amount = parseFloat(editSubAmount);
+    if (!editSubName.trim() || isNaN(amount) || amount <= 0) return;
+    const billingDay = Math.min(31, Math.max(1, parseInt(editSubBillingDay, 10) || 1));
+    if (editSubIsManual) {
+      const updated = manualSubs.map(s => s.id === editSubKey
+        ? { ...s, name: editSubName.trim(), amount, group: editSubGroup, frequency: editSubFrequency, billingDay }
+        : s
+      );
+      setManualSubs(updated);
+      AsyncStorage.setItem('manualSubs', JSON.stringify(updated));
+    } else {
+      const updatedOverrides = { ...subOverrides, [editSubKey]: { name: editSubName.trim(), amount, group: editSubGroup, frequency: editSubFrequency, billingDay } };
+      setSubOverrides(updatedOverrides);
+      AsyncStorage.setItem('subOverrides', JSON.stringify(updatedOverrides));
+    }
+    setEditSubModalVisible(false);
   };
 
   // For each subscription key, get every matching transaction across ALL months
@@ -413,6 +530,137 @@ export default function BudgetScreen() {
     }
     return days;
   }, [transactions, activeSubsMonth]);
+
+  const getNextBillingDate = useCallback((lastDate: string, frequency: 'monthly' | 'yearly', billingDay?: number): Date => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const last = new Date(lastDate + 'T12:00:00');
+    const day = billingDay ?? last.getDate();
+    if (frequency === 'yearly') {
+      const thisYear = new Date(today.getFullYear(), last.getMonth(), day);
+      if (thisYear > today) return thisYear;
+      return new Date(today.getFullYear() + 1, last.getMonth(), day);
+    }
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), day);
+    if (thisMonth > today) return thisMonth;
+    return new Date(today.getFullYear(), today.getMonth() + 1, day);
+  }, []);
+
+  const autoDetectedSubs = useMemo(() => {
+    const isYearly = (key: string, amount: number) => {
+      const txs = allTxsBySubKey[key] ?? [];
+      return new Set(txs.map((t: Transaction) => t.date.substring(0, 7))).size <= 2 && amount > 35;
+    };
+    const getRecurringAmounts = (key: string): Set<number> => {
+      const txs = allTxsBySubKey[key] ?? [];
+      const buckets: { center: number; months: Set<string> }[] = [];
+      for (const t of txs) {
+        const existing = buckets.find(b => Math.abs(b.center - t.amount) <= 3);
+        if (existing) { existing.months.add(t.date.substring(0, 7)); }
+        else { buckets.push({ center: t.amount, months: new Set([t.date.substring(0, 7)]) }); }
+      }
+      const totalMonths = new Set(txs.map((t: Transaction) => t.date.substring(0, 7))).size;
+      const threshold = Math.max(2, Math.ceil(totalMonths * 0.5));
+      return new Set(buckets.filter(b => b.months.size >= threshold).map(b => b.center));
+    };
+    const entries: { key: string; description: string; amount: number; group: string; emoji: string; color: string; subCharges: { description: string; amount: number }[]; lastChargeDate: string; frequency: 'monthly' | 'yearly' }[] = [];
+    for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
+      for (const kw of keywords) {
+        if (dismissedSubKeys.has(kw)) continue;
+        const txs = allTxsBySubKey[kw] ?? [];
+        if (txs.length === 0) continue;
+        const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+        const recurringAmounts = getRecurringAmounts(kw);
+        if (recurringAmounts.size === 0) continue;
+        const latestMonth = sorted[0].date.substring(0, 7);
+        const subCharges: { description: string; amount: number }[] = [];
+        for (const t of txs.filter((t: Transaction) => t.date.startsWith(latestMonth))) {
+          if ([...recurringAmounts].some(r => Math.abs(r - t.amount) <= 3))
+            subCharges.push({ description: t.description ?? kw, amount: t.amount });
+        }
+        if (subCharges.length === 0) continue;
+        const displayAmt = subCharges.reduce((s, c) => s + c.amount, 0) / subCharges.length;
+        entries.push({ key: kw, description: subCharges[0].description, amount: displayAmt, group: groupName, emoji, color, subCharges, lastChargeDate: sorted[0].date, frequency: isYearly(kw, displayAmt) ? 'yearly' : 'monthly' });
+      }
+    }
+    return entries;
+  }, [allTxsBySubKey, dismissedSubKeys]);
+
+  const allSubsList = useMemo(() => {
+    type SubEntry = { id: string; name: string; amount: number; frequency: 'monthly' | 'yearly'; group: string; color: string; emoji: string; nextBillingDate: Date; lastChargeDate?: string; isManual: boolean; isActive: boolean; multiAccount: boolean };
+    const result: SubEntry[] = [];
+    for (const entry of autoDetectedSubs) {
+      const ov = subOverrides[entry.key] ?? {};
+      const freq = ov.frequency ?? entry.frequency;
+      const grp = ov.group ?? entry.group;
+      result.push({ id: entry.key, name: ov.name ?? entry.description, amount: ov.amount ?? entry.amount, frequency: freq, group: grp, color: SUB_GROUPS[grp]?.color ?? '#9ca3af', emoji: SUB_GROUPS[grp]?.emoji ?? '📦', nextBillingDate: getNextBillingDate(entry.lastChargeDate, freq, ov.billingDay), lastChargeDate: entry.lastChargeDate, isManual: false, isActive: !cancelledSubs[entry.key], multiAccount: entry.subCharges.length > 1 });
+    }
+    for (const ms of manualSubs) {
+      const day = ms.billingDay ?? 1;
+      const today = new Date();
+      const fakeDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      result.push({ id: ms.id, name: ms.name, amount: ms.amount, frequency: ms.frequency, group: ms.group, color: SUB_GROUPS[ms.group]?.color ?? '#9ca3af', emoji: SUB_GROUPS[ms.group]?.emoji ?? '📦', nextBillingDate: getNextBillingDate(fakeDate, ms.frequency, day), isManual: true, isActive: !cancelledSubs[ms.id], multiAccount: false });
+    }
+    return result;
+  }, [autoDetectedSubs, manualSubs, cancelledSubs, subOverrides, getNextBillingDate]);
+
+  const upcomingCalendar = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const subs = allSubsList.filter(s => {
+        if (!s.isActive) return false;
+        const nd = new Date(s.nextBillingDate);
+        nd.setHours(0, 0, 0, 0);
+        return nd.getTime() === d.getTime();
+      });
+      const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'short' });
+      return { date: d, label: i === 0 ? 'Today' : dayOfWeek, subs };
+    });
+  }, [allSubsList]);
+
+  const formatSubDate = (d: Date): string => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const daysUntil = (d: Date): number => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const target = new Date(d); target.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.ceil((target.getTime() - today.getTime()) / 86400000));
+  };
+
+  const renderSubCard = (sub: { id: string; name: string; amount: number; frequency: 'monthly' | 'yearly'; group: string; color: string; nextBillingDate: Date; lastChargeDate?: string; isManual: boolean; isActive: boolean; multiAccount: boolean }) => {
+    const days = daysUntil(sub.nextBillingDate);
+    const urgentColor = days <= 1 ? Colors.danger : days <= 7 ? '#f59e0b' : Colors.textDim;
+    const nextLabel = days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `${formatSubDate(sub.nextBillingDate)} · ${days}d`;
+    return (
+      <View key={sub.id} style={{ backgroundColor: '#1a1a24', borderRadius: 14, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ width: 4, alignSelf: 'stretch', borderRadius: 2, backgroundColor: sub.isActive ? sub.color : Colors.border, marginRight: 13, flexShrink: 0 }} />
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={{ color: sub.isActive ? '#fff' : Colors.textDim, fontSize: 15, fontWeight: '700', flex: 1, textDecorationLine: sub.isActive ? 'none' : 'line-through' }} numberOfLines={1}>{sub.name}</Text>
+            <Text style={{ color: sub.isActive ? Colors.primary : Colors.textDim, fontSize: 14, fontWeight: '700', marginLeft: 10, textDecorationLine: sub.isActive ? 'none' : 'line-through' }}>${sub.amount.toFixed(2)}/{sub.frequency === 'yearly' ? 'yr' : 'mo'}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            {sub.isActive ? (
+              <Text style={{ color: urgentColor, fontSize: 12 }} numberOfLines={1}>
+                {days <= 1 ? '⚡ ' : ''}{nextLabel}{sub.lastChargeDate ? ` · Last ${formatSubDate(new Date(sub.lastChargeDate + 'T12:00:00'))}` : ''}
+              </Text>
+            ) : (
+              <View style={{ backgroundColor: 'rgba(156,163,175,0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ color: Colors.textDim, fontSize: 10, fontWeight: '700' }}>PAUSED</Text>
+              </View>
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: 8 }}>
+              <TouchableOpacity onPress={() => handleOpenEditSub(sub.id, sub.isManual)} style={{ padding: 6 }}>
+                <Edit2 size={13} color={Colors.textDim} />
+              </TouchableOpacity>
+              <Switch value={sub.isActive} onValueChange={() => handleToggleSubActive(sub.id, sub.isManual)} trackColor={{ false: Colors.border, true: Colors.primary + '66' }} thumbColor={sub.isActive ? Colors.primary : '#555'} style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }} />
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   const monthsWithData = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -734,6 +982,27 @@ export default function BudgetScreen() {
         },
       },
     ]);
+  };
+
+  const handleClearMonth = (monthKey: string) => {
+    const count = transactions.filter(t => t.date.startsWith(monthKey)).length;
+    Alert.alert(
+      `Delete ${monthKey}`,
+      `This will permanently delete all ${count} transaction${count !== 1 ? 's' : ''} for ${monthKey}. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            const ids = transactions.filter(t => t.date.startsWith(monthKey)).map(t => t.id);
+            ids.forEach(id => deleteTransaction(id));
+            if (monthDetailVisible && selectedMonthKey === monthKey) setMonthDetailVisible(false);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
   };
 
   const openDebtModal = (debt?: Debt) => {
@@ -1477,21 +1746,39 @@ export default function BudgetScreen() {
             <TouchableOpacity
               style={[styles.uploadSecondaryButton, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}
               onPress={() => {
-                Alert.alert(
-                  'Clear All Data',
-                  'This will delete all transactions and reset budget spending to $0. This cannot be undone.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Clear All',
-                      style: 'destructive',
-                      onPress: () => {
-                        clearAllTransactions();
-                        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      },
-                    },
-                  ]
-                );
+                const months = [...new Set(transactions.map(t => t.date.slice(0, 7)))].sort().reverse();
+                if (months.length === 0) {
+                  Alert.alert('No Data', 'There are no transactions to delete.');
+                  return;
+                }
+                const buttons: { text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }[] = months.map(m => ({
+                  text: `Delete ${m} (${transactions.filter(t => t.date.startsWith(m)).length} transactions)`,
+                  style: 'destructive' as const,
+                  onPress: () => handleClearMonth(m),
+                }));
+                buttons.push({
+                  text: 'Clear ALL Data',
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      'Clear All Data',
+                      'This will delete every transaction and reset budget spending to $0. This cannot be undone.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Clear All',
+                          style: 'destructive',
+                          onPress: () => {
+                            clearAllTransactions();
+                            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          },
+                        },
+                      ]
+                    );
+                  },
+                });
+                buttons.push({ text: 'Cancel', style: 'cancel' });
+                Alert.alert('Delete Transactions', 'Choose what to delete:', buttons);
               }}
             >
               <RotateCcw size={15} color={Colors.danger} />
@@ -2238,40 +2525,50 @@ export default function BudgetScreen() {
                                 {quarter.months.map((month, idx) => {
                                   const hasMonthData = month.transactions.length > 0;
                                   return (
-                                    <TouchableOpacity
-                                      key={`${qKey}-${idx}`}
-                                      style={[styles.monthCard, !hasMonthData && styles.monthCardEmpty]}
-                                      onPress={() => hasMonthData ? openMonthDetail(month.key) : null}
-                                      activeOpacity={hasMonthData ? 0.7 : 1}
-                                    >
-                                      <Text style={[styles.monthCardTitle, !hasMonthData && { color: Colors.textDim }]}>{month.key}</Text>
-                                      {hasMonthData ? (
-                                        <>
-                                          <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Income:</Text>
-                                            <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
-                                          </View>
-                                          <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Expense:</Text>
-                                            <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
-                                          </View>
-                                          <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Cashflow:</Text>
-                                            <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
-                                              {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
-                                            </Text>
-                                          </View>
-                                          {monthlyEndingBalances[month.key] !== undefined && (
-                                            <View style={styles.monthCardRow}>
-                                              <Text style={styles.monthCardLabel}>Left Over:</Text>
-                                              <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
-                                            </View>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <Text style={{ color: Colors.textDim, fontSize: 11, textAlign: 'center', paddingVertical: 8 }}>No data yet</Text>
+                                    <View key={`${qKey}-${idx}`} style={[styles.monthCard, !hasMonthData && styles.monthCardEmpty]}>
+                                      {hasMonthData && (
+                                        <TouchableOpacity
+                                          onPress={() => handleClearMonth(month.key)}
+                                          style={{ position: 'absolute', top: 6, right: 6, padding: 4, zIndex: 1 }}
+                                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                        >
+                                          <Trash2 size={13} color={Colors.danger} />
+                                        </TouchableOpacity>
                                       )}
-                                    </TouchableOpacity>
+                                      <TouchableOpacity
+                                        onPress={() => hasMonthData ? openMonthDetail(month.key) : null}
+                                        activeOpacity={hasMonthData ? 0.7 : 1}
+                                        style={{ flex: 1 }}
+                                      >
+                                        <Text style={[styles.monthCardTitle, !hasMonthData && { color: Colors.textDim }]}>{month.key}</Text>
+                                        {hasMonthData ? (
+                                          <>
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Income:</Text>
+                                              <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
+                                            </View>
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Expense:</Text>
+                                              <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
+                                            </View>
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Cashflow:</Text>
+                                              <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                                                {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
+                                              </Text>
+                                            </View>
+                                            {monthlyEndingBalances[month.key] !== undefined && (
+                                              <View style={styles.monthCardRow}>
+                                                <Text style={styles.monthCardLabel}>Left Over:</Text>
+                                                <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                              </View>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <Text style={{ color: Colors.textDim, fontSize: 11, textAlign: 'center', paddingVertical: 8 }}>No data yet</Text>
+                                        )}
+                                      </TouchableOpacity>
+                                    </View>
                                   );
                                 })}
                               </View>
@@ -2325,34 +2622,42 @@ export default function BudgetScreen() {
                                       <Text style={[styles.emptyText, { fontSize: 12, paddingVertical: 8 }]}>No statement data for this quarter</Text>
                                     )}
                                     {quarter.months.map((month, idx) => (
-                                      <TouchableOpacity
-                                        key={`${qKey}-${idx}`}
-                                        style={styles.monthCard}
-                                        onPress={() => openMonthDetail(month.key)}
-                                        activeOpacity={0.7}
-                                      >
-                                        <Text style={styles.monthCardTitle}>{month.key}</Text>
-                                        <View style={styles.monthCardRow}>
-                                          <Text style={styles.monthCardLabel}>Income:</Text>
-                                          <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
-                                        </View>
-                                        <View style={styles.monthCardRow}>
-                                          <Text style={styles.monthCardLabel}>Expense:</Text>
-                                          <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
-                                        </View>
-                                        <View style={styles.monthCardRow}>
-                                          <Text style={styles.monthCardLabel}>Cashflow:</Text>
-                                          <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
-                                            {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
-                                          </Text>
-                                        </View>
-                                        {monthlyEndingBalances[month.key] !== undefined && (
+                                      <View key={`${qKey}-${idx}`} style={styles.monthCard}>
+                                        <TouchableOpacity
+                                          onPress={() => handleClearMonth(month.key)}
+                                          style={{ position: 'absolute', top: 6, right: 6, padding: 4, zIndex: 1 }}
+                                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                        >
+                                          <Trash2 size={13} color={Colors.danger} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          onPress={() => openMonthDetail(month.key)}
+                                          activeOpacity={0.7}
+                                          style={{ flex: 1 }}
+                                        >
+                                          <Text style={styles.monthCardTitle}>{month.key}</Text>
                                           <View style={styles.monthCardRow}>
-                                            <Text style={styles.monthCardLabel}>Left Over:</Text>
-                                            <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                            <Text style={styles.monthCardLabel}>Income:</Text>
+                                            <Text style={[styles.monthCardValue, { color: Colors.success }]}>${month.income.toFixed(2)}</Text>
                                           </View>
-                                        )}
-                                      </TouchableOpacity>
+                                          <View style={styles.monthCardRow}>
+                                            <Text style={styles.monthCardLabel}>Expense:</Text>
+                                            <Text style={[styles.monthCardValue, { color: Colors.danger }]}>${month.expenses.toFixed(2)}</Text>
+                                          </View>
+                                          <View style={styles.monthCardRow}>
+                                            <Text style={styles.monthCardLabel}>Cashflow:</Text>
+                                            <Text style={[styles.monthCardValue, { color: month.cashflow >= 0 ? Colors.success : Colors.danger }]}>
+                                              {month.cashflow >= 0 ? '+' : ''}${month.cashflow.toFixed(2)}
+                                            </Text>
+                                          </View>
+                                          {monthlyEndingBalances[month.key] !== undefined && (
+                                            <View style={styles.monthCardRow}>
+                                              <Text style={styles.monthCardLabel}>Left Over:</Text>
+                                              <Text style={[styles.monthCardValue, { color: Colors.success }]}>${monthlyEndingBalances[month.key].toFixed(2)}</Text>
+                                            </View>
+                                          )}
+                                        </TouchableOpacity>
+                                      </View>
                                     ))}
                                   </View>
                                 )}
@@ -2370,170 +2675,371 @@ export default function BudgetScreen() {
         </View>
       </ScrollView>
       ) : (
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Subscriptions View */}
+      <View style={{ flex: 1 }}>
+        {/* ── Rocket Money-style Subscriptions View ── */}
         {(() => {
-          const isYearly = (key: string, amount: number): boolean => {
-            const txs = allTxsBySubKey[key] ?? [];
-            const months = new Set(txs.map((t: Transaction) => t.date.substring(0, 7)));
-            return months.size <= 2 && amount > 35;
-          };
+          const totalMonthly = allSubsList.filter(s => s.isActive).reduce((sum, s) => {
+            return sum + (s.frequency === 'yearly' ? s.amount / 12 : s.amount);
+          }, 0);
+          const activeCount = allSubsList.filter(s => s.isActive).length;
 
-          // A charge amount is "recurring" (subscription) if it appears in the majority of months
-          // the service was charged — this distinguishes subscriptions from one-time purchases
-          const getRecurringAmounts = (key: string): Set<number> => {
-            const txs = allTxsBySubKey[key] ?? [];
-            // bucket amounts within $3 of each other; each bucket maps to the set of months it appeared in
-            const buckets: { center: number; months: Set<string> }[] = [];
-            for (const t of txs) {
-              const existing = buckets.find(b => Math.abs(b.center - t.amount) <= 3);
-              if (existing) { existing.months.add(t.date.substring(0, 7)); }
-              else { buckets.push({ center: t.amount, months: new Set([t.date.substring(0, 7)]) }); }
-            }
-            // Total distinct months this service was seen
-            const totalMonths = new Set(txs.map((t: Transaction) => t.date.substring(0, 7))).size;
-            // Require amount appears in majority of months (>50%), minimum 2
-            const threshold = Math.max(2, Math.ceil(totalMonths * 0.5));
-            return new Set(buckets.filter(b => b.months.size >= threshold).map(b => b.center));
-          };
-
-          // Collect all subscription keys with at least one transaction
-          const subEntries: {
-            key: string; description: string; amount: number; group: string; emoji: string; color: string;
-            subCharges: { description: string; amount: number }[];
-            oneTimePurchases: { description: string; amount: number }[];
-          }[] = [];
-
-          for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
+          // Dismissed entries for the Hidden section
+          const dismissedEntries: { key: string; description: string; group: string }[] = [];
+          for (const [groupName, { keywords }] of Object.entries(SUB_GROUPS)) {
             for (const kw of keywords) {
+              if (!dismissedSubKeys.has(kw)) continue;
               const txs = allTxsBySubKey[kw] ?? [];
               if (txs.length === 0) continue;
-              const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
-              const recurringAmounts = getRecurringAmounts(kw);
-
-              // Get this month's charges
-              const latestMonth = sorted[0].date.substring(0, 7);
-              const monthTxs = txs.filter((t: Transaction) => t.date.startsWith(latestMonth));
-
-              // A charge this month is a subscription if its amount matches a recurring amount bucket
-              // Otherwise it's a one-time purchase (e.g. buying a Kindle book)
-              const subCharges: { description: string; amount: number }[] = [];
-              const oneTimePurchases: { description: string; amount: number }[] = [];
-
-              for (const t of monthTxs) {
-                const isRecurring = recurringAmounts.size === 0 // if no history yet, treat all as subscriptions
-                  || [...recurringAmounts].some(r => Math.abs(r - t.amount) <= 3);
-                if (isRecurring) subCharges.push({ description: t.description ?? kw, amount: t.amount });
-                else oneTimePurchases.push({ description: t.description ?? kw, amount: t.amount });
-              }
-
-              if (subCharges.length === 0 && monthTxs.length > 0) {
-                // No recurring charges this month — show the charge anyway
-                subCharges.push({ description: sorted[0].description ?? kw, amount: sorted[0].amount });
-              }
-
-              // Display amount = average of sub charges this month
-              const displayAmt = subCharges.reduce((s, c) => s + c.amount, 0) / subCharges.length;
-
-              subEntries.push({ key: kw, description: subCharges[0].description, amount: displayAmt, group: groupName, emoji, color, subCharges, oneTimePurchases });
+              const latest = [...txs].sort((a, b) => b.date.localeCompare(a.date))[0];
+              dismissedEntries.push({ key: kw, description: latest.description ?? kw, group: groupName });
             }
-          }
-
-          // Compute total monthly cost — sum of all subscription charges this month
-          let totalMonthly = 0;
-          for (const entry of subEntries) {
-            if (cancelledSubs[entry.key]) continue;
-            const total = entry.subCharges.reduce((s, c) => s + c.amount, 0);
-            totalMonthly += isYearly(entry.key, entry.amount) ? total / 12 : total;
-          }
-
-          // Group by category
-          const grouped: Record<string, typeof subEntries> = {};
-          for (const entry of subEntries) {
-            if (!grouped[entry.group]) grouped[entry.group] = [];
-            grouped[entry.group].push(entry);
           }
 
           return (
-            <View style={{ padding: 16 }}>
-              {/* Total monthly header */}
-              <View style={{ backgroundColor: '#1a1a24', borderRadius: 16, padding: 20, marginBottom: 16, alignItems: 'center' }}>
-                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 4 }}>Est. Monthly Cost</Text>
-                <Text style={{ color: Colors.primary, fontSize: 32, fontWeight: '700' }}>${totalMonthly.toFixed(2)}</Text>
-                <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{subEntries.filter(e => !cancelledSubs[e.key]).length} active • ${(totalMonthly * 12).toFixed(0)}/yr</Text>
-              </View>
+            <>
+              {/* ── Sticky-ish header with total + tab bar ── */}
+              <LinearGradient colors={['#1c1c2e', '#12121a']} style={{ paddingTop: 20, paddingHorizontal: 16, paddingBottom: 16 }}>
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 2 }}>Monthly Subscriptions</Text>
+                  <Text style={{ color: Colors.primary, fontSize: 40, fontWeight: '800', letterSpacing: -1 }}>${totalMonthly.toFixed(2)}</Text>
+                  <Text style={{ color: Colors.textDim, fontSize: 12, marginTop: 4 }}>{activeCount} active · ${(totalMonthly * 12).toFixed(0)}/yr</Text>
+                </View>
+                {/* Tab bar */}
+                <View style={{ flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4 }}>
+                  {(['upcoming', 'all'] as const).map(tab => (
+                    <TouchableOpacity
+                      key={tab}
+                      onPress={() => setSubsTab(tab)}
+                      style={{ flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', backgroundColor: subsTab === tab ? Colors.primary : 'transparent' }}
+                    >
+                      <Text style={{ color: subsTab === tab ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>
+                        {tab === 'upcoming' ? 'Upcoming' : `All (${allSubsList.length})`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => setAddSubModalVisible(true)}
+                    style={{ paddingHorizontal: 16, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <Plus size={14} color={Colors.primary} />
+                    <Text style={{ color: Colors.primary, fontWeight: '600', fontSize: 14 }}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
 
-              {Object.entries(grouped).map(([groupName, entries]) => (
-                <View key={groupName} style={{ marginBottom: 20 }}>
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 }}>
-                    {SUB_GROUPS[groupName]?.emoji} {groupName}
-                  </Text>
-                  {entries.map(entry => {
-                    const yearly = isYearly(entry.key, entry.amount);
-                    const cancelled = !!cancelledSubs[entry.key];
-                    const multiAccount = entry.subCharges.length > 1;
-                    return (
-                      <View key={entry.key} style={{ marginBottom: 10 }}>
-                        {/* Each subscription charge shown individually */}
-                        {entry.subCharges.map((charge, ci) => {
-                          const label = charge.description.length > 32 ? charge.description.substring(0, 32) : charge.description;
-                          return (
-                            <View key={ci} style={{ backgroundColor: '#1a1a24', borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: ci < entry.subCharges.length - 1 ? 4 : 0 }}>
-                              <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
-                                  <Text style={{ color: cancelled ? Colors.textDim : '#fff', fontSize: 14, fontWeight: '600', textDecorationLine: cancelled ? 'line-through' : 'none' }}>
-                                    {label}
-                                  </Text>
-                                  <View style={{ backgroundColor: yearly ? '#f59e0b22' : '#34d39922', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                    <Text style={{ color: yearly ? '#f59e0b' : Colors.success, fontSize: 10, fontWeight: '700' }}>
-                                      {yearly ? 'YEARLY' : 'MONTHLY'}
-                                    </Text>
-                                  </View>
-                                  {multiAccount && (
-                                    <View style={{ backgroundColor: 'rgba(167,139,250,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                      <Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '700' }}>ACCOUNT {ci + 1} OF {entry.subCharges.length}</Text>
-                                    </View>
-                                  )}
-                                </View>
-                                <Text style={{ color: cancelled ? Colors.textDim : Colors.primary, fontSize: 16, fontWeight: '700' }}>
-                                  ${charge.amount.toFixed(2)}{yearly ? '/yr' : '/mo'}
-                                </Text>
+              {/* ── Tab content ── */}
+              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {subsTab === 'upcoming' ? (
+                  <View style={{ padding: 16 }}>
+                    {/* 14-day calendar strip */}
+                    {allSubsList.some(s => s.isActive) && (
+                      <View style={{ marginBottom: 20 }}>
+                        <Text style={{ color: Colors.textDim, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 10 }}>NEXT 14 DAYS</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 5 }}>
+                          {upcomingCalendar.map((day, i) => {
+                            const isToday = i === 0;
+                            const hasSubs = day.subs.length > 0;
+                            const isUrgent = hasSubs && i <= 2;
+                            return (
+                              <View key={i} style={{ width: 52, alignItems: 'center', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 4, backgroundColor: isToday ? Colors.primary + '22' : hasSubs ? (isUrgent ? Colors.danger + '15' : '#1a1a2e') : 'transparent', borderWidth: 1, borderColor: isToday ? Colors.primary + '66' : isUrgent ? Colors.danger + '55' : hasSubs ? Colors.border : 'transparent' }}>
+                                <Text style={{ color: isToday ? Colors.primary : Colors.textDim, fontSize: 10, fontWeight: '700', marginBottom: 3 }}>{day.label}</Text>
+                                <Text style={{ color: isUrgent ? Colors.danger : hasSubs ? '#fff' : Colors.textDim, fontSize: 18, fontWeight: '800' }}>{day.date.getDate()}</Text>
+                                {hasSubs && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: isUrgent ? Colors.danger : Colors.primary, marginTop: 4 }} />}
+                                {hasSubs && <Text style={{ color: isUrgent ? Colors.danger : Colors.primary, fontSize: 7, marginTop: 2, textAlign: 'center' }} numberOfLines={1}>{day.subs[0].name.substring(0, 8)}</Text>}
                               </View>
-                              {ci === 0 && (
-                                <TouchableOpacity
-                                  onPress={() => cancelled ? handleUncancelSub(entry.key) : handleCancelSub(entry.key)}
-                                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: cancelled ? Colors.success + '22' : Colors.danger + '22' }}
-                                >
-                                  <Text style={{ color: cancelled ? Colors.success : Colors.danger, fontSize: 12, fontWeight: '600' }}>
-                                    {cancelled ? 'Restore' : 'Cancel'}
-                                  </Text>
-                                </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
+
+                    {/* Upcoming charges sorted by date */}
+                    {(() => {
+                      const today = new Date(); today.setHours(0, 0, 0, 0);
+                      const endWeek = new Date(today); endWeek.setDate(today.getDate() + 7);
+                      const endMonth = new Date(today); endMonth.setMonth(today.getMonth() + 1);
+                      const sorted = [...allSubsList].filter(s => s.isActive).sort((a, b) => a.nextBillingDate.getTime() - b.nextBillingDate.getTime());
+                      const groups = [
+                        { label: 'THIS WEEK', items: sorted.filter(s => s.nextBillingDate < endWeek) },
+                        { label: 'THIS MONTH', items: sorted.filter(s => s.nextBillingDate >= endWeek && s.nextBillingDate < endMonth) },
+                        { label: 'LATER', items: sorted.filter(s => s.nextBillingDate >= endMonth) },
+                      ];
+                      return (
+                        <>
+                          {groups.map(g => g.items.length > 0 && (
+                            <View key={g.label} style={{ marginBottom: 20 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 10 }}>{g.label}</Text>
+                              {g.items.map(sub => renderSubCard(sub))}
+                            </View>
+                          ))}
+                          {sorted.length === 0 && (
+                            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>No active subscriptions.{'\n'}Tap + Add or upload a bank statement.</Text>
+                              <Text style={{ color: Colors.textDim, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 12, alignSelf: 'flex-start' }}>POPULAR SUBSCRIPTIONS</Text>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%' }}>
+                                {[
+                                  { name: 'Netflix', amount: '15.99' },
+                                  { name: 'Spotify', amount: '9.99' },
+                                  { name: 'Hulu', amount: '7.99' },
+                                  { name: 'YouTube Premium', amount: '13.99' },
+                                  { name: 'Apple TV+', amount: '9.99' },
+                                  { name: 'Disney+', amount: '7.99' },
+                                ].map(item => (
+                                  <TouchableOpacity
+                                    key={item.name}
+                                    onPress={() => {
+                                      setAddSubName(item.name);
+                                      setAddSubAmount(item.amount);
+                                      setAddSubModalVisible(true);
+                                    }}
+                                    style={{
+                                      width: '47%',
+                                      backgroundColor: 'rgba(99,102,241,0.1)',
+                                      borderWidth: 1,
+                                      borderColor: 'rgba(99,102,241,0.25)',
+                                      borderRadius: 10,
+                                      paddingVertical: 10,
+                                      paddingHorizontal: 12,
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                    }}
+                                  >
+                                    <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>{item.name}</Text>
+                                    <Text style={{ color: Colors.primary, fontSize: 12, fontWeight: '700', marginLeft: 4 }}>${item.amount}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            </View>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </View>
+                ) : (
+                  <View style={{ padding: 16 }}>
+                    {/* Search bar */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a24', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12, borderWidth: 1, borderColor: Colors.border }}>
+                      <Text style={{ color: Colors.textDim, marginRight: 8, fontSize: 15 }}>🔍</Text>
+                      <TextInput style={{ flex: 1, color: Colors.text, fontSize: 14 }} placeholder="Search subscriptions..." placeholderTextColor={Colors.textDim} value={subsSearch} onChangeText={setSubsSearch} />
+                      {subsSearch.length > 0 && <TouchableOpacity onPress={() => setSubsSearch('')}><X size={16} color={Colors.textDim} /></TouchableOpacity>}
+                    </View>
+
+                    {/* Sort chips */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                      {(['date', 'name', 'amount'] as const).map(s => (
+                        <TouchableOpacity key={s} onPress={() => setSubsSort(s)} style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: subsSort === s ? Colors.primary : 'transparent', borderWidth: 1, borderColor: subsSort === s ? Colors.primary : Colors.border }}>
+                          <Text style={{ color: subsSort === s ? '#fff' : Colors.textDim, fontSize: 12, fontWeight: subsSort === s ? '700' : '400' }}>{s === 'date' ? 'By Date' : s === 'name' ? 'By Name' : 'By Amount'}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Active */}
+                    {(() => {
+                      const filtered = allSubsList.filter(s => !subsSearch || s.name.toLowerCase().includes(subsSearch.toLowerCase()));
+                      const active = filtered.filter(s => s.isActive).sort((a, b) => subsSort === 'name' ? a.name.localeCompare(b.name) : subsSort === 'amount' ? b.amount - a.amount : a.nextBillingDate.getTime() - b.nextBillingDate.getTime());
+                      const paused = filtered.filter(s => !s.isActive);
+                      return (
+                        <>
+                          {active.length === 0 && paused.length === 0 ? (
+                            <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+                              <Text style={{ color: Colors.textDim, fontSize: 14, textAlign: 'center' }}>{subsSearch ? 'No results.' : 'No subscriptions yet.\nTap + Add or upload a bank statement.'}</Text>
+                            </View>
+                          ) : (
+                            <>
+                              {active.length > 0 && (
+                                <View style={{ marginBottom: 8 }}>
+                                  <Text style={{ color: Colors.textDim, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 10 }}>ACTIVE ({active.length})</Text>
+                                  {active.map(sub => renderSubCard(sub))}
+                                </View>
                               )}
-                            </View>
-                          );
-                        })}
-                        {/* One-time purchases (e.g. buying a Kindle book) */}
-                        {entry.oneTimePurchases.map((p, i) => (
-                          <View key={i} style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, marginTop: 4, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: 'rgba(148,163,184,0.25)' }}>
+                              {paused.length > 0 && (
+                                <View style={{ marginBottom: 8 }}>
+                                  <TouchableOpacity onPress={() => setShowPausedSubs(v => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: showPausedSubs ? 10 : 0 }}>
+                                    <Text style={{ color: Colors.textDim, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>PAUSED ({paused.length})</Text>
+                                    <Text style={{ color: Colors.textDim, fontSize: 11 }}>{showPausedSubs ? '▲' : '▼'}</Text>
+                                  </TouchableOpacity>
+                                  {showPausedSubs && paused.map(sub => renderSubCard(sub))}
+                                </View>
+                              )}
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    {/* Hidden / dismissed */}
+                    {dismissedEntries.length > 0 && (
+                      <View style={{ marginTop: 8, marginBottom: 24 }}>
+                        <TouchableOpacity onPress={() => setShowDismissed(v => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: showDismissed ? 10 : 0 }}>
+                          <Text style={{ color: Colors.textDim, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>HIDDEN ({dismissedEntries.length})</Text>
+                          <Text style={{ color: Colors.textDim, fontSize: 11 }}>{showDismissed ? '▲' : '▼'}</Text>
+                        </TouchableOpacity>
+                        {showDismissed && dismissedEntries.map(de => (
+                          <View key={de.key} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                             <View style={{ flex: 1 }}>
-                              <Text style={{ color: Colors.textDim, fontSize: 12 }} numberOfLines={1}>{p.description}</Text>
-                              <Text style={{ color: Colors.text, fontSize: 13, fontWeight: '600', marginTop: 2 }}>${p.amount.toFixed(2)}</Text>
+                              <Text style={{ color: Colors.textDim, fontSize: 13 }} numberOfLines={1}>{de.description}</Text>
+                              <Text style={{ color: Colors.textDim, fontSize: 11, marginTop: 1 }}>{de.group}</Text>
                             </View>
-                            <View style={{ backgroundColor: 'rgba(148,163,184,0.12)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                              <Text style={{ color: Colors.textDim, fontSize: 10, fontWeight: '700' }}>ONE-TIME</Text>
-                            </View>
+                            <TouchableOpacity onPress={() => handleRestoreDismissedSub(de.key)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.success + '22' }}>
+                              <Text style={{ color: Colors.success, fontSize: 12, fontWeight: '600' }}>Restore</Text>
+                            </TouchableOpacity>
                           </View>
                         ))}
                       </View>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+            </>
           );
         })()}
-      </ScrollView>
+      </View>
       )}
+
+      {/* Add Subscription Modal */}
+      <Modal
+        visible={addSubModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddSubModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
+                <Text style={styles.modalTitle}>Add Subscription</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Service name (e.g. Netflix)"
+                  placeholderTextColor={Colors.textDim}
+                  value={addSubName}
+                  onChangeText={setAddSubName}
+                />
+                <TextInput
+                  style={[styles.modalInput, styles.amountInput]}
+                  placeholder="Amount"
+                  placeholderTextColor={Colors.textDim}
+                  value={addSubAmount}
+                  onChangeText={setAddSubAmount}
+                  keyboardType="numeric"
+                />
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Billing Frequency</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                  {(['monthly', 'yearly'] as const).map(freq => (
+                    <TouchableOpacity key={freq} onPress={() => setAddSubFrequency(freq)} style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: addSubFrequency === freq ? Colors.primary : 'transparent', borderWidth: 1, borderColor: addSubFrequency === freq ? Colors.primary : Colors.border }}>
+                      <Text style={{ color: addSubFrequency === freq ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>{freq.charAt(0).toUpperCase() + freq.slice(1)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Billing Day of Month</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
+                      <TouchableOpacity key={day} onPress={() => setAddSubBillingDay(day.toString())} style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: addSubBillingDay === day.toString() ? Colors.primary : 'rgba(255,255,255,0.07)' }}>
+                        <Text style={{ color: addSubBillingDay === day.toString() ? '#fff' : Colors.textDim, fontSize: 13, fontWeight: '600' }}>{day}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {Object.entries(SUB_GROUPS).map(([name, def]) => (
+                      <TouchableOpacity key={name} onPress={() => setAddSubGroup(name)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: addSubGroup === name ? Colors.primary : 'transparent', borderWidth: 1, borderColor: addSubGroup === name ? Colors.primary : Colors.border }}>
+                        <Text style={{ color: addSubGroup === name ? '#fff' : Colors.textDim, fontSize: 13 }}>{def.emoji} {name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.modalButtonSecondary} onPress={() => setAddSubModalVisible(false)}>
+                    <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleAddManualSub}>
+                    <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.modalButtonGradient}>
+                      <Text style={styles.modalButtonText}>Add</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Edit Subscription Modal */}
+      <Modal visible={editSubModalVisible} transparent animationType="slide" onRequestClose={() => setEditSubModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} keyboardVerticalOffset={0}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={[styles.modalContent, { paddingBottom: modalPaddingBottom }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <Text style={styles.modalTitle}>Edit Subscription</Text>
+                  {editSubIsManual && (
+                    <TouchableOpacity onPress={() => { setEditSubModalVisible(false); Alert.alert('Delete Subscription', `Remove "${editSubName}"?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => handleDeleteManualSub(editSubKey) }]); }} style={{ padding: 4 }}>
+                      <Trash2 size={18} color={Colors.danger} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {!editSubIsManual && (
+                  <View style={{ backgroundColor: Colors.primary + '15', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+                    <Text style={{ color: Colors.primary, fontSize: 12 }}>Editing will override auto-detected values. You can also hide this subscription using the ✕ on the card.</Text>
+                  </View>
+                )}
+                <TextInput style={styles.modalInput} placeholder="Service name" placeholderTextColor={Colors.textDim} value={editSubName} onChangeText={setEditSubName} />
+                <TextInput style={[styles.modalInput, styles.amountInput]} placeholder="Amount" placeholderTextColor={Colors.textDim} value={editSubAmount} onChangeText={setEditSubAmount} keyboardType="numeric" />
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Billing Frequency</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                  {(['monthly', 'yearly'] as const).map(freq => (
+                    <TouchableOpacity key={freq} onPress={() => setEditSubFrequency(freq)} style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: editSubFrequency === freq ? Colors.primary : 'transparent', borderWidth: 1, borderColor: editSubFrequency === freq ? Colors.primary : Colors.border }}>
+                      <Text style={{ color: editSubFrequency === freq ? '#fff' : Colors.textDim, fontWeight: '600', fontSize: 14 }}>{freq.charAt(0).toUpperCase() + freq.slice(1)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Billing Day of Month</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
+                      <TouchableOpacity key={day} onPress={() => setEditSubBillingDay(day.toString())} style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: editSubBillingDay === day.toString() ? Colors.primary : 'rgba(255,255,255,0.07)' }}>
+                        <Text style={{ color: editSubBillingDay === day.toString() ? '#fff' : Colors.textDim, fontSize: 13, fontWeight: '600' }}>{day}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 8 }}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {Object.entries(SUB_GROUPS).map(([name, def]) => (
+                      <TouchableOpacity key={name} onPress={() => setEditSubGroup(name)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: editSubGroup === name ? Colors.primary : 'transparent', borderWidth: 1, borderColor: editSubGroup === name ? Colors.primary : Colors.border }}>
+                        <Text style={{ color: editSubGroup === name ? '#fff' : Colors.textDim, fontSize: 13 }}>{def.emoji} {name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.modalButtonSecondary} onPress={() => setEditSubModalVisible(false)}>
+                    <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleSaveEditSub}>
+                    <LinearGradient colors={[Colors.primary, Colors.secondary]} style={styles.modalButtonGradient}>
+                      <Text style={styles.modalButtonText}>Save</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       <Modal
         visible={budgetModalVisible}
@@ -2547,7 +3053,7 @@ export default function BudgetScreen() {
             style={{ flex: 1 }}
             keyboardVerticalOffset={0}
           >
-            <ScrollView 
+            <ScrollView
               contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -3183,9 +3689,16 @@ export default function BudgetScreen() {
           <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: modalPaddingBottom }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={styles.modalTitle}>{selectedMonthKey}</Text>
-              <TouchableOpacity onPress={() => setMonthDetailVisible(false)}>
-                <ChevronDown size={24} color={Colors.textDim} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {selectedMonthKey && transactions.some(t => t.date.startsWith(selectedMonthKey)) && (
+                  <TouchableOpacity onPress={() => selectedMonthKey && handleClearMonth(selectedMonthKey)}>
+                    <Trash2 size={18} color={Colors.danger} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setMonthDetailVisible(false)}>
+                  <ChevronDown size={24} color={Colors.textDim} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {selectedMonthData && (
