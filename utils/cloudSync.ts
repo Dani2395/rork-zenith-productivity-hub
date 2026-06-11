@@ -9,11 +9,14 @@ const LAST_SYNC_KEY = 'last_sync_at';
 export interface SyncCreds {
   url: string;
   anonKey: string;
+  syncKey?: string; // optional shared key for cross-device sync (phone + web)
 }
 
 let _client: SupabaseClient | null = null;
 
 const getDeviceId = async (): Promise<string> => {
+  const creds = await loadSyncCreds();
+  if (creds?.syncKey?.trim()) return creds.syncKey.trim();
   const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
   if (existing) return existing;
   const id = `${Platform.OS}-${Date.now()}-${Math.random().toString(36).slice(2)}`;

@@ -71,20 +71,21 @@ export default function SettingsScreen() {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [urlDraft, setUrlDraft] = useState('');
   const [keyDraft, setKeyDraft] = useState('');
+  const [syncKeyDraft, setSyncKeyDraft] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState('');
   const [showSetupSQL, setShowSetupSQL] = useState(false);
 
   useEffect(() => {
-    loadSyncCreds().then(c => { if (c) setSyncCreds(c); });
+    loadSyncCreds().then(c => { if (c) { setSyncCreds(c); setSyncKeyDraft(c.syncKey ?? ''); } });
     getLastSyncTime().then(t => setLastSynced(t));
     getDeviceIdPublic().then(id => setDeviceId(id));
   }, []);
 
   const handleSaveSyncCreds = async () => {
     if (!urlDraft.trim() || !keyDraft.trim()) return;
-    const creds = { url: urlDraft.trim(), anonKey: keyDraft.trim() };
+    const creds = { url: urlDraft.trim(), anonKey: keyDraft.trim(), syncKey: syncKeyDraft.trim() || undefined };
     await saveSyncCreds(creds);
     setSyncCreds(creds);
     setSyncModalVisible(false);
@@ -513,6 +514,19 @@ export default function SettingsScreen() {
               autoCorrect={false}
               secureTextEntry
             />
+            <Text style={styles.inputLabel}>Sync Key (optional — for cross-device sync)</Text>
+            <TextInput
+              style={styles.input}
+              value={syncKeyDraft}
+              onChangeText={setSyncKeyDraft}
+              placeholder="e.g. my-zenith-account"
+              placeholderTextColor={Colors.textDim}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={{ fontSize: 11, color: Colors.textDim, marginBottom: 12, lineHeight: 16 }}>
+              Set the same Sync Key on your phone and iPad web app so they share data. Leave blank to use a device-specific backup.
+            </Text>
             <TouchableOpacity
               style={[styles.connectBtn, (!urlDraft.trim() || !keyDraft.trim()) && { opacity: 0.4 }]}
               onPress={handleSaveSyncCreds}
