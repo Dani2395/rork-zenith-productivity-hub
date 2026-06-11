@@ -279,13 +279,15 @@ export default function BudgetScreen() {
   };
 
   const handleDismissSub = (key: string) => {
-    const updated = new Set([...dismissedSubKeys, key]);
+    const baseKey = key.includes('|') ? key.split('|')[0] : key;
+    const updated = new Set([...dismissedSubKeys, baseKey]);
     setDismissedSubKeys(updated);
     AsyncStorage.setItem('dismissedSubKeys', JSON.stringify([...updated]));
   };
 
   const handleRestoreDismissedSub = (key: string) => {
-    const updated = new Set([...dismissedSubKeys].filter(k => k !== key));
+    const baseKey = key.includes('|') ? key.split('|')[0] : key;
+    const updated = new Set([...dismissedSubKeys].filter(k => k !== baseKey));
     setDismissedSubKeys(updated);
     AsyncStorage.setItem('dismissedSubKeys', JSON.stringify([...updated]));
   };
@@ -338,11 +340,12 @@ export default function BudgetScreen() {
       setEditSubFrequency(ms.frequency);
     } else {
       const override = subOverrides[id] ?? {};
-      const txs = allTxsBySubKey[id] ?? [];
+      const baseKey = id.includes('|') ? id.split('|')[0] : id;
+      const txs = allTxsBySubKey[baseKey] ?? [];
       const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
       const lastDate = sorted[0]?.date ?? '';
       const day = override.billingDay ?? (lastDate ? parseInt(lastDate.split('-')[2], 10) : 1);
-      setEditSubName(override.name ?? (sorted[0]?.description ?? id));
+      setEditSubName(override.name ?? (sorted[0]?.description ?? baseKey));
       setEditSubAmount((override.amount ?? (sorted[0]?.amount ?? 0)).toString());
       setEditSubBillingDay(day.toString());
       setEditSubGroup(override.group ?? 'Other');
@@ -550,36 +553,65 @@ export default function BudgetScreen() {
       const txs = allTxsBySubKey[key] ?? [];
       return new Set(txs.map((t: Transaction) => t.date.substring(0, 7))).size <= 2 && amount > 35;
     };
-    const getRecurringAmounts = (key: string): Set<number> => {
+    // Returns recurring amount buckets with a typical per-month count (to detect duplicate accounts)
+    const getRecurringBuckets = (key: string): { center: number; typicalCount: number; months: Set<string> }[] => {
       const txs = allTxsBySubKey[key] ?? [];
-      const buckets: { center: number; months: Set<string> }[] = [];
+      const buckets: { center: number; months: Set<string>; monthCounts: Record<string, number> }[] = [];
       for (const t of txs) {
+        const ym = t.date.substring(0, 7);
         const existing = buckets.find(b => Math.abs(b.center - t.amount) <= 3);
-        if (existing) { existing.months.add(t.date.substring(0, 7)); }
-        else { buckets.push({ center: t.amount, months: new Set([t.date.substring(0, 7)]) }); }
+        if (existing) {
+          existing.months.add(ym);
+          existing.monthCounts[ym] = (existing.monthCounts[ym] ?? 0) + 1;
+        } else {
+          buckets.push({ center: t.amount, months: new Set([ym]), monthCounts: { [ym]: 1 } });
+        }
       }
       const totalMonths = new Set(txs.map((t: Transaction) => t.date.substring(0, 7))).size;
       const threshold = Math.max(2, Math.ceil(totalMonths * 0.5));
-      return new Set(buckets.filter(b => b.months.size >= threshold).map(b => b.center));
+      return buckets
+        .filter(b => b.months.size >= threshold)
+        .map(b => {
+          // Typical count = mode of per-month counts
+          const freq: Record<number, number> = {};
+          for (const c of Object.values(b.monthCounts)) freq[c] = (freq[c] ?? 0) + 1;
+          const typicalCount = parseInt(Object.entries(freq).sort((a, b2) => b2[1] - a[1])[0][0]);
+          return { center: b.center, typicalCount, months: b.months };
+        });
     };
-    const entries: { key: string; description: string; amount: number; group: string; emoji: string; color: string; subCharges: { description: string; amount: number }[]; lastChargeDate: string; frequency: 'monthly' | 'yearly' }[] = [];
+    const entries: { key: string; instanceId: string; instanceIndex: number; totalInstances: number; description: string; amount: number; group: string; emoji: string; color: string; subCharges: { description: string; amount: number }[]; lastChargeDate: string; frequency: 'monthly' | 'yearly' }[] = [];
     for (const [groupName, { keywords, emoji, color }] of Object.entries(SUB_GROUPS)) {
       for (const kw of keywords) {
         if (dismissedSubKeys.has(kw)) continue;
         const txs = allTxsBySubKey[kw] ?? [];
         if (txs.length === 0) continue;
         const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
-        const recurringAmounts = getRecurringAmounts(kw);
-        if (recurringAmounts.size === 0) continue;
+        const recurringBuckets = getRecurringBuckets(kw);
+        if (recurringBuckets.length === 0) continue;
         const latestMonth = sorted[0].date.substring(0, 7);
-        const subCharges: { description: string; amount: number }[] = [];
-        for (const t of txs.filter((t: Transaction) => t.date.startsWith(latestMonth))) {
-          if ([...recurringAmounts].some(r => Math.abs(r - t.amount) <= 3))
-            subCharges.push({ description: t.description ?? kw, amount: t.amount });
+        for (const bucket of recurringBuckets) {
+          const bucketCharges = txs.filter((t: Transaction) => t.date.startsWith(latestMonth) && Math.abs(t.amount - bucket.center) <= 3);
+          if (bucketCharges.length === 0) continue;
+          const totalInstances = bucket.typicalCount;
+          for (let i = 0; i < totalInstances; i++) {
+            const charge = bucketCharges[i] ?? bucketCharges[0];
+            const instanceId = totalInstances > 1 ? `${kw}|${i}` : kw;
+            entries.push({
+              key: kw,
+              instanceId,
+              instanceIndex: i,
+              totalInstances,
+              description: charge.description ?? kw,
+              amount: bucket.center,
+              group: groupName,
+              emoji,
+              color,
+              subCharges: [{ description: charge.description ?? kw, amount: charge.amount }],
+              lastChargeDate: sorted[0].date,
+              frequency: isYearly(kw, bucket.center) ? 'yearly' : 'monthly',
+            });
+          }
         }
-        if (subCharges.length === 0) continue;
-        const displayAmt = subCharges.reduce((s, c) => s + c.amount, 0) / subCharges.length;
-        entries.push({ key: kw, description: subCharges[0].description, amount: displayAmt, group: groupName, emoji, color, subCharges, lastChargeDate: sorted[0].date, frequency: isYearly(kw, displayAmt) ? 'yearly' : 'monthly' });
       }
     }
     return entries;
@@ -589,10 +621,12 @@ export default function BudgetScreen() {
     type SubEntry = { id: string; name: string; amount: number; frequency: 'monthly' | 'yearly'; group: string; color: string; emoji: string; nextBillingDate: Date; lastChargeDate?: string; isManual: boolean; isActive: boolean; multiAccount: boolean };
     const result: SubEntry[] = [];
     for (const entry of autoDetectedSubs) {
-      const ov = subOverrides[entry.key] ?? {};
+      const ov = subOverrides[entry.instanceId] ?? {};
       const freq = ov.frequency ?? entry.frequency;
       const grp = ov.group ?? entry.group;
-      result.push({ id: entry.key, name: ov.name ?? entry.description, amount: ov.amount ?? entry.amount, frequency: freq, group: grp, color: SUB_GROUPS[grp]?.color ?? '#9ca3af', emoji: SUB_GROUPS[grp]?.emoji ?? '📦', nextBillingDate: getNextBillingDate(entry.lastChargeDate, freq, ov.billingDay), lastChargeDate: entry.lastChargeDate, isManual: false, isActive: !cancelledSubs[entry.key], multiAccount: entry.subCharges.length > 1 });
+      const baseName = ov.name ?? entry.description;
+      const displayName = entry.totalInstances > 1 ? `${baseName} (${entry.instanceIndex + 1})` : baseName;
+      result.push({ id: entry.instanceId, name: displayName, amount: ov.amount ?? entry.amount, frequency: freq, group: grp, color: SUB_GROUPS[grp]?.color ?? '#9ca3af', emoji: SUB_GROUPS[grp]?.emoji ?? '📦', nextBillingDate: getNextBillingDate(entry.lastChargeDate, freq, ov.billingDay), lastChargeDate: entry.lastChargeDate, isManual: false, isActive: !cancelledSubs[entry.instanceId], multiAccount: entry.totalInstances > 1 });
     }
     for (const ms of manualSubs) {
       const day = ms.billingDay ?? 1;
