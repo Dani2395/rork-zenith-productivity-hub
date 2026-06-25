@@ -3215,6 +3215,29 @@ export default function BudgetScreen() {
               value={transactionDate}
               onChangeText={setTransactionDate}
             />
+            {transactionType === 'expense' && budgets.length > 0 && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ color: Colors.textDim, fontSize: 13, marginBottom: 6 }}>Category (optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
+                  <TouchableOpacity
+                    onPress={() => setSelectedBudgetId(null)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: selectedBudgetId === null ? Colors.primary : Colors.border, backgroundColor: selectedBudgetId === null ? Colors.primary + '22' : 'transparent' }}
+                  >
+                    <Text style={{ color: selectedBudgetId === null ? Colors.primary : Colors.textDim, fontSize: 13 }}>None</Text>
+                  </TouchableOpacity>
+                  {budgets.map(b => (
+                    <TouchableOpacity
+                      key={b.id}
+                      onPress={() => setSelectedBudgetId(b.id)}
+                      style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: selectedBudgetId === b.id ? Colors.primary : Colors.border, backgroundColor: selectedBudgetId === b.id ? Colors.primary + '22' : 'transparent', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Text style={{ fontSize: 13 }}>{b.icon}</Text>
+                      <Text style={{ color: selectedBudgetId === b.id ? Colors.primary : Colors.textDim, fontSize: 13 }}>{b.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalButtonSecondary}
