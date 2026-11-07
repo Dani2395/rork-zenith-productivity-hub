@@ -1,318 +1,107 @@
-# Welcome to your Rork app
+<div align="center">
 
-## Project info
+<img src="assets/images/icon.png" alt="Zenith icon" width="96" />
 
-This is a native cross-platform mobile app created with [Rork](https://rork.com)
+# Zenith — Productivity Hub
 
-**Platform**: Native iOS & Android app, exportable to web
-**Framework**: Expo Router + React Native
+**One app for tasks, calendar, habits, notes, budget, workouts, books and goals.**
+Cross-platform (Android, iOS, web) app built with React Native, Expo and TypeScript.
 
-## How can I edit this code?
+[**Live web demo →**](https://rork-zenith-productivity-hub.vercel.app)
 
-There are several ways of editing your native mobile application.
+![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?logo=react&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-SDK_54-000020?logo=expo&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-sync-3FCF8E?logo=supabase&logoColor=white)
 
-### **Use Rork**
+</div>
 
-Simply visit [rork.com](https://rork.com) and prompt to build your app with AI.
+---
 
-Changes made via Rork will be committed automatically to this GitHub repo.
+## About
 
-Whenever you make a change in your local code editor and push it to GitHub, it will be also reflected in Rork.
+I built Zenith because my day was spread across six different apps: a to-do list, a calendar, a habit tracker, a budgeting spreadsheet, a notes app and a reading log. Zenith pulls all of them into one home screen, with Android home-screen widgets so the important things are visible without opening the app.
 
-### **Use your preferred code editor**
+It is a daily-use personal project that has grown to about **25,000 lines of TypeScript** across 14 screens, 10 widgets and a set of parsing and sync utilities.
 
-If you want to work locally using your own code editor, you can clone this repo and push changes. Pushed changes will also be reflected in Rork.
+<!--
+  SCREENSHOTS: add 3–4 phone screenshots to docs/screenshots/ and uncomment this block.
+  <p align="center">
+    <img src="docs/screenshots/home.png" width="200" />
+    <img src="docs/screenshots/budget.png" width="200" />
+    <img src="docs/screenshots/tasks.png" width="200" />
+    <img src="docs/screenshots/widgets.png" width="200" />
+  </p>
+-->
 
-If you are new to coding and unsure which editor to use, we recommend Cursor. If you're familiar with terminals, try Claude Code.
+## Features
 
-The only requirement is having Node.js & Bun installed - [install Node.js with nvm](https://github.com/nvm-sh/nvm) and [install Bun](https://bun.sh/docs/installation)
+| Area | What it does |
+| --- | --- |
+| **Home dashboard** | Top-5 priorities, today's habits, schedule, pinned notes and a mood log on one screen |
+| **Tasks** | Custom lists, priorities, due dates, Today / Upcoming / Overdue views, local reminders |
+| **Calendar** | Month view, holidays, and one-way sync from Google / Apple / Outlook calendars via iCal (no OAuth setup needed) |
+| **Natural-language quick add** | Type or speak *"remind me to take medicine at 8am"* or *"schedule dentist next Tuesday at 2pm"* and it becomes a task, note or event |
+| **Brain dump** | Paste a messy paragraph of thoughts; it is split into sentences and turned into clean, suggested tasks |
+| **Budget** | Income/expense tracking, monthly and quarterly metrics, debt and savings trackers, and **bank-statement import from CSV or PDF** with automatic categorisation |
+| **Habits & workouts** | Habit streaks and a workout log |
+| **Notes** | Categorised notes with pinning, search and PIN-locked notes |
+| **Books** | Reading list, currently reading, and a yearly reading goal |
+| **Gifts** | PIN-protected gift ideas per person |
+| **Goal bingo** | A yearly goals bingo card |
+| **Widgets** | 10 Android home-screen widgets plus lock-screen widget support on Samsung One UI |
+| **Cloud sync** | Optional Supabase sync so phone and web share the same data |
 
-Follow these steps:
+## Technical highlights
+
+- **Statement parsing without a server.** `utils/pdfExtractor.ts` reads PDF bank statements on-device: it decompresses PDF content streams with `pako`, extracts the text, then `utils/budgetHelpers.ts` detects the statement's date range, infers the year for each transaction, auto-detects CSV column layouts across different banks, and categorises merchants.
+- **Rule-based natural-language parser.** `utils/nlpParser.ts` turns free text into a typed command (`task | note | priority | event`) with dates, times and priority, with no external AI API calls. The same parser powers deep links (`rork-app:///voice-add?cmd=…`) so Google Assistant routines can add tasks.
+- **Custom Expo config plugin.** `plugins/withLockScreenWidget.js` edits the generated Android manifest and widget XML at build time to fix Android 12+ widget export rules and enable Samsung lock-screen widgets.
+- **Platform-specific code paths.** Widget handlers are split into `.android.ts`, `.ios.ts` and `.web.ts` files so one codebase builds for all three targets.
+- **Offline-first data.** All data lives in local storage through a single typed `DataContext`; Supabase sync is opt-in and keyed by device or a shared sync key.
+- **Web deployment.** Exported with `expo export --platform web` and deployed on Vercel (Netlify config also included).
+
+## Tech stack
+
+**App:** React Native 0.81 · Expo SDK 54 · Expo Router · TypeScript
+**State & data:** React Context · TanStack Query · AsyncStorage
+**Backend / sync:** Supabase
+**Native features:** expo-notifications · expo-location · expo-image-picker · expo-document-picker · react-native-android-widget
+**Deploy:** Vercel (web) · EAS Build (Android/iOS)
+
+## Project structure
+
+```
+app/          Screens (Expo Router file-based routing): tasks, calendar, budget, notes, …
+components/   Shared UI components
+contexts/     DataContext: the app's single source of truth
+utils/        NLP parser, PDF/CSV statement import, notifications, calendar & cloud sync
+widgets/      Android home/lock-screen widgets + per-platform handlers
+plugins/      Custom Expo config plugin for lock-screen widgets
+types/        Shared TypeScript types
+```
+
+## Running locally
+
+Requires Node.js 20+ (and [Bun](https://bun.sh), or use npm).
 
 ```bash
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+git clone https://github.com/Dani2395/rork-zenith-productivity-hub.git
+cd rork-zenith-productivity-hub
+bun install            # or: npm install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-bun i
-
-# Step 4: Start the instant web preview of your Rork app in your browser, with auto-reloading of your changes
-bun run start-web
-
-# Step 5: Start iOS preview
-# Option A (recommended):
-bun run start  # then press "i" in the terminal to open iOS Simulator
-# Option B (if supported by your environment):
-bun run start -- --ios
+bun run start-web      # run in the browser
+bun run start          # then press "a" for Android or "i" for iOS
 ```
 
-### **Edit a file directly in GitHub**
+Home-screen widgets need a native Android build (`npx expo run:android` or an EAS build); they don't run in Expo Go.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## How it was built
 
-## What technologies are used for this project?
+I designed the features, made the product decisions and tested the app daily on my own phone. I used AI-assisted development tools ([Rork](https://rork.com) and Claude) to help write and refactor code, and I directed, reviewed and debugged the changes, which is why some commits are authored by those tools.
 
-This project is built with the most popular native mobile cross-platform technical stack:
+## Roadmap
 
-- **React Native** - Cross-platform native mobile development framework created by Meta and used for Instagram, Airbnb, and lots of top apps in the App Store
-- **Expo** - Extension of React Native + platform used by Discord, Shopify, Coinbase, Telsa, Starlink, Eightsleep, and more
-- **Expo Router** - File-based routing system for React Native with support for web, server functions and SSR
-- **TypeScript** - Type-safe JavaScript
-- **React Query** - Server state management
-- **Lucide React Native** - Beautiful icons
-
-## How can I test my app?
-
-### **On your phone (Recommended)**
-
-1. **iOS**: Download the [Rork app from the App Store](https://apps.apple.com/app/rork) or [Expo Go](https://apps.apple.com/app/expo-go/id982107779)
-2. **Android**: Download the [Expo Go app from Google Play](https://play.google.com/store/apps/details?id=host.exp.exponent)
-3. Run `bun run start` and scan the QR code from your development server
-
-### **In your browser**
-
-Run `bun start-web` to test in a web browser. Note: The browser preview is great for quick testing, but some native features may not be available.
-
-### **iOS Simulator / Android Emulator**
-
-You can test Rork apps in Expo Go or Rork iOS app. You don't need XCode or Android Studio for most features.
-
-**When do you need Custom Development Builds?**
-
-- Native authentication (Face ID, Touch ID, Apple Sign In)
-- In-app purchases and subscriptions
-- Push notifications
-- Custom native modules
-
-Learn more: [Expo Custom Development Builds Guide](https://docs.expo.dev/develop/development-builds/introduction/)
-
-If you have XCode (iOS) or Android Studio installed:
-
-```bash
-# iOS Simulator
-bun run start -- --ios
-
-# Android Emulator
-bun run start -- --android
-```
-
-## How can I deploy this project?
-
-### **Publish to App Store (iOS)**
-
-1. **Install EAS CLI**:
-
-   ```bash
-   bun i -g @expo/eas-cli
-   ```
-
-2. **Configure your project**:
-
-   ```bash
-   eas build:configure
-   ```
-
-3. **Build for iOS**:
-
-   ```bash
-   eas build --platform ios
-   ```
-
-4. **Submit to App Store**:
-   ```bash
-   eas submit --platform ios
-   ```
-
-For detailed instructions, visit [Expo's App Store deployment guide](https://docs.expo.dev/submit/ios/).
-
-### **Publish to Google Play (Android)**
-
-1. **Build for Android**:
-
-   ```bash
-   eas build --platform android
-   ```
-
-2. **Submit to Google Play**:
-   ```bash
-   eas submit --platform android
-   ```
-
-For detailed instructions, visit [Expo's Google Play deployment guide](https://docs.expo.dev/submit/android/).
-
-### **Publish as a Website**
-
-Your React Native app can also run on the web:
-
-1. **Build for web**:
-
-   ```bash
-   eas build --platform web
-   ```
-
-2. **Deploy with EAS Hosting**:
-   ```bash
-   eas hosting:configure
-   eas hosting:deploy
-   ```
-
-Alternative web deployment options:
-
-- **Vercel**: Deploy directly from your GitHub repository
-- **Netlify**: Connect your GitHub repo to Netlify for automatic deployments
-
-## App Features
-
-This template includes:
-
-- **Cross-platform compatibility** - Works on iOS, Android, and Web
-- **File-based routing** with Expo Router
-- **Tab navigation** with customizable tabs
-- **Modal screens** for overlays and dialogs
-- **TypeScript support** for better development experience
-- **Async storage** for local data persistence
-- **Vector icons** with Lucide React Native
-
-## Project Structure
-
-```
-├── app/                    # App screens (Expo Router)
-│   ├── (tabs)/            # Tab navigation screens
-│   │   ├── _layout.tsx    # Tab layout configuration
-│   │   └── index.tsx      # Home tab screen
-│   ├── _layout.tsx        # Root layout
-│   ├── modal.tsx          # Modal screen example
-│   └── +not-found.tsx     # 404 screen
-├── assets/                # Static assets
-│   └── images/           # App icons and images
-├── constants/            # App constants and configuration
-├── app.json             # Expo configuration
-├── package.json         # Dependencies and scripts
-└── tsconfig.json        # TypeScript configuration
-```
-
-## Custom Development Builds
-
-For advanced native features, you'll need to create a Custom Development Build instead of using Expo Go.
-
-### **When do you need a Custom Development Build?**
-
-- **Native Authentication**: Face ID, Touch ID, Apple Sign In, Google Sign In
-- **In-App Purchases**: App Store and Google Play subscriptions
-- **Advanced Native Features**: Third-party SDKs, platform-specifc features (e.g. Widgets on iOS)
-- **Background Processing**: Background tasks, location tracking
-
-### **Creating a Custom Development Build**
-
-```bash
-# Install EAS CLI
-bun i -g @expo/eas-cli
-
-# Configure your project for development builds
-eas build:configure
-
-# Create a development build for your device
-eas build --profile development --platform ios
-eas build --profile development --platform android
-
-# Install the development build on your device and start developing
-bun start --dev-client
-```
-
-**Learn more:**
-
-- [Development Builds Introduction](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Creating Development Builds](https://docs.expo.dev/develop/development-builds/create-a-build/)
-- [Installing Development Builds](https://docs.expo.dev/develop/development-builds/installation/)
-
-## Advanced Features
-
-### **Add a Database**
-
-Integrate with backend services:
-
-- **Supabase** - PostgreSQL database with real-time features
-- **Firebase** - Google's mobile development platform
-- **Custom API** - Connect to your own backend
-
-### **Add Authentication**
-
-Implement user authentication:
-
-**Basic Authentication (works in Expo Go):**
-
-- **Expo AuthSession** - OAuth providers (Google, Facebook, Apple) - [Guide](https://docs.expo.dev/guides/authentication/)
-- **Supabase Auth** - Email/password and social login - [Integration Guide](https://supabase.com/docs/guides/getting-started/tutorials/with-expo-react-native)
-- **Firebase Auth** - Comprehensive authentication solution - [Setup Guide](https://docs.expo.dev/guides/using-firebase/)
-
-**Native Authentication (requires Custom Development Build):**
-
-- **Apple Sign In** - Native Apple authentication - [Implementation Guide](https://docs.expo.dev/versions/latest/sdk/apple-authentication/)
-- **Google Sign In** - Native Google authentication - [Setup Guide](https://docs.expo.dev/guides/google-authentication/)
-
-### **Add Push Notifications**
-
-Send notifications to your users:
-
-- **Expo Notifications** - Cross-platform push notifications
-- **Firebase Cloud Messaging** - Advanced notification features
-
-### **Add Payments**
-
-Monetize your app:
-
-**Web & Credit Card Payments (works in Expo Go):**
-
-- **Stripe** - Credit card payments and subscriptions - [Expo + Stripe Guide](https://docs.expo.dev/guides/using-stripe/)
-- **PayPal** - PayPal payments integration - [Setup Guide](https://developer.paypal.com/docs/checkout/mobile/react-native/)
-
-**Native In-App Purchases (requires Custom Development Build):**
-
-- **RevenueCat** - Cross-platform in-app purchases and subscriptions - [Expo Integration Guide](https://www.revenuecat.com/docs/expo)
-- **Expo In-App Purchases** - Direct App Store/Google Play integration - [Implementation Guide](https://docs.expo.dev/versions/latest/sdk/in-app-purchases/)
-
-**Paywall Optimization:**
-
-- **Superwall** - Paywall A/B testing and optimization - [React Native SDK](https://docs.superwall.com/docs/react-native)
-- **Adapty** - Mobile subscription analytics and paywalls - [Expo Integration](https://docs.adapty.io/docs/expo)
-
-## I want to use a custom domain - is that possible?
-
-For web deployments, you can use custom domains with:
-
-- **EAS Hosting** - Custom domains available on paid plans
-- **Netlify** - Free custom domain support
-- **Vercel** - Custom domains with automatic SSL
-
-For mobile apps, you'll configure your app's deep linking scheme in `app.json`.
-
-## Troubleshooting
-
-### **App not loading on device?**
-
-1. Make sure your phone and computer are on the same WiFi network
-2. Try using tunnel mode: `bun start -- --tunnel`
-3. Check if your firewall is blocking the connection
-
-### **Build failing?**
-
-1. Clear your cache: `bunx expo start --clear`
-2. Delete `node_modules` and reinstall: `rm -rf node_modules && bun install`
-3. Check [Expo's troubleshooting guide](https://docs.expo.dev/troubleshooting/build-errors/)
-
-### **Need help with native features?**
-
-- Check [Expo's documentation](https://docs.expo.dev/) for native APIs
-- Browse [React Native's documentation](https://reactnative.dev/docs/getting-started) for core components
-- Visit [Rork's FAQ](https://rork.com/faq) for platform-specific questions
-
-## About Rork
-
-Rork builds fully native mobile apps using React Native and Expo - the same technology stack used by Discord, Shopify, Coinbase, Instagram, and nearly 30% of the top 100 apps on the App Store.
-
-Your Rork app is production-ready and can be published to both the App Store and Google Play Store. You can also export your app to run on the web, making it truly cross-platform.
+- [ ] Two-way calendar sync
+- [ ] iOS widgets (WidgetKit)
+- [ ] Automated tests for the statement parser and NLP parser
